@@ -1,18 +1,19 @@
 let refreshTimer = null;
-
 let qrScanner = null;
-
 let qrScanBusy = false;
 
 function checkAdminAccess() {
+
     const loggedIn =
         localStorage.getItem(
             "anchorAdminLoggedIn"
         );
 
     if (loggedIn !== "true") {
+
         window.location.href =
             "admin-login.html";
+
         return false;
     }
 
@@ -23,6 +24,7 @@ async function apiRequest(
     url,
     options = {}
 ) {
+
     const response =
         await fetch(
             url,
@@ -38,9 +40,12 @@ async function apiRequest(
     let data;
 
     try {
+
         data =
             JSON.parse(text);
+
     } catch (error) {
+
         throw new Error(
             `Invalid server response from ${url}. HTTP ${response.status}`
         );
@@ -50,6 +55,7 @@ async function apiRequest(
         !response.ok ||
         data.success === false
     ) {
+
         throw new Error(
             data.message ||
             data.error ||
@@ -64,6 +70,7 @@ function showPage(
     id,
     button = null
 ) {
+
     document
         .querySelectorAll(".page")
         .forEach(
@@ -80,6 +87,7 @@ function showPage(
         );
 
     if (page) {
+
         page.classList.add(
             "active"
         );
@@ -98,16 +106,20 @@ function showPage(
         );
 
     if (button) {
+
         button.classList.add(
             "active"
         );
+
     } else {
+
         const sidebarButton =
             document.querySelector(
                 `.sidebar button[onclick*="showPage('${id}'"]`
             );
 
         if (sidebarButton) {
+
             sidebarButton.classList.add(
                 "active"
             );
@@ -118,6 +130,7 @@ function showPage(
 }
 
 function showPageById(id) {
+
     const button =
         document.querySelector(
             `.sidebar button[onclick*="showPage('${id}'"]`
@@ -130,10 +143,12 @@ function showPageById(id) {
 }
 
 async function loadPageData(id) {
+
     if (
         id ===
         "dashboard"
     ) {
+
         await Promise.all([
             loadAdminDashboard(),
             loadApplications(),
@@ -148,6 +163,7 @@ async function loadPageData(id) {
         id ===
         "members"
     ) {
+
         await loadMembers();
     }
 
@@ -155,6 +171,7 @@ async function loadPageData(id) {
         id ===
         "archived-members"
     ) {
+
         await loadArchivedMembers();
     }
 
@@ -162,6 +179,7 @@ async function loadPageData(id) {
         id ===
         "applications"
     ) {
+
         await loadApplications();
     }
 
@@ -169,6 +187,7 @@ async function loadPageData(id) {
         id ===
         "transactions"
     ) {
+
         await loadTransactions();
     }
 
@@ -176,13 +195,23 @@ async function loadPageData(id) {
         id ===
         "attendance"
     ) {
+
         await loadAttendance();
+    }
+
+    if (
+        id ===
+        "guests"
+    ) {
+
+        updateGuestPricing();
     }
 
     if (
         id ===
         "reports"
     ) {
+
         await loadReports();
     }
 
@@ -190,12 +219,15 @@ async function loadPageData(id) {
         id ===
         "equipment"
     ) {
+
         await loadEquipment();
     }
 }
 
 async function loadAdminDashboard() {
+
     try {
+
         const data =
             await apiRequest(
                 "/api/admin/dashboard"
@@ -278,7 +310,9 @@ async function loadAdminDashboard() {
             data.capacity ??
             120
         );
+
     } catch (error) {
+
         console.error(
             "Dashboard loading error:",
             error
@@ -287,7 +321,9 @@ async function loadAdminDashboard() {
 }
 
 async function loadApplications() {
+
     try {
+
         const data =
             await apiRequest(
                 "/api/admin/applications"
@@ -345,6 +381,7 @@ async function loadApplications() {
             );
 
         if (recentBody) {
+
             const recent =
                 applications.slice(
                     0,
@@ -355,6 +392,7 @@ async function loadApplications() {
                 recent.length ===
                 0
             ) {
+
                 recentBody.innerHTML = `
                     <tr>
                         <td
@@ -364,7 +402,9 @@ async function loadApplications() {
                         </td>
                     </tr>
                 `;
+
             } else {
+
                 recentBody.innerHTML =
                     recent
                         .map(
@@ -383,16 +423,20 @@ async function loadApplications() {
             );
 
         if (pendingDashboard) {
+
             if (
                 pendingApplications.length ===
                 0
             ) {
+
                 pendingDashboard.innerHTML = `
                     <p>
                         No pending applications.
                     </p>
                 `;
+
             } else {
+
                 pendingDashboard.innerHTML =
                     pendingApplications
                         .slice(
@@ -402,52 +446,64 @@ async function loadApplications() {
                         .map(
                             (application) => `
                                 <div class="pending-row">
+
                                     <div>
+
                                         <strong>
                                             ${escapeHtml(
                                                 application.full_name ||
                                                 "Unknown"
                                             )}
                                         </strong>
+
                                         <small>
                                             ${escapeHtml(
                                                 application.email ||
                                                 ""
                                             )}
                                         </small>
+
                                     </div>
 
                                     <div>
+
                                         <strong>
                                             ₱${Number(
                                                 application.amount ||
                                                 0
                                             ).toLocaleString()}
                                         </strong>
+
                                         <small>
                                             ${escapeHtml(
                                                 application.membership_plan ||
                                                 "Monthly"
                                             )}
                                         </small>
+
                                     </div>
 
                                     <div>
+
                                         <button
                                             class="red-button"
                                             type="button"
-                                            onclick="approveApplication(${application.id})"
-                                        >
+                                            onclick="approveApplication(${application.id})">
+
                                             Approve
+
                                         </button>
 
                                         <button
                                             type="button"
-                                            onclick="rejectApplication(${application.id})"
-                                        >
+                                            onclick="rejectApplication(${application.id})">
+
                                             Reject
+
                                         </button>
+
                                     </div>
+
                                 </div>
                             `
                         )
@@ -461,10 +517,12 @@ async function loadApplications() {
             );
 
         if (tableBody) {
+
             if (
                 pendingApplications.length ===
                 0
             ) {
+
                 tableBody.innerHTML = `
                     <tr>
                         <td
@@ -474,7 +532,9 @@ async function loadApplications() {
                         </td>
                     </tr>
                 `;
+
             } else {
+
                 tableBody.innerHTML =
                     pendingApplications
                         .map(
@@ -488,7 +548,9 @@ async function loadApplications() {
         }
 
         void approvedApplications;
+
     } catch (error) {
+
         console.error(
             "Applications loading error:",
             error
@@ -499,6 +561,7 @@ async function loadApplications() {
 function createRecentApplicationRow(
     application
 ) {
+
     const status =
         getStatus(
             application.status
@@ -506,29 +569,34 @@ function createRecentApplicationRow(
 
     return `
         <tr>
+
             <td>
                 ${escapeHtml(
                     application.full_name ||
                     "-"
                 )}
             </td>
+
             <td>
                 ₱${Number(
                     application.amount ||
                     0
                 ).toLocaleString()}
             </td>
+
             <td>
                 ${escapeHtml(
                     application.gcash_reference ||
                     "-"
                 )}
             </td>
+
             <td>
                 <span class="status ${getStatusClass(status)}">
                     ${escapeHtml(status)}
                 </span>
             </td>
+
         </tr>
     `;
 }
@@ -536,6 +604,7 @@ function createRecentApplicationRow(
 function createApplicationRow(
     application
 ) {
+
     const status =
         getStatus(
             application.status
@@ -548,9 +617,10 @@ function createApplicationRow(
                     type="button"
                     onclick="viewScreenshot('${escapeAttribute(
                         application.payment_screenshot
-                    )}')"
-                >
+                    )}')">
+
                     View
+
                 </button>
             `
             : "None";
@@ -562,15 +632,18 @@ function createApplicationRow(
                 <button
                     class="red-button"
                     type="button"
-                    onclick="approveApplication(${application.id})"
-                >
+                    onclick="approveApplication(${application.id})">
+
                     Approve
+
                 </button>
+
                 <button
                     type="button"
-                    onclick="rejectApplication(${application.id})"
-                >
+                    onclick="rejectApplication(${application.id})">
+
                     Reject
+
                 </button>
             `
             : escapeHtml(
@@ -579,40 +652,48 @@ function createApplicationRow(
 
     return `
         <tr>
+
             <td>
                 ${escapeHtml(
                     application.full_name ||
                     "-"
                 )}
             </td>
+
             <td>
                 ₱${Number(
                     application.amount ||
                     0
                 ).toLocaleString()}
             </td>
+
             <td>
                 ${escapeHtml(
                     application.gcash_reference ||
                     "-"
                 )}
             </td>
+
             <td>
                 ${formatDate(
                     application.payment_date
                 )}
             </td>
+
             <td>
                 ${screenshot}
             </td>
+
             <td>
                 <span class="status ${getStatusClass(status)}">
                     ${escapeHtml(status)}
                 </span>
             </td>
+
             <td>
                 ${actions}
             </td>
+
         </tr>
     `;
 }
@@ -620,7 +701,9 @@ function createApplicationRow(
 async function approveApplication(
     applicationId
 ) {
+
     try {
+
         const applicationsData =
             await apiRequest(
                 "/api/admin/applications"
@@ -641,6 +724,7 @@ async function approveApplication(
             );
 
         if (!application) {
+
             alert(
                 "Application not found."
             );
@@ -657,6 +741,7 @@ async function approveApplication(
             customerData.membership;
 
         if (membership) {
+
             const currentStatus =
                 getStatus(
                     membership.status
@@ -666,6 +751,7 @@ async function approveApplication(
                 currentStatus ===
                 "ACTIVE"
             ) {
+
                 const proceed =
                     confirm(
                         "This customer already has an active membership. Approving this application will renew the membership. Continue?"
@@ -706,7 +792,9 @@ async function approveApplication(
             loadMembers(),
             loadTransactions()
         ]);
+
     } catch (error) {
+
         console.error(
             "Approve application error:",
             error
@@ -722,6 +810,7 @@ async function approveApplication(
 async function rejectApplication(
     applicationId
 ) {
+
     const reason =
         prompt(
             "Enter the reason for rejecting this application:"
@@ -735,6 +824,7 @@ async function rejectApplication(
         reason.trim();
 
     if (!trimmedReason) {
+
         alert(
             "Rejection reason is required."
         );
@@ -743,16 +833,19 @@ async function rejectApplication(
     }
 
     try {
+
         const data =
             await apiRequest(
                 `/api/admin/applications/${applicationId}/reject`,
                 {
                     method:
                         "POST",
+
                     headers: {
                         "Content-Type":
                             "application/json"
                     },
+
                     body:
                         JSON.stringify({
                             reason:
@@ -770,7 +863,9 @@ async function rejectApplication(
             loadAdminDashboard(),
             loadApplications()
         ]);
+
     } catch (error) {
+
         console.error(
             "Reject application error:",
             error
@@ -784,7 +879,9 @@ async function rejectApplication(
 }
 
 async function loadMembers() {
+
     try {
+
         const data =
             await apiRequest(
                 "/api/admin/members"
@@ -821,6 +918,7 @@ async function loadMembers() {
             members.length ===
             0
         ) {
+
             body.innerHTML = `
                 <tr>
                     <td
@@ -839,35 +937,41 @@ async function loadMembers() {
                 .map(
                     (member) => `
                         <tr>
+
                             <td>
                                 ${escapeHtml(
                                     member.member_id ||
                                     "-"
                                 )}
                             </td>
+
                             <td>
                                 ${escapeHtml(
                                     member.full_name ||
                                     "-"
                                 )}
                             </td>
+
                             <td>
                                 ${escapeHtml(
                                     member.registration_type ||
                                     "-"
                                 )}
                             </td>
+
                             <td>
                                 ${escapeHtml(
                                     member.membership_plan ||
                                     "-"
                                 )}
                             </td>
+
                             <td>
                                 ${formatDate(
                                     member.expiration_date
                                 )}
                             </td>
+
                             <td>
                                 <span class="status ${getStatusClass(
                                     member.status
@@ -879,19 +983,26 @@ async function loadMembers() {
                                     )}
                                 </span>
                             </td>
+
                             <td>
+
                                 <button
                                     type="button"
-                                    onclick="removeMember(${member.id})"
-                                >
+                                    onclick="removeMember(${member.id})">
+
                                     Remove
+
                                 </button>
+
                             </td>
+
                         </tr>
                     `
                 )
                 .join("");
+
     } catch (error) {
+
         console.error(
             "Members loading error:",
             error
@@ -902,6 +1013,7 @@ async function loadMembers() {
 async function removeMember(
     memberId
 ) {
+
     const confirmed =
         confirm(
             "Remove this membership and move it to Archived Members?"
@@ -912,6 +1024,7 @@ async function removeMember(
     }
 
     try {
+
         const data =
             await apiRequest(
                 `/api/admin/members/${memberId}`,
@@ -933,7 +1046,9 @@ async function removeMember(
             loadTransactions(),
             loadAttendance()
         ]);
+
     } catch (error) {
+
         console.error(
             "Remove member error:",
             error
@@ -947,6 +1062,7 @@ async function removeMember(
 }
 
 async function loadArchivedMembers() {
+
     const body =
         document.getElementById(
             "archivedMembersTableBody"
@@ -957,6 +1073,7 @@ async function loadArchivedMembers() {
     }
 
     try {
+
         const data =
             await apiRequest(
                 "/api/admin/archived-members"
@@ -970,6 +1087,7 @@ async function loadArchivedMembers() {
             archivedMembers.length ===
             0
         ) {
+
             body.innerHTML = `
                 <tr>
                     <td
@@ -987,13 +1105,15 @@ async function loadArchivedMembers() {
             archivedMembers
                 .map(
                     (member) => {
+
                         const restored =
                             Boolean(
                                 member.restored_at
                             ) ||
                             getStatus(
                                 member.status
-                            ) === "RESTORED";
+                            ) ===
+                            "RESTORED";
 
                         const displayStatus =
                             restored
@@ -1005,56 +1125,65 @@ async function loadArchivedMembers() {
                                 ? `
                                     <button
                                         type="button"
-                                        onclick="deleteArchivedMember(${member.archive_id})"
-                                    >
+                                        onclick="deleteArchivedMember(${member.archive_id})">
+
                                         Delete
+
                                     </button>
                                 `
                                 : `
                                     <button
                                         class="red-button"
                                         type="button"
-                                        onclick="restoreArchivedMember(${member.archive_id})"
-                                    >
+                                        onclick="restoreArchivedMember(${member.archive_id})">
+
                                         Restore
+
                                     </button>
                                 `;
 
                         return `
                             <tr>
+
                                 <td>
                                     ${escapeHtml(
                                         member.member_id ||
                                         "-"
                                     )}
                                 </td>
+
                                 <td>
                                     ${escapeHtml(
                                         member.full_name ||
                                         "-"
                                     )}
                                 </td>
+
                                 <td>
                                     ${escapeHtml(
                                         member.membership_plan ||
                                         "-"
                                     )}
                                 </td>
+
                                 <td>
                                     ${formatDate(
                                         member.start_date
                                     )}
                                 </td>
+
                                 <td>
                                     ${formatDate(
                                         member.expiration_date
                                     )}
                                 </td>
+
                                 <td>
                                     ${formatDateTime(
                                         member.archived_at
                                     )}
                                 </td>
+
                                 <td>
                                     <span class="status ${getStatusClass(
                                         displayStatus
@@ -1062,15 +1191,19 @@ async function loadArchivedMembers() {
                                         ${displayStatus}
                                     </span>
                                 </td>
+
                                 <td>
                                     ${action}
                                 </td>
+
                             </tr>
                         `;
                     }
                 )
                 .join("");
+
     } catch (error) {
+
         console.error(
             "Archived members loading error:",
             error
@@ -1091,6 +1224,7 @@ async function loadArchivedMembers() {
 async function restoreArchivedMember(
     archiveId
 ) {
+
     const confirmed =
         confirm(
             "Restore this archived membership?"
@@ -1101,6 +1235,7 @@ async function restoreArchivedMember(
     }
 
     try {
+
         const data =
             await apiRequest(
                 `/api/admin/archived-members/${archiveId}/restore`,
@@ -1123,7 +1258,9 @@ async function restoreArchivedMember(
             loadApplications(),
             loadAttendance()
         ]);
+
     } catch (error) {
+
         console.error(
             "Restore member error:",
             error
@@ -1139,6 +1276,7 @@ async function restoreArchivedMember(
 async function deleteArchivedMember(
     archiveId
 ) {
+
     const confirmed =
         confirm(
             "Are you sure you want to permanently delete this restored archive history?"
@@ -1149,6 +1287,7 @@ async function deleteArchivedMember(
     }
 
     try {
+
         const data =
             await apiRequest(
                 `/api/admin/archived-members/${archiveId}`,
@@ -1164,7 +1303,9 @@ async function deleteArchivedMember(
         );
 
         await loadArchivedMembers();
+
     } catch (error) {
+
         console.error(
             "Delete archived member error:",
             error
@@ -1178,7 +1319,9 @@ async function deleteArchivedMember(
 }
 
 async function loadTransactions() {
+
     try {
+
         const data =
             await apiRequest(
                 "/api/admin/transactions"
@@ -1201,6 +1344,7 @@ async function loadTransactions() {
             transactions.length ===
             0
         ) {
+
             body.innerHTML = `
                 <tr>
                     <td
@@ -1219,46 +1363,58 @@ async function loadTransactions() {
                 .map(
                     (transaction) => `
                         <tr>
+
                             <td>
                                 ${transaction.id}
                             </td>
+
                             <td>
                                 ${escapeHtml(
                                     transaction.full_name ||
                                     "-"
                                 )}
                             </td>
+
                             <td>
                                 ₱${Number(
                                     transaction.amount ||
                                     0
                                 ).toLocaleString()}
                             </td>
+
                             <td>
                                 ${escapeHtml(
                                     transaction.gcash_reference ||
                                     "-"
                                 )}
                             </td>
+
                             <td>
                                 ${escapeHtml(
                                     transaction.status ||
                                     "-"
                                 )}
                             </td>
+
                             <td>
+
                                 <button
                                     type="button"
-                                    onclick="deleteTransaction(${transaction.id})"
-                                >
+                                    onclick="deleteTransaction(${transaction.id})">
+
                                     Delete
+
                                 </button>
+
                             </td>
+
                         </tr>
                     `
                 )
                 .join("");
+
     } catch (error) {
+
         console.error(
             "Transactions loading error:",
             error
@@ -1269,6 +1425,7 @@ async function loadTransactions() {
 async function deleteTransaction(
     transactionId
 ) {
+
     const confirmed =
         confirm(
             "Delete this transaction history? This does not remove the membership."
@@ -1279,6 +1436,7 @@ async function deleteTransaction(
     }
 
     try {
+
         const data =
             await apiRequest(
                 `/api/admin/transactions/${transactionId}`,
@@ -1294,7 +1452,9 @@ async function deleteTransaction(
         );
 
         await loadTransactions();
+
     } catch (error) {
+
         console.error(
             "Delete transaction error:",
             error
@@ -1308,7 +1468,9 @@ async function deleteTransaction(
 }
 
 async function loadAttendance() {
+
     try {
+
         const data =
             await apiRequest(
                 "/api/admin/attendance"
@@ -1398,6 +1560,7 @@ async function loadAttendance() {
             currentAttendance.length ===
             0
         ) {
+
             body.innerHTML = `
                 <tr>
                     <td
@@ -1416,12 +1579,14 @@ async function loadAttendance() {
                 .map(
                     (record) => `
                         <tr>
+
                             <td>
                                 ${escapeHtml(
                                     record.full_name ||
                                     "-"
                                 )}
                             </td>
+
                             <td>
                                 ${escapeHtml(
                                     String(
@@ -1430,24 +1595,32 @@ async function loadAttendance() {
                                     )
                                 )}
                             </td>
+
                             <td>
                                 ${formatDateTime(
                                     record.check_in
                                 )}
                             </td>
+
                             <td>
+
                                 <button
                                     type="button"
-                                    onclick="checkoutAttendance(${record.id})"
-                                >
+                                    onclick="checkoutAttendance(${record.id})">
+
                                     Check Out
+
                                 </button>
+
                             </td>
+
                         </tr>
                     `
                 )
                 .join("");
+
     } catch (error) {
+
         console.error(
             "Attendance loading error:",
             error
@@ -1458,6 +1631,7 @@ async function loadAttendance() {
 async function checkoutAttendance(
     attendanceId
 ) {
+
     const confirmed =
         confirm(
             "Check out this person?"
@@ -1468,6 +1642,7 @@ async function checkoutAttendance(
     }
 
     try {
+
         const data =
             await apiRequest(
                 `/api/admin/attendance/${attendanceId}/checkout`,
@@ -1487,7 +1662,9 @@ async function checkoutAttendance(
             loadAdminDashboard(),
             loadReports()
         ]);
+
     } catch (error) {
+
         console.error(
             "Checkout error:",
             error
@@ -1500,10 +1677,85 @@ async function checkoutAttendance(
     }
 }
 
+/*
+    GUEST PRICING
+    Guest Visit = ₱30 per hour
+    Maximum = 3 hours
+    Day Pass = ₱100 fixed
+*/
+function updateGuestPricing() {
+
+    const visitType =
+        document.getElementById(
+            "guestVisitType"
+        )?.value;
+
+    const hoursGroup =
+        document.getElementById(
+            "guestHoursGroup"
+        );
+
+    const hoursSelect =
+        document.getElementById(
+            "guestHours"
+        );
+
+    const amountInput =
+        document.getElementById(
+            "guestAmount"
+        );
+
+    if (
+        !visitType ||
+        !amountInput
+    ) {
+        return;
+    }
+
+    if (
+        visitType ===
+        "DAY PASS"
+    ) {
+
+        if (hoursGroup) {
+
+            hoursGroup.style.display =
+                "none";
+        }
+
+        amountInput.value =
+            "100";
+
+        return;
+    }
+
+    if (hoursGroup) {
+
+        hoursGroup.style.display =
+            "block";
+    }
+
+    const hours =
+        Number(
+            hoursSelect?.value ||
+            1
+        );
+
+    const amount =
+        hours * 30;
+
+    amountInput.value =
+        String(
+            amount
+        );
+}
+
 async function addGuest(
     event
 ) {
+
     if (event) {
+
         event.preventDefault();
     }
 
@@ -1522,6 +1774,11 @@ async function addGuest(
             "guestVisitType"
         )?.value;
 
+    const hours =
+        document.getElementById(
+            "guestHours"
+        )?.value;
+
     const amountPaid =
         document.getElementById(
             "guestAmount"
@@ -1533,6 +1790,7 @@ async function addGuest(
         )?.value;
 
     if (!fullName) {
+
         alert(
             "Guest name is required."
         );
@@ -1540,34 +1798,83 @@ async function addGuest(
         return;
     }
 
+    if (!visitType) {
+
+        alert(
+            "Visit type is required."
+        );
+
+        return;
+    }
+
+    if (!paymentMethod) {
+
+        alert(
+            "Payment method is required."
+        );
+
+        return;
+    }
+
+    const selectedHours =
+        visitType === "DAY PASS"
+            ? null
+            : Number(
+                hours ||
+                1
+            );
+
+    const calculatedAmount =
+        visitType === "DAY PASS"
+            ? 100
+            : selectedHours * 30;
+
+    const confirmed =
+        confirm(
+            `Record ${fullName} as ${visitType} for ₱${calculatedAmount.toLocaleString()} using ${paymentMethod}?`
+        );
+
+    if (!confirmed) {
+        return;
+    }
+
     try {
+
         const data =
             await apiRequest(
                 "/api/admin/guests",
                 {
                     method:
                         "POST",
+
                     headers: {
                         "Content-Type":
                             "application/json"
                     },
+
                     body:
                         JSON.stringify({
+
                             full_name:
                                 fullName,
+
                             phone:
                                 phone,
+
                             visit_type:
-                                visitType ||
-                                "GUEST",
+                                visitType,
+
+                            hours:
+                                selectedHours,
+
                             amount_paid:
                                 Number(
                                     amountPaid ||
-                                    0
+                                    calculatedAmount
                                 ),
+
                             payment_method:
-                                paymentMethod ||
-                                ""
+                                paymentMethod
                         })
                 }
             );
@@ -1583,8 +1890,11 @@ async function addGuest(
             );
 
         if (form) {
+
             form.reset();
         }
+
+        updateGuestPricing();
 
         await Promise.all([
             loadAttendance(),
@@ -1595,7 +1905,9 @@ async function addGuest(
         showPageById(
             "attendance"
         );
+
     } catch (error) {
+
         console.error(
             "Guest error:",
             error
@@ -1609,10 +1921,12 @@ async function addGuest(
 }
 
 async function scanCustomerQr() {
+
     if (
         typeof Html5Qrcode ===
         "undefined"
     ) {
+
         alert(
             "QR scanner library is not loaded."
         );
@@ -1630,6 +1944,7 @@ async function scanCustomerQr() {
         );
 
     if (status) {
+
         status.textContent =
             "Starting camera...";
     }
@@ -1643,6 +1958,7 @@ async function scanCustomerQr() {
         );
 
     try {
+
         const cameras =
             await Html5Qrcode.getCameras();
 
@@ -1651,6 +1967,7 @@ async function scanCustomerQr() {
             cameras.length ===
             0
         ) {
+
             throw new Error(
                 "No camera was found."
             );
@@ -1662,6 +1979,7 @@ async function scanCustomerQr() {
         const rearCamera =
             cameras.find(
                 (camera) => {
+
                     const label =
                         String(
                             camera.label ||
@@ -1683,11 +2001,13 @@ async function scanCustomerQr() {
             );
 
         if (rearCamera) {
+
             cameraId =
                 rearCamera.id;
         }
 
         if (status) {
+
             status.textContent =
                 "Camera ready. Scan the customer's QR code.";
         }
@@ -1697,18 +2017,23 @@ async function scanCustomerQr() {
             {
                 fps:
                     10,
+
                 qrbox: {
                     width:
                         220,
+
                     height:
                         220
                 },
+
                 aspectRatio:
                     1
             },
+
             async (
                 decodedText
             ) => {
+
                 if (qrScanBusy) {
                     return;
                 }
@@ -1717,16 +2042,19 @@ async function scanCustomerQr() {
                     true;
 
                 try {
+
                     const data =
                         await apiRequest(
                             "/api/admin/attendance/scan",
                             {
                                 method:
                                     "POST",
+
                                 headers: {
                                     "Content-Type":
                                         "application/json"
                                 },
+
                                 body:
                                     JSON.stringify({
                                         qr_code:
@@ -1736,6 +2064,7 @@ async function scanCustomerQr() {
                         );
 
                     if (status) {
+
                         status.textContent =
                             data.message ||
                             "Scan successful.";
@@ -1757,13 +2086,16 @@ async function scanCustomerQr() {
                     showPageById(
                         "attendance"
                     );
+
                 } catch (error) {
+
                     console.error(
                         "QR scan error:",
                         error
                     );
 
                     if (status) {
+
                         status.textContent =
                             error.message ||
                             "Unable to process QR code.";
@@ -1776,8 +2108,10 @@ async function scanCustomerQr() {
 
                     setTimeout(
                         () => {
+
                             qrScanBusy =
                                 false;
+
                         },
                         1500
                     );
@@ -1788,15 +2122,19 @@ async function scanCustomerQr() {
                 qrScanBusy =
                     false;
             },
+
             () => {}
         );
+
     } catch (error) {
+
         console.error(
             "Camera start error:",
             error
         );
 
         if (status) {
+
             status.textContent =
                 error.message ||
                 "Unable to start camera.";
@@ -1812,13 +2150,17 @@ async function scanCustomerQr() {
 }
 
 async function stopQrScanner() {
+
     if (!qrScanner) {
         return;
     }
 
     try {
+
         await qrScanner.stop();
+
     } catch (error) {
+
         console.error(
             "QR scanner stop error:",
             error
@@ -1826,8 +2168,11 @@ async function stopQrScanner() {
     }
 
     try {
+
         qrScanner.clear();
+
     } catch (error) {
+
         console.error(
             "QR scanner clear error:",
             error
@@ -1842,6 +2187,7 @@ async function stopQrScanner() {
 }
 
 async function closeQrScanner() {
+
     await stopQrScanner();
 
     const status =
@@ -1850,6 +2196,7 @@ async function closeQrScanner() {
         );
 
     if (status) {
+
         status.textContent =
             "Scanner closed.";
     }
@@ -1858,6 +2205,7 @@ async function closeQrScanner() {
 function viewScreenshot(
     url
 ) {
+
     if (!url) {
         return;
     }
@@ -1869,7 +2217,9 @@ function viewScreenshot(
 }
 
 async function loadReports() {
+
     try {
+
         const data =
             await apiRequest(
                 "/api/admin/reports"
@@ -1919,10 +2269,13 @@ async function loadReports() {
             );
 
         if (reportMessage) {
+
             reportMessage.textContent =
                 `Total recorded visits: ${totalVisits}`;
         }
+
     } catch (error) {
+
         console.error(
             "Reports loading error:",
             error
@@ -1933,11 +2286,13 @@ async function loadReports() {
 function updatePeakBars(
     hourly
 ) {
+
     const hourMap =
         {};
 
     hourly.forEach(
         (item) => {
+
             hourMap[
                 Number(
                     item.hour
@@ -2009,6 +2364,7 @@ function updatePeakBars(
                 value
             }
         ) => {
+
             setBarHeight(
                 id,
                 value,
@@ -2019,7 +2375,9 @@ function updatePeakBars(
 }
 
 async function loadEquipment() {
+
     try {
+
         const data =
             await apiRequest(
                 "/api/admin/equipment"
@@ -2042,6 +2400,7 @@ async function loadEquipment() {
             equipment.length ===
             0
         ) {
+
             body.innerHTML = `
                 <tr>
                     <td
@@ -2060,12 +2419,14 @@ async function loadEquipment() {
                 .map(
                     (item) => `
                         <tr>
+
                             <td>
                                 ${escapeHtml(
                                     item.name ||
                                     "-"
                                 )}
                             </td>
+
                             <td>
                                 ${escapeHtml(
                                     item.category ||
@@ -2073,6 +2434,7 @@ async function loadEquipment() {
                                     "-"
                                 )}
                             </td>
+
                             <td>
                                 ${escapeHtml(
                                     item.peak_time ||
@@ -2080,6 +2442,7 @@ async function loadEquipment() {
                                     "-"
                                 )}
                             </td>
+
                             <td>
                                 ${escapeHtml(
                                     item.recommendation ||
@@ -2087,11 +2450,14 @@ async function loadEquipment() {
                                     "-"
                                 )}
                             </td>
+
                         </tr>
                     `
                 )
                 .join("");
+
     } catch (error) {
+
         console.error(
             "Equipment loading error:",
             error
@@ -2100,6 +2466,7 @@ async function loadEquipment() {
 }
 
 async function refreshAdminData() {
+
     if (
         localStorage.getItem(
             "anchorAdminLoggedIn"
@@ -2110,6 +2477,7 @@ async function refreshAdminData() {
     }
 
     try {
+
         await Promise.all([
             loadAdminDashboard(),
             loadApplications(),
@@ -2118,7 +2486,9 @@ async function refreshAdminData() {
             loadAttendance(),
             loadReports()
         ]);
+
     } catch (error) {
+
         console.error(
             "Admin refresh error:",
             error
@@ -2130,12 +2500,14 @@ function setText(
     id,
     value
 ) {
+
     const element =
         document.getElementById(
             id
         );
 
     if (element) {
+
         element.textContent =
             value;
     }
@@ -2145,6 +2517,7 @@ function updateOccupancyBar(
     occupancy,
     capacity
 ) {
+
     const percentage =
         capacity > 0
             ? Math.min(
@@ -2169,6 +2542,7 @@ function updateOccupancyBar(
         (
             element
         ) => {
+
             element.style.width =
                 `${percentage}%`;
         }
@@ -2180,6 +2554,7 @@ function setBarHeight(
     value,
     max
 ) {
+
     const element =
         document.getElementById(
             id
@@ -2214,6 +2589,7 @@ function setBarHeight(
 function getStatus(
     status
 ) {
+
     return String(
         status ||
         ""
@@ -2225,6 +2601,7 @@ function getStatus(
 function getStatusClass(
     status
 ) {
+
     const normalized =
         getStatus(
             status
@@ -2292,6 +2669,7 @@ function getStatusClass(
 function formatDate(
     value
 ) {
+
     if (!value) {
         return "-";
     }
@@ -2307,6 +2685,7 @@ function formatDate(
         );
 
     if (dateOnlyMatch) {
+
         const year =
             Number(
                 dateOnlyMatch[1]
@@ -2334,8 +2713,10 @@ function formatDate(
             {
                 year:
                     "numeric",
+
                 month:
                     "short",
+
                 day:
                     "numeric"
             }
@@ -2352,6 +2733,7 @@ function formatDate(
             date.getTime()
         )
     ) {
+
         return "-";
     }
 
@@ -2360,8 +2742,10 @@ function formatDate(
         {
             year:
                 "numeric",
+
             month:
                 "short",
+
             day:
                 "numeric"
         }
@@ -2371,6 +2755,7 @@ function formatDate(
 function formatDateTime(
     value
 ) {
+
     if (!value) {
         return "-";
     }
@@ -2385,6 +2770,7 @@ function formatDateTime(
             date.getTime()
         )
     ) {
+
         return "-";
     }
 
@@ -2393,12 +2779,16 @@ function formatDateTime(
         {
             year:
                 "numeric",
+
             month:
                 "short",
+
             day:
                 "numeric",
+
             hour:
                 "numeric",
+
             minute:
                 "2-digit"
         }
@@ -2408,6 +2798,7 @@ function formatDateTime(
 function escapeHtml(
     value
 ) {
+
     return String(
         value ??
         ""
@@ -2437,6 +2828,7 @@ function escapeHtml(
 function escapeAttribute(
     value
 ) {
+
     return String(
         value ??
         ""
@@ -2456,6 +2848,7 @@ function escapeAttribute(
 }
 
 function logout() {
+
     const confirmed =
         confirm(
             "Are you sure you want to logout?"
@@ -2484,9 +2877,12 @@ function logout() {
 document.addEventListener(
     "DOMContentLoaded",
     async () => {
+
         if (!checkAdminAccess()) {
             return;
         }
+
+        updateGuestPricing();
 
         showPageById(
             "dashboard"
