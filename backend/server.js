@@ -19,7 +19,9 @@ pool.on("error", (error) => {
     console.error("PostgreSQL pool error:", error);
 });
 
-const uploadDir = path.join(__dirname, "uploads");
+const projectRoot = path.join(__dirname, "..");
+const frontendDir = path.join(projectRoot, "frontend");
+const uploadDir = path.join(projectRoot, "uploads");
 
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, {
@@ -33,7 +35,7 @@ app.use(
     })
 );
 
-app.use(express.static(__dirname));
+app.use(express.static(frontendDir));
 
 app.use(
     "/uploads",
@@ -42,7 +44,7 @@ app.use(
 
 app.get("/", (req, res) => {
     res.sendFile(
-        path.join(__dirname, "login.html")
+        path.join(frontendDir, "login.html")
     );
 });
 
@@ -2689,8 +2691,8 @@ app.use(
     }
 );
 
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
     console.log(
-        `ANCHOR server running at http://localhost:${PORT}`
+        `ANCHOR server running on port ${PORT}`
     );
 });
