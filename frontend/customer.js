@@ -88,6 +88,19 @@ function showPageById(id) {
         });
 
 
+    const navButton =
+        document.querySelector(
+            `nav button[onclick*="showPage('${id}'"]`
+        );
+
+
+    if (navButton) {
+
+        navButton.classList.add("active");
+
+    }
+
+
     loadPageSpecificData(id);
 
 }
@@ -133,6 +146,20 @@ function loadPageSpecificData(id) {
 
     }
 
+
+    if (id === "notifications") {
+
+        refreshCustomerData(false);
+
+    }
+
+
+    if (id === "profile") {
+
+        refreshCustomerData(false);
+
+    }
+
 }
 
 
@@ -143,7 +170,9 @@ function loadPageSpecificData(id) {
 async function loadCustomer() {
 
     const savedUser =
-        localStorage.getItem("anchorUser");
+        localStorage.getItem(
+            "anchorUser"
+        );
 
 
     if (!savedUser) {
@@ -242,7 +271,10 @@ async function refreshCustomerData(
     silent = true
 ) {
 
-    if (!customerData || !customerData.id) {
+    if (
+        !customerData ||
+        !customerData.id
+    ) {
 
         return;
 
@@ -310,7 +342,8 @@ async function refreshCustomerData(
         // ---------------------------------
 
         displayApplication(
-            data.application || null
+            data.application || null,
+            data.membership || null
         );
 
 
@@ -320,6 +353,15 @@ async function refreshCustomerData(
 
         displayTransactions(
             data.transactions || []
+        );
+
+
+        // ---------------------------------
+        // NOTIFICATIONS
+        // ---------------------------------
+
+        displayNotifications(
+            data.notifications || []
         );
 
 
@@ -1080,68 +1122,117 @@ function getMembershipDescription(
 // DISPLAY APPLICATION
 // =====================================
 
-function displayApplication(application, membership) {
+function displayApplication(
+    application,
+    membership
+) {
+
     const statusElement =
-        document.getElementById("customerApplicationStatus");
+        document.getElementById(
+            "customerApplicationStatus"
+        );
+
 
     const messageElement =
-        document.getElementById("customerApplicationMessage");
+        document.getElementById(
+            "customerApplicationMessage"
+        );
 
-    if (!statusElement || !messageElement) {
+
+    if (
+        !statusElement ||
+        !messageElement
+    ) {
+
         return;
+
     }
 
+
     if (!application) {
-        statusElement.textContent = "NO APPLICATION";
+
+        statusElement.textContent =
+            "NO APPLICATION";
+
 
         messageElement.textContent =
             "You have not submitted a membership application yet.";
 
         return;
+
     }
 
+
     const status =
-        String(application.status || "")
+        String(
+            application.status ||
+            ""
+        )
             .trim()
             .toUpperCase();
+
 
     if (
         status === "APPROVED" &&
         !membership &&
         application.membership_removed === true
     ) {
+
         statusElement.textContent =
             "MEMBERSHIP REMOVED";
 
+
         messageElement.textContent =
-            "Your previous membership was approved, but the membership has been removed by the gym administrator. You may apply again to activate a new membership.";
+            application.removal_reason
+                ? `Your previous membership was removed by the gym administrator. Reason: ${application.removal_reason}`
+                : "Your previous membership was approved, but the membership has been removed by the gym administrator. You may apply again to activate a new membership.";
+
 
         return;
+
     }
 
-    if (status === "APPROVED" && membership) {
+
+    if (
+        status === "APPROVED" &&
+        membership
+    ) {
+
         statusElement.textContent =
             "APPROVED";
+
 
         messageElement.textContent =
             "Your payment has been verified and your membership has been activated.";
 
         return;
+
     }
 
-    if (status === "PENDING") {
+
+    if (
+        status === "PENDING"
+    ) {
+
         statusElement.textContent =
             "PENDING";
+
 
         messageElement.textContent =
             "Your application and payment are currently being reviewed by the gym administrator.";
 
         return;
+
     }
 
-    if (status === "REJECTED") {
+
+    if (
+        status === "REJECTED"
+    ) {
+
         statusElement.textContent =
             "REJECTED";
+
 
         messageElement.textContent =
             application.rejection_reason
@@ -1149,13 +1240,290 @@ function displayApplication(application, membership) {
                 : "Your membership application was rejected.";
 
         return;
+
     }
 
+
     statusElement.textContent =
-        status || "UNKNOWN";
+        status ||
+        "UNKNOWN";
+
 
     messageElement.textContent =
         "Your application status has been updated.";
+
+}
+
+
+// =====================================
+// DISPLAY NOTIFICATIONS
+// =====================================
+
+function displayNotifications(
+    notifications
+) {
+
+    const safeNotifications =
+        Array.isArray(
+            notifications
+        )
+            ? notifications
+            : [];
+
+
+    const unreadCount =
+        safeNotifications.filter(
+            notification =>
+                !isNotificationRead(
+                    notification
+                )
+        ).length;
+
+
+    setText(
+        "notificationCount",
+        unreadCount
+    );
+
+
+    const dashboardContainer =
+        document.getElementById(
+            "dashboardNotifications"
+        );
+
+
+    const notificationsContainer =
+        document.getElementById(
+            "notificationsContainer"
+        );
+
+
+    if (
+        safeNotifications.length ===
+        0
+    ) {
+
+        const emptyDashboard = `
+
+            <div class="notification">
+
+                <b>
+                    No New Notifications
+                </b>
+
+                <p>
+                    You currently have no notifications.
+                </p>
+
+            </div>
+
+        `;
+
+
+        const emptyNotifications = `
+
+            <div class="notification">
+
+                <b>
+                    No Notifications
+                </b>
+
+                <p>
+                    You currently have no notifications.
+                </p>
+
+            </div>
+
+        `;
+
+
+        if (dashboardContainer) {
+
+            dashboardContainer.innerHTML =
+                emptyDashboard;
+
+        }
+
+
+        if (notificationsContainer) {
+
+            notificationsContainer.innerHTML =
+                emptyNotifications;
+
+        }
+
+
+        return;
+
+    }
+
+
+    const dashboardNotifications =
+        safeNotifications
+            .slice(
+                0,
+                5
+            )
+            .map(
+                notification =>
+                    createNotificationHtml(
+                        notification
+                    )
+            )
+            .join("");
+
+
+    const allNotifications =
+        safeNotifications
+            .map(
+                notification =>
+                    createNotificationHtml(
+                        notification
+                    )
+            )
+            .join("");
+
+
+    if (dashboardContainer) {
+
+        dashboardContainer.innerHTML =
+            dashboardNotifications;
+
+    }
+
+
+    if (notificationsContainer) {
+
+        notificationsContainer.innerHTML =
+            allNotifications;
+
+    }
+
+}
+
+
+// =====================================
+// CREATE NOTIFICATION HTML
+// =====================================
+
+function createNotificationHtml(
+    notification
+) {
+
+    const title =
+        notification.title ||
+        "ANCHOR Notification";
+
+
+    const message =
+        notification.message ||
+        notification.body ||
+        notification.description ||
+        "";
+
+
+    const createdAt =
+        notification.created_at ||
+        notification.createdAt ||
+        null;
+
+
+    const read =
+        isNotificationRead(
+            notification
+        );
+
+
+    const unreadStyle =
+        read
+            ? ""
+            : "border-left:4px solid #dc2626;";
+
+
+    return `
+
+        <div
+            class="notification"
+            style="${unreadStyle}">
+
+            <b>
+                ${escapeHtml(title)}
+            </b>
+
+            <p>
+                ${escapeHtml(message)}
+            </p>
+
+            ${
+                createdAt
+                    ? `
+                        <small>
+                            ${escapeHtml(
+                                formatDateTime(
+                                    createdAt
+                                )
+                            )}
+                        </small>
+                    `
+                    : ""
+            }
+
+        </div>
+
+    `;
+
+}
+
+
+// =====================================
+// CHECK NOTIFICATION READ STATUS
+// =====================================
+
+function isNotificationRead(
+    notification
+) {
+
+    if (!notification) {
+
+        return false;
+
+    }
+
+
+    if (
+        typeof notification.is_read !==
+        "undefined"
+    ) {
+
+        return (
+            notification.is_read === true ||
+            notification.is_read === 1 ||
+            String(
+                notification.is_read
+            ).toLowerCase() === "true"
+        );
+
+    }
+
+
+    if (
+        typeof notification.read !==
+        "undefined"
+    ) {
+
+        return (
+            notification.read === true ||
+            notification.read === 1 ||
+            String(
+                notification.read
+            ).toLowerCase() === "true"
+        );
+
+    }
+
+
+    return false;
+
 }
 
 
@@ -1179,7 +1547,10 @@ function displayTransactions(
 
     if (tableBody) {
 
-        if (transactions.length === 0) {
+        if (
+            transactions.length ===
+            0
+        ) {
 
             tableBody.innerHTML = `
 
@@ -1233,7 +1604,10 @@ function displayTransactions(
             );
 
 
-        if (recent.length === 0) {
+        if (
+            recent.length ===
+            0
+        ) {
 
             recentBody.innerHTML = `
 
@@ -1471,7 +1845,10 @@ function displayQR(
         membership.qrCode;
 
 
-    if (!qrImage && !qrCode) {
+    if (
+        !qrImage &&
+        !qrCode
+    ) {
 
         displayNoQR();
 
@@ -1671,7 +2048,10 @@ async function submitApplication() {
     }
 
 
-    if (!user || !user.id) {
+    if (
+        !user ||
+        !user.id
+    ) {
 
         alert(
             "Customer ID is missing from the login session."
@@ -1755,7 +2135,8 @@ async function submitApplication() {
 
     if (
         !screenshotInput.files ||
-        screenshotInput.files.length === 0
+        screenshotInput.files.length ===
+        0
     ) {
 
         alert(
@@ -1841,158 +2222,160 @@ async function submitApplication() {
         new FileReader();
 
 
-    reader.onload = async function() {
-
-        try {
-
-            const screenshot =
-                reader.result;
-
-
-            const response =
-                await fetch(
-                    "/api/applications",
-                    {
-                        method: "POST",
-
-                        headers: {
-                            "Content-Type":
-                                "application/json"
-                        },
-
-                        body:
-                            JSON.stringify({
-
-                                user_id:
-                                    user.id,
-
-                                membership_plan:
-                                    "Monthly",
-
-                                amount:
-                                    800,
-
-                                gcash_reference:
-                                    reference,
-
-                                payment_date:
-                                    paymentDate,
-
-                                payment_screenshot:
-                                    screenshot
-
-                            })
-
-                    }
-                );
-
-
-            const responseText =
-                await response.text();
-
-
-            let data;
-
+    reader.onload =
+        async function() {
 
             try {
 
-                data =
-                    JSON.parse(
-                        responseText
+                const screenshot =
+                    reader.result;
+
+
+                const response =
+                    await fetch(
+                        "/api/applications",
+                        {
+                            method:
+                                "POST",
+
+                            headers: {
+                                "Content-Type":
+                                    "application/json"
+                            },
+
+                            body:
+                                JSON.stringify({
+
+                                    user_id:
+                                        user.id,
+
+                                    membership_plan:
+                                        "Monthly",
+
+                                    amount:
+                                        800,
+
+                                    gcash_reference:
+                                        reference,
+
+                                    payment_date:
+                                        paymentDate,
+
+                                    payment_screenshot:
+                                        screenshot
+
+                                })
+
+                        }
                     );
+
+
+                const responseText =
+                    await response.text();
+
+
+                let data;
+
+
+                try {
+
+                    data =
+                        JSON.parse(
+                            responseText
+                        );
+
+                } catch (error) {
+
+                    throw new Error(
+                        `Server returned an invalid response. HTTP ${response.status}`
+                    );
+
+                }
+
+
+                if (
+                    !response.ok ||
+                    !data.success
+                ) {
+
+                    throw new Error(
+                        data.message ||
+                        data.error ||
+                        "Unable to submit application."
+                    );
+
+                }
+
+
+                alert(
+                    "Application submitted successfully!\n\n" +
+                    "Your application is now PENDING for admin review."
+                );
+
+
+                // ---------------------------------
+                // CLEAR FORM
+                // ---------------------------------
+
+                referenceInput.value =
+                    "";
+
+
+                paymentDateInput.value =
+                    "";
+
+
+                screenshotInput.value =
+                    "";
+
+
+                // ---------------------------------
+                // REFRESH DATA
+                // ---------------------------------
+
+                await refreshCustomerData(
+                    false
+                );
+
+
+                // ---------------------------------
+                // GO TO MEMBERSHIP PAGE
+                // ---------------------------------
+
+                showPageById(
+                    "membership"
+                );
+
 
             } catch (error) {
 
-                throw new Error(
-                    `Server returned an invalid response. HTTP ${response.status}`
+                console.error(
+                    "Application submission error:",
+                    error
                 );
 
-            }
 
-
-            if (
-                !response.ok ||
-                !data.success
-            ) {
-
-                throw new Error(
-                    data.message ||
-                    data.error ||
-                    "Unable to submit application."
+                alert(
+                    "Unable to submit application.\n\n" +
+                    error.message
                 );
 
-            }
 
+            } finally {
 
-            alert(
-                "Application submitted successfully!\n\n" +
-                "Your application is now PENDING for admin review."
-            );
+                if (submitButton) {
 
+                    submitButton.disabled =
+                        false;
 
-            // ---------------------------------
-            // CLEAR FORM
-            // ---------------------------------
+                    submitButton.textContent =
+                        "Submit Application";
 
-            referenceInput.value =
-                "";
-
-
-            paymentDateInput.value =
-                "";
-
-
-            screenshotInput.value =
-                "";
-
-
-            // ---------------------------------
-            // REFRESH DATA
-            // ---------------------------------
-
-            await refreshCustomerData(
-                false
-            );
-
-
-            // ---------------------------------
-            // GO TO MEMBERSHIP PAGE
-            // ---------------------------------
-
-            showPageById(
-                "membership"
-            );
-
-
-        } catch (error) {
-
-            console.error(
-                "Application submission error:",
-                error
-            );
-
-
-            alert(
-                "Unable to submit application.\n\n" +
-                error.message
-            );
-
-
-        } finally {
-
-            if (submitButton) {
-
-                submitButton.disabled =
-                    false;
-
-                submitButton.textContent =
-                    "Submit Application";
+                }
 
             }
 
-        }
-
-    };
+        };
 
 
     reader.onerror =
@@ -2074,7 +2457,10 @@ function getInitials(
         .trim()
         .split(/\s+/)
         .filter(Boolean)
-        .slice(0, 2)
+        .slice(
+            0,
+            2
+        )
         .map(
             word =>
                 word
@@ -2121,9 +2507,69 @@ function formatDate(
     return date.toLocaleDateString(
         "en-US",
         {
-            month: "short",
-            day: "numeric",
-            year: "numeric"
+            month:
+                "short",
+
+            day:
+                "numeric",
+
+            year:
+                "numeric"
+        }
+    );
+
+}
+
+
+// =====================================
+// FORMAT DATE + TIME
+// =====================================
+
+function formatDateTime(
+    dateValue
+) {
+
+    if (!dateValue) {
+
+        return "—";
+
+    }
+
+
+    const date =
+        new Date(
+            dateValue
+        );
+
+
+    if (
+        Number.isNaN(
+            date.getTime()
+        )
+    ) {
+
+        return "—";
+
+    }
+
+
+    return date.toLocaleString(
+        "en-US",
+        {
+            month:
+                "short",
+
+            day:
+                "numeric",
+
+            year:
+                "numeric",
+
+            hour:
+                "numeric",
+
+            minute:
+                "2-digit"
         }
     );
 
@@ -2178,7 +2624,12 @@ function calculateDaysRemaining(
 
     return Math.ceil(
         difference /
-        (1000 * 60 * 60 * 24)
+        (
+            1000 *
+            60 *
+            60 *
+            24
+        )
     );
 
 }
@@ -2194,7 +2645,8 @@ function getStatusClass(
 
     const normalized =
         String(
-            status || ""
+            status ||
+            ""
         ).toLowerCase();
 
 
@@ -2266,7 +2718,10 @@ function escapeHtml(
     value
 ) {
 
-    return String(value)
+    return String(
+        value ??
+        ""
+    )
 
         .replaceAll(
             "&",
@@ -2304,7 +2759,10 @@ function escapeAttribute(
     value
 ) {
 
-    return String(value)
+    return String(
+        value ??
+        ""
+    )
 
         .replaceAll(
             "&",

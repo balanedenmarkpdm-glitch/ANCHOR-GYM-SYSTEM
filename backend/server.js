@@ -16,18 +16,55 @@ const pool = new Pool({
 });
 
 pool.on("error", (error) => {
-    console.error("PostgreSQL pool error:", error);
+    console.error(
+        "PostgreSQL pool error:",
+        error
+    );
 });
 
-const projectRoot = path.join(__dirname, "..");
-const frontendDir = path.join(projectRoot, "frontend");
-const uploadDir = path.join(projectRoot, "uploads");
 
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, {
-        recursive: true
-    });
+// =====================================
+// PROJECT DIRECTORIES
+// =====================================
+
+const projectRoot =
+    path.join(
+        __dirname,
+        ".."
+    );
+
+const frontendDir =
+    path.join(
+        projectRoot,
+        "frontend"
+    );
+
+const uploadDir =
+    path.join(
+        projectRoot,
+        "uploads"
+    );
+
+
+if (
+    !fs.existsSync(
+        uploadDir
+    )
+) {
+
+    fs.mkdirSync(
+        uploadDir,
+        {
+            recursive: true
+        }
+    );
+
 }
+
+
+// =====================================
+// MIDDLEWARE
+// =====================================
 
 app.use(
     express.json({
@@ -35,796 +72,1670 @@ app.use(
     })
 );
 
-app.use(express.static(frontendDir));
+
+app.use(
+    express.static(
+        frontendDir
+    )
+);
+
 
 app.use(
     "/uploads",
-    express.static(uploadDir)
+    express.static(
+        uploadDir
+    )
 );
 
-app.get("/", (req, res) => {
-    res.sendFile(
-        path.join(frontendDir, "login.html")
-    );
-});
 
-app.get("/api/test-db", async (req, res) => {
-    try {
-        const result = await pool.query(`
-            SELECT
-                NOW() AS current_time,
-                current_database() AS database_name,
-                current_user
-        `);
+// =====================================
+// HOME
+// =====================================
 
-        res.json({
-            success: true,
-            message: "PostgreSQL connected!",
-            data: result.rows[0]
-        });
-    } catch (error) {
-        console.error("Database test error:", error);
+app.get(
+    "/",
+    (req, res) => {
 
-        res.status(500).json({
-            success: false,
-            message: "PostgreSQL connection failed.",
-            error: error.message
-        });
+        res.sendFile(
+            path.join(
+                frontendDir,
+                "login.html"
+            )
+        );
+
     }
-});
+);
+
+
+// =====================================
+// NOTIFICATION HELPER
+// =====================================
+
+async function createNotification(
+    database,
+    userId,
+    title,
+    message,
+    type = "INFO"
+) {
+
+    if (!userId) {
+        return;
+    }
+
+    await database.query(
+        `
+        INSERT INTO notifications
+        (
+            user_id,
+            title,
+            message,
+            type,
+            is_read,
+            created_at
+        )
+        VALUES
+        (
+            $1,
+            $2,
+            $3,
+            $4,
+            FALSE,
+            CURRENT_TIMESTAMP
+        )
+        `,
+        [
+            userId,
+            title,
+            message,
+            type
+        ]
+    );
+}
+
+
+// =====================================
+// TEST DATABASE
+// =====================================
+
+app.get(
+    "/api/test-db",
+    async (req, res) => {
+
+        try {
+
+            const result =
+                await pool.query(
+                    `
+                    SELECT
+                        NOW() AS current_time,
+                        current_database() AS database_name,
+                        current_user
+                    `
+                );
+
+
+            res.json({
+                success:
+                    true,
+
+                message:
+                    "PostgreSQL connected!",
+
+                data:
+                    result.rows[0]
+            });
+
+
+        } catch (error) {
+
+            console.error(
+                "Database test error:",
+                error
+            );
+
+
+            res.status(
+                500
+            ).json({
+
+                success:
+                    false,
+
+                message:
+                    "PostgreSQL connection failed.",
+
+                error:
+                    error.message
+
+            });
+
+        }
+
+    }
+);
+
+
+// =====================================
+// DELETE RESTORED ARCHIVE
+// =====================================
 
 app.delete(
     "/api/admin/archived-members/:id",
     async (req, res) => {
-        const client = await pool.connect();
-        let transactionStarted = false;
+
+        const client =
+            await pool.connect();
+
+        let transactionStarted =
+            false;
 
         try {
-            const archiveId = Number(req.params.id);
+
+            const archiveId =
+                Number(
+                    req.params.id
+                );
+
 
             if (
-                !Number.isInteger(archiveId) ||
+                !Number.isInteger(
+                    archiveId
+                ) ||
                 archiveId <= 0
             ) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Invalid archive ID."
+
+                return res.status(
+                    400
+                ).json({
+
+                    success:
+                        false,
+
+                    message:
+                        "Invalid archive ID."
+
                 });
+
             }
 
-            await client.query("BEGIN");
-            transactionStarted = true;
 
-            const archiveResult = await client.query(
-                `
-                SELECT
-                    archive_id,
-                    user_id,
-                    member_id,
-                    restored_at,
-                    status
-                FROM archived_members
-                WHERE archive_id = $1
-                FOR UPDATE
-                `,
-                [archiveId]
+            await client.query(
+                "BEGIN"
             );
 
-            if (archiveResult.rows.length === 0) {
-                await client.query("ROLLBACK");
-                transactionStarted = false;
+            transactionStarted =
+                true;
 
-                return res.status(404).json({
-                    success: false,
-                    message: "Archived member record not found."
+
+            const archiveResult =
+                await client.query(
+                    `
+                    SELECT
+                        archive_id,
+                        user_id,
+                        member_id,
+                        restored_at,
+                        status
+                    FROM archived_members
+                    WHERE archive_id = $1
+                    FOR UPDATE
+                    `,
+                    [
+                        archiveId
+                    ]
+                );
+
+
+            if (
+                archiveResult.rows.length ===
+                0
+            ) {
+
+                await client.query(
+                    "ROLLBACK"
+                );
+
+                transactionStarted =
+                    false;
+
+
+                return res.status(
+                    404
+                ).json({
+
+                    success:
+                        false,
+
+                    message:
+                        "Archived member record not found."
+
                 });
+
             }
 
-            const archived = archiveResult.rows[0];
+
+            const archived =
+                archiveResult.rows[0];
+
 
             if (
                 !archived.restored_at &&
-                String(archived.status || "").toUpperCase() !== "RESTORED"
+                String(
+                    archived.status ||
+                    ""
+                ).toUpperCase() !==
+                "RESTORED"
             ) {
-                await client.query("ROLLBACK");
-                transactionStarted = false;
 
-                return res.status(400).json({
-                    success: false,
+                await client.query(
+                    "ROLLBACK"
+                );
+
+                transactionStarted =
+                    false;
+
+
+                return res.status(
+                    400
+                ).json({
+
+                    success:
+                        false,
+
                     message:
                         "Only restored archived records can be deleted."
+
                 });
+
             }
 
-            const deleteResult = await client.query(
-                `
-                DELETE FROM archived_members
-                WHERE archive_id = $1
-                RETURNING
-                    archive_id,
-                    user_id,
-                    member_id
-                `,
-                [archiveId]
+
+            const deleteResult =
+                await client.query(
+                    `
+                    DELETE FROM archived_members
+                    WHERE archive_id = $1
+                    RETURNING
+                        archive_id,
+                        user_id,
+                        member_id
+                    `,
+                    [
+                        archiveId
+                    ]
+                );
+
+
+            await client.query(
+                "COMMIT"
             );
 
-            await client.query("COMMIT");
-            transactionStarted = false;
+            transactionStarted =
+                false;
+
 
             res.json({
-                success: true,
+
+                success:
+                    true,
+
                 message:
                     "Archived history deleted successfully.",
+
                 archive:
                     deleteResult.rows[0]
+
             });
+
+
         } catch (error) {
-            if (transactionStarted) {
+
+            if (
+                transactionStarted
+            ) {
+
                 try {
-                    await client.query("ROLLBACK");
-                } catch (rollbackError) {
+
+                    await client.query(
+                        "ROLLBACK"
+                    );
+
+                } catch (
+                    rollbackError
+                ) {
+
                     console.error(
                         "Rollback error:",
                         rollbackError
                     );
+
                 }
+
             }
+
 
             console.error(
                 "Delete archived member error:",
                 error
             );
 
-            res.status(500).json({
-                success: false,
+
+            res.status(
+                500
+            ).json({
+
+                success:
+                    false,
+
                 message:
                     "Unable to delete archived member history.",
+
                 error:
                     error.message,
+
                 code:
-                    error.code || null,
+                    error.code ||
+                    null,
+
                 detail:
-                    error.detail || null
+                    error.detail ||
+                    null
+
             });
+
         } finally {
+
             client.release();
+
         }
+
     }
 );
 
-app.post("/api/signup", async (req, res) => {
-    try {
-        const {
-            fullName,
-            full_name,
-            email,
-            password,
-            phone
-        } = req.body;
 
-        const finalFullName = fullName || full_name;
+// =====================================
+// SIGN UP
+// =====================================
 
-        if (
-            !finalFullName ||
-            !email ||
-            !password ||
-            !phone
-        ) {
-            return res.status(400).json({
-                success: false,
-                message: "Please complete all required fields."
-            });
-        }
-
-        const normalizedEmail = String(email)
-            .trim()
-            .toLowerCase();
-
-        const existingUser = await pool.query(
-            `
-            SELECT id
-            FROM users
-            WHERE LOWER(email) = $1
-            `,
-            [normalizedEmail]
-        );
-
-        if (existingUser.rows.length > 0) {
-            return res.status(400).json({
-                success: false,
-                message: "An account with this email already exists."
-            });
-        }
-
-        const hashedPassword = await bcrypt.hash(
-            password,
-            10
-        );
-
-        const result = await pool.query(
-            `
-            INSERT INTO users
-            (
-                full_name,
-                email,
-                password,
-                phone,
-                role
-            )
-            VALUES
-            (
-                $1,
-                $2,
-                $3,
-                $4,
-                'customer'
-            )
-            RETURNING
-                id,
-                full_name,
-                email,
-                phone,
-                role,
-                created_at
-            `,
-            [
-                String(finalFullName).trim(),
-                normalizedEmail,
-                hashedPassword,
-                String(phone).trim()
-            ]
-        );
-
-        res.status(201).json({
-            success: true,
-            message: "Account created successfully.",
-            user: result.rows[0]
-        });
-    } catch (error) {
-        console.error("Signup error:", error);
-
-        res.status(500).json({
-            success: false,
-            message: "Unable to create account.",
-            error: error.message,
-            code: error.code || null
-        });
-    }
-});
-
-app.post("/api/login", async (req, res) => {
-    try {
-        const {
-            email,
-            password
-        } = req.body;
-
-        if (!email || !password) {
-            return res.status(400).json({
-                success: false,
-                message: "Email and password are required."
-            });
-        }
-
-        const normalizedEmail = String(email)
-            .trim()
-            .toLowerCase();
-
-        const result = await pool.query(
-            `
-            SELECT
-                id,
-                full_name,
-                email,
-                phone,
-                password,
-                role,
-                created_at
-            FROM users
-            WHERE LOWER(email) = $1
-            `,
-            [normalizedEmail]
-        );
-
-        if (result.rows.length === 0) {
-            return res.status(401).json({
-                success: false,
-                message: "Invalid email or password."
-            });
-        }
-
-        const user = result.rows[0];
-
-        const passwordMatch = await bcrypt.compare(
-            password,
-            user.password
-        );
-
-        if (!passwordMatch) {
-            return res.status(401).json({
-                success: false,
-                message: "Invalid email or password."
-            });
-        }
-
-        if (
-            String(user.role).toLowerCase() !==
-            "customer"
-        ) {
-            return res.status(403).json({
-                success: false,
-                message: "This login is for customer accounts only."
-            });
-        }
-
-        delete user.password;
-
-        res.json({
-            success: true,
-            message: "Login successful.",
-            user
-        });
-    } catch (error) {
-        console.error("Login error:", error);
-
-        res.status(500).json({
-            success: false,
-            message: "Unable to login.",
-            error: error.message
-        });
-    }
-});
-
-app.get("/api/customer/:userId", async (req, res) => {
-    try {
-        const userId = Number(req.params.userId);
-
-        if (!Number.isInteger(userId)) {
-            return res.status(400).json({
-                success: false,
-                message: "Invalid customer ID."
-            });
-        }
-
-        const userResult = await pool.query(
-            `
-            SELECT
-                id,
-                full_name,
-                email,
-                phone,
-                role,
-                created_at
-            FROM users
-            WHERE id = $1
-              AND LOWER(role) = 'customer'
-            `,
-            [userId]
-        );
-
-        if (userResult.rows.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: "Customer account not found."
-            });
-        }
-
-        const memberResult = await pool.query(
-            `
-            SELECT
-                id,
-                user_id,
-                member_id,
-                registration_type,
-                membership_plan,
-                start_date,
-                expiration_date,
-                status,
-                qr_code
-            FROM members
-            WHERE user_id = $1
-            ORDER BY id DESC
-            LIMIT 1
-            `,
-            [userId]
-        );
-
-        let membership =
-            memberResult.rows.length > 0
-                ? memberResult.rows[0]
-                : null;
-
-        if (
-            membership &&
-            membership.qr_code
-        ) {
-            membership.qr_image =
-                await QRCode.toDataURL(
-                    membership.qr_code
-                );
-        }
-
-        const applicationResult = await pool.query(
-            `
-            SELECT
-                id,
-                user_id,
-                membership_plan,
-                amount,
-                gcash_reference,
-                payment_screenshot,
-                payment_date,
-                status,
-                rejection_reason,
-                created_at
-            FROM applications
-            WHERE user_id = $1
-            ORDER BY
-                created_at DESC,
-                id DESC
-            LIMIT 1
-            `,
-            [userId]
-        );
-
-        let application =
-            applicationResult.rows.length > 0
-                ? applicationResult.rows[0]
-                : null;
-
-        if (
-            application &&
-            !membership &&
-            String(application.status)
-                .trim()
-                .toUpperCase() === "APPROVED"
-        ) {
-            application = {
-                ...application,
-                membership_removed: true
-            };
-        }
-
-        const transactionResult = await pool.query(
-            `
-            SELECT
-                id,
-                application_id,
-                amount,
-                payment_method,
-                gcash_reference,
-                transaction_date,
-                status
-            FROM transactions
-            WHERE user_id = $1
-            ORDER BY
-                transaction_date DESC,
-                id DESC
-            `,
-            [userId]
-        );
-
-        res.json({
-            success: true,
-            user: userResult.rows[0],
-            customer: userResult.rows[0],
-            membership,
-            application,
-            transactions: transactionResult.rows
-        });
-    } catch (error) {
-        console.error("Customer dashboard error:", error);
-
-        res.status(500).json({
-            success: false,
-            message: "Unable to load customer data.",
-            error: error.message
-        });
-    }
-});
-
-app.post("/api/applications", async (req, res) => {
-    try {
-        const {
-            user_id,
-            membership_plan,
-            amount,
-            gcash_reference,
-            payment_date,
-            payment_screenshot
-        } = req.body;
-
-        if (!user_id) {
-            return res.status(400).json({
-                success: false,
-                message: "Customer account is required."
-            });
-        }
-
-        if (
-            !gcash_reference ||
-            !String(gcash_reference).trim()
-        ) {
-            return res.status(400).json({
-                success: false,
-                message: "GCash reference number is required."
-            });
-        }
-
-        if (!payment_date) {
-            return res.status(400).json({
-                success: false,
-                message: "Payment date is required."
-            });
-        }
-
-        if (!payment_screenshot) {
-            return res.status(400).json({
-                success: false,
-                message: "Payment screenshot is required."
-            });
-        }
-
-        const fixedAmount = 800;
-
-        if (Number(amount) !== fixedAmount) {
-            return res.status(400).json({
-                success: false,
-                message: "Membership fee must be exactly ₱800."
-            });
-        }
-
-        const userResult = await pool.query(
-            `
-            SELECT id
-            FROM users
-            WHERE id = $1
-              AND LOWER(role) = 'customer'
-            `,
-            [user_id]
-        );
-
-        if (userResult.rows.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: "Customer account not found."
-            });
-        }
-
-        const referenceResult = await pool.query(
-            `
-            SELECT id
-            FROM applications
-            WHERE LOWER(gcash_reference) = LOWER($1)
-            `,
-            [String(gcash_reference).trim()]
-        );
-
-        if (referenceResult.rows.length > 0) {
-            return res.status(400).json({
-                success: false,
-                message:
-                    "This GCash reference number has already been submitted."
-            });
-        }
-
-        const pendingResult = await pool.query(
-            `
-            SELECT id
-            FROM applications
-            WHERE user_id = $1
-              AND UPPER(status) = 'PENDING'
-            `,
-            [user_id]
-        );
-
-        if (pendingResult.rows.length > 0) {
-            return res.status(400).json({
-                success: false,
-                message: "You already have a pending application."
-            });
-        }
-
-        let screenshotPath = null;
+app.post(
+    "/api/signup",
+    async (req, res) => {
 
         try {
-            const matches = String(
-                payment_screenshot
-            ).match(
-                /^data:image\/(png|jpeg|jpg|webp);base64,(.+)$/i
-            );
 
-            if (!matches) {
-                return res.status(400).json({
-                    success: false,
-                    message:
-                        "Invalid payment screenshot. Use PNG, JPG, JPEG, or WEBP."
-                });
-            }
+            const {
+                fullName,
+                full_name,
+                email,
+                password,
+                phone
+            } = req.body;
 
-            const extension = matches[1]
-                .toLowerCase()
-                .replace("jpeg", "jpg");
 
-            const imageData = Buffer.from(
-                matches[2],
-                "base64"
-            );
+            const finalFullName =
+                fullName ||
+                full_name;
+
 
             if (
-                imageData.length >
-                8 * 1024 * 1024
+                !finalFullName ||
+                !email ||
+                !password ||
+                !phone
             ) {
-                return res.status(400).json({
-                    success: false,
+
+                return res.status(
+                    400
+                ).json({
+
+                    success:
+                        false,
+
                     message:
-                        "Payment screenshot is too large. Maximum is 8MB."
+                        "Please complete all required fields."
+
                 });
+
             }
 
-            const filename =
-                `${Date.now()}-${crypto.randomUUID()}.${extension}`;
 
-            const filepath = path.join(
-                uploadDir,
-                filename
-            );
+            const normalizedEmail =
+                String(
+                    email
+                )
+                    .trim()
+                    .toLowerCase();
 
-            fs.writeFileSync(
-                filepath,
-                imageData
-            );
 
-            screenshotPath =
-                `/uploads/${filename}`;
+            const existingUser =
+                await pool.query(
+                    `
+                    SELECT id
+                    FROM users
+                    WHERE LOWER(email) = $1
+                    `,
+                    [
+                        normalizedEmail
+                    ]
+                );
+
+
+            if (
+                existingUser.rows.length >
+                0
+            ) {
+
+                return res.status(
+                    400
+                ).json({
+
+                    success:
+                        false,
+
+                    message:
+                        "An account with this email already exists."
+
+                });
+
+            }
+
+
+            const hashedPassword =
+                await bcrypt.hash(
+                    password,
+                    10
+                );
+
+
+            const result =
+                await pool.query(
+                    `
+                    INSERT INTO users
+                    (
+                        full_name,
+                        email,
+                        password,
+                        phone,
+                        role
+                    )
+                    VALUES
+                    (
+                        $1,
+                        $2,
+                        $3,
+                        $4,
+                        'customer'
+                    )
+                    RETURNING
+                        id,
+                        full_name,
+                        email,
+                        phone,
+                        role,
+                        created_at
+                    `,
+                    [
+                        String(
+                            finalFullName
+                        ).trim(),
+
+                        normalizedEmail,
+
+                        hashedPassword,
+
+                        String(
+                            phone
+                        ).trim()
+                    ]
+                );
+
+
+            res.status(
+                201
+            ).json({
+
+                success:
+                    true,
+
+                message:
+                    "Account created successfully.",
+
+                user:
+                    result.rows[0]
+
+            });
+
+
         } catch (error) {
+
             console.error(
-                "Screenshot save error:",
+                "Signup error:",
                 error
             );
 
-            return res.status(400).json({
-                success: false,
+
+            res.status(
+                500
+            ).json({
+
+                success:
+                    false,
+
                 message:
-                    "Unable to save payment screenshot."
+                    "Unable to create account.",
+
+                error:
+                    error.message,
+
+                code:
+                    error.code ||
+                    null
+
             });
+
         }
 
-        const result = await pool.query(
-            `
-            INSERT INTO applications
-            (
-                user_id,
-                membership_plan,
-                amount,
-                gcash_reference,
-                payment_screenshot,
-                payment_date,
-                status
-            )
-            VALUES
-            (
-                $1,
-                $2,
-                $3,
-                $4,
-                $5,
-                $6,
-                'PENDING'
-            )
-            RETURNING
-                id,
-                user_id,
-                membership_plan,
-                amount,
-                gcash_reference,
-                payment_screenshot,
-                payment_date,
-                status,
-                created_at
-            `,
-            [
-                user_id,
-                membership_plan || "Monthly",
-                fixedAmount,
+    }
+);
+
+
+// =====================================
+// LOGIN
+// =====================================
+
+app.post(
+    "/api/login",
+    async (req, res) => {
+
+        try {
+
+            const {
+                email,
+                password
+            } = req.body;
+
+
+            if (
+                !email ||
+                !password
+            ) {
+
+                return res.status(
+                    400
+                ).json({
+
+                    success:
+                        false,
+
+                    message:
+                        "Email and password are required."
+
+                });
+
+            }
+
+
+            const normalizedEmail =
                 String(
+                    email
+                )
+                    .trim()
+                    .toLowerCase();
+
+
+            const result =
+                await pool.query(
+                    `
+                    SELECT
+                        id,
+                        full_name,
+                        email,
+                        phone,
+                        password,
+                        role,
+                        created_at
+                    FROM users
+                    WHERE LOWER(email) = $1
+                    `,
+                    [
+                        normalizedEmail
+                    ]
+                );
+
+
+            if (
+                result.rows.length ===
+                0
+            ) {
+
+                return res.status(
+                    401
+                ).json({
+
+                    success:
+                        false,
+
+                    message:
+                        "Invalid email or password."
+
+                });
+
+            }
+
+
+            const user =
+                result.rows[0];
+
+
+            const passwordMatch =
+                await bcrypt.compare(
+                    password,
+                    user.password
+                );
+
+
+            if (
+                !passwordMatch
+            ) {
+
+                return res.status(
+                    401
+                ).json({
+
+                    success:
+                        false,
+
+                    message:
+                        "Invalid email or password."
+
+                });
+
+            }
+
+
+            if (
+                String(
+                    user.role
+                ).toLowerCase() !==
+                "customer"
+            ) {
+
+                return res.status(
+                    403
+                ).json({
+
+                    success:
+                        false,
+
+                    message:
+                        "This login is for customer accounts only."
+
+                });
+
+            }
+
+
+            delete user.password;
+
+
+            res.json({
+
+                success:
+                    true,
+
+                message:
+                    "Login successful.",
+
+                user
+
+            });
+
+
+        } catch (error) {
+
+            console.error(
+                "Login error:",
+                error
+            );
+
+
+            res.status(
+                500
+            ).json({
+
+                success:
+                    false,
+
+                message:
+                    "Unable to login.",
+
+                error:
+                    error.message
+
+            });
+
+        }
+
+    }
+);
+
+
+// =====================================
+// CUSTOMER DASHBOARD
+// =====================================
+
+app.get(
+    "/api/customer/:userId",
+    async (req, res) => {
+
+        try {
+
+            const userId =
+                Number(
+                    req.params.userId
+                );
+
+
+            if (
+                !Number.isInteger(
+                    userId
+                )
+            ) {
+
+                return res.status(
+                    400
+                ).json({
+
+                    success:
+                        false,
+
+                    message:
+                        "Invalid customer ID."
+
+                });
+
+            }
+
+
+            // ---------------------------------
+            // CUSTOMER
+            // ---------------------------------
+
+            const userResult =
+                await pool.query(
+                    `
+                    SELECT
+                        id,
+                        full_name,
+                        email,
+                        phone,
+                        role,
+                        created_at
+                    FROM users
+                    WHERE id = $1
+                      AND LOWER(role) = 'customer'
+                    `,
+                    [
+                        userId
+                    ]
+                );
+
+
+            if (
+                userResult.rows.length ===
+                0
+            ) {
+
+                return res.status(
+                    404
+                ).json({
+
+                    success:
+                        false,
+
+                    message:
+                        "Customer account not found."
+
+                });
+
+            }
+
+
+            // ---------------------------------
+            // MEMBERSHIP
+            // ---------------------------------
+
+            const memberResult =
+                await pool.query(
+                    `
+                    SELECT
+                        id,
+                        user_id,
+                        member_id,
+                        registration_type,
+                        membership_plan,
+                        start_date,
+                        expiration_date,
+                        status,
+                        qr_code
+                    FROM members
+                    WHERE user_id = $1
+                    ORDER BY
+                        id DESC
+                    LIMIT 1
+                    `,
+                    [
+                        userId
+                    ]
+                );
+
+
+            let membership =
+                memberResult.rows.length >
+                0
+                    ? memberResult.rows[0]
+                    : null;
+
+
+            if (
+                membership &&
+                membership.qr_code
+            ) {
+
+                membership.qr_image =
+                    await QRCode.toDataURL(
+                        membership.qr_code
+                    );
+
+            }
+
+
+            // ---------------------------------
+            // APPLICATION
+            // ---------------------------------
+
+            const applicationResult =
+                await pool.query(
+                    `
+                    SELECT
+                        id,
+                        user_id,
+                        membership_plan,
+                        amount,
+                        gcash_reference,
+                        payment_screenshot,
+                        payment_date,
+                        status,
+                        rejection_reason,
+                        created_at
+                    FROM applications
+                    WHERE user_id = $1
+                    ORDER BY
+                        created_at DESC,
+                        id DESC
+                    LIMIT 1
+                    `,
+                    [
+                        userId
+                    ]
+                );
+
+
+            let application =
+                applicationResult.rows.length >
+                0
+                    ? applicationResult.rows[0]
+                    : null;
+
+
+            if (
+                application &&
+                !membership &&
+                String(
+                    application.status
+                )
+                    .trim()
+                    .toUpperCase() ===
+                "APPROVED"
+            ) {
+
+                let removalReason =
+                    null;
+
+
+                try {
+
+                    const removalResult =
+                        await pool.query(
+                            `
+                            SELECT
+                                removal_reason
+                            FROM archived_members
+                            WHERE user_id = $1
+                            ORDER BY
+                                archived_at DESC,
+                                archive_id DESC
+                            LIMIT 1
+                            `,
+                            [
+                                userId
+                            ]
+                        );
+
+
+                    if (
+                        removalResult.rows.length >
+                        0
+                    ) {
+
+                        removalReason =
+                            removalResult.rows[0]
+                                .removal_reason;
+
+                    }
+
+                } catch (
+                    removalLookupError
+                ) {
+
+                    console.error(
+                        "Removal reason lookup error:",
+                        removalLookupError
+                    );
+
+                }
+
+
+                application = {
+
+                    ...application,
+
+                    membership_removed:
+                        true,
+
+                    removal_reason:
+                        removalReason
+
+                };
+
+            }
+
+
+            // ---------------------------------
+            // TRANSACTIONS
+            // ---------------------------------
+
+            const transactionResult =
+                await pool.query(
+                    `
+                    SELECT
+                        id,
+                        application_id,
+                        amount,
+                        payment_method,
+                        gcash_reference,
+                        transaction_date,
+                        status
+                    FROM transactions
+                    WHERE user_id = $1
+                    ORDER BY
+                        transaction_date DESC,
+                        id DESC
+                    `,
+                    [
+                        userId
+                    ]
+                );
+
+
+            // ---------------------------------
+            // NOTIFICATIONS
+            // ---------------------------------
+
+            const notificationResult =
+                await pool.query(
+                    `
+                    SELECT
+                        id,
+                        user_id,
+                        title,
+                        message,
+                        type,
+                        is_read,
+                        created_at
+                    FROM notifications
+                    WHERE user_id = $1
+                    ORDER BY
+                        created_at DESC,
+                        id DESC
+                    `,
+                    [
+                        userId
+                    ]
+                );
+
+
+            res.json({
+
+                success:
+                    true,
+
+                user:
+                    userResult.rows[0],
+
+                customer:
+                    userResult.rows[0],
+
+                membership,
+
+                application,
+
+                transactions:
+                    transactionResult.rows,
+
+                notifications:
+                    notificationResult.rows
+
+            });
+
+
+        } catch (error) {
+
+            console.error(
+                "Customer dashboard error:",
+                error
+            );
+
+
+            res.status(
+                500
+            ).json({
+
+                success:
+                    false,
+
+                message:
+                    "Unable to load customer data.",
+
+                error:
+                    error.message
+
+            });
+
+        }
+
+    }
+);
+
+
+// =====================================
+// SUBMIT APPLICATION
+// =====================================
+
+app.post(
+    "/api/applications",
+    async (req, res) => {
+
+        try {
+
+            const {
+                user_id,
+                membership_plan,
+                amount,
+                gcash_reference,
+                payment_date,
+                payment_screenshot
+            } = req.body;
+
+
+            if (!user_id) {
+
+                return res.status(
+                    400
+                ).json({
+
+                    success:
+                        false,
+
+                    message:
+                        "Customer account is required."
+
+                });
+
+            }
+
+
+            if (
+                !gcash_reference ||
+                !String(
                     gcash_reference
-                ).trim(),
-                screenshotPath,
-                payment_date
-            ]
-        );
+                ).trim()
+            ) {
 
-        res.status(201).json({
-            success: true,
-            message:
-                "Membership application submitted. Status: PENDING.",
-            application:
-                result.rows[0]
-        });
-    } catch (error) {
-        console.error(
-            "Application submission error:",
-            error
-        );
+                return res.status(
+                    400
+                ).json({
 
-        res.status(500).json({
-            success: false,
-            message:
-                "Unable to submit membership application.",
-            error: error.message,
-            code: error.code || null,
-            detail: error.detail || null
-        });
+                    success:
+                        false,
+
+                    message:
+                        "GCash reference number is required."
+
+                });
+
+            }
+
+
+            if (!payment_date) {
+
+                return res.status(
+                    400
+                ).json({
+
+                    success:
+                        false,
+
+                    message:
+                        "Payment date is required."
+
+                });
+
+            }
+
+
+            if (!payment_screenshot) {
+
+                return res.status(
+                    400
+                ).json({
+
+                    success:
+                        false,
+
+                    message:
+                        "Payment screenshot is required."
+
+                });
+
+            }
+
+
+            const fixedAmount =
+                800;
+
+
+            if (
+                Number(
+                    amount
+                ) !==
+                fixedAmount
+            ) {
+
+                return res.status(
+                    400
+                ).json({
+
+                    success:
+                        false,
+
+                    message:
+                        "Membership fee must be exactly ₱800."
+
+                });
+
+            }
+
+
+            const userResult =
+                await pool.query(
+                    `
+                    SELECT id
+                    FROM users
+                    WHERE id = $1
+                      AND LOWER(role) = 'customer'
+                    `,
+                    [
+                        user_id
+                    ]
+                );
+
+
+            if (
+                userResult.rows.length ===
+                0
+            ) {
+
+                return res.status(
+                    404
+                ).json({
+
+                    success:
+                        false,
+
+                    message:
+                        "Customer account not found."
+
+                });
+
+            }
+
+
+            const referenceResult =
+                await pool.query(
+                    `
+                    SELECT id
+                    FROM applications
+                    WHERE LOWER(gcash_reference) =
+                          LOWER($1)
+                    `,
+                    [
+                        String(
+                            gcash_reference
+                        ).trim()
+                    ]
+                );
+
+
+            if (
+                referenceResult.rows.length >
+                0
+            ) {
+
+                return res.status(
+                    400
+                ).json({
+
+                    success:
+                        false,
+
+                    message:
+                        "This GCash reference number has already been submitted."
+
+                });
+
+            }
+
+
+            const pendingResult =
+                await pool.query(
+                    `
+                    SELECT id
+                    FROM applications
+                    WHERE user_id = $1
+                      AND UPPER(status) = 'PENDING'
+                    `,
+                    [
+                        user_id
+                    ]
+                );
+
+
+            if (
+                pendingResult.rows.length >
+                0
+            ) {
+
+                return res.status(
+                    400
+                ).json({
+
+                    success:
+                        false,
+
+                    message:
+                        "You already have a pending application."
+
+                });
+
+            }
+
+
+            let screenshotPath =
+                null;
+
+
+            try {
+
+                const matches =
+                    String(
+                        payment_screenshot
+                    ).match(
+                        /^data:image\/(png|jpeg|jpg|webp);base64,(.+)$/i
+                    );
+
+
+                if (!matches) {
+
+                    return res.status(
+                        400
+                    ).json({
+
+                        success:
+                            false,
+
+                        message:
+                            "Invalid payment screenshot. Use PNG, JPG, JPEG, or WEBP."
+
+                    });
+
+                }
+
+
+                const extension =
+                    matches[1]
+                        .toLowerCase()
+                        .replace(
+                            "jpeg",
+                            "jpg"
+                        );
+
+
+                const imageData =
+                    Buffer.from(
+                        matches[2],
+                        "base64"
+                    );
+
+
+                if (
+                    imageData.length >
+                    8 * 1024 * 1024
+                ) {
+
+                    return res.status(
+                        400
+                    ).json({
+
+                        success:
+                            false,
+
+                        message:
+                            "Payment screenshot is too large. Maximum is 8MB."
+
+                    });
+
+                }
+
+
+                const filename =
+                    `${Date.now()}-${crypto.randomUUID()}.${extension}`;
+
+
+                const filepath =
+                    path.join(
+                        uploadDir,
+                        filename
+                    );
+
+
+                fs.writeFileSync(
+                    filepath,
+                    imageData
+                );
+
+
+                screenshotPath =
+                    `/uploads/${filename}`;
+
+
+            } catch (error) {
+
+                console.error(
+                    "Screenshot save error:",
+                    error
+                );
+
+
+                return res.status(
+                    400
+                ).json({
+
+                    success:
+                        false,
+
+                    message:
+                        "Unable to save payment screenshot."
+
+                });
+
+            }
+
+
+            const result =
+                await pool.query(
+                    `
+                    INSERT INTO applications
+                    (
+                        user_id,
+                        membership_plan,
+                        amount,
+                        gcash_reference,
+                        payment_screenshot,
+                        payment_date,
+                        status
+                    )
+                    VALUES
+                    (
+                        $1,
+                        $2,
+                        $3,
+                        $4,
+                        $5,
+                        $6,
+                        'PENDING'
+                    )
+                    RETURNING
+                        id,
+                        user_id,
+                        membership_plan,
+                        amount,
+                        gcash_reference,
+                        payment_screenshot,
+                        payment_date,
+                        status,
+                        created_at
+                    `,
+                    [
+                        user_id,
+
+                        membership_plan ||
+                            "Monthly",
+
+                        fixedAmount,
+
+                        String(
+                            gcash_reference
+                        ).trim(),
+
+                        screenshotPath,
+
+                        payment_date
+                    ]
+                );
+
+
+            res.status(
+                201
+            ).json({
+
+                success:
+                    true,
+
+                message:
+                    "Membership application submitted. Status: PENDING.",
+
+                application:
+                    result.rows[0]
+
+            });
+
+
+        } catch (error) {
+
+            console.error(
+                "Application submission error:",
+                error
+            );
+
+
+            res.status(
+                500
+            ).json({
+
+                success:
+                    false,
+
+                message:
+                    "Unable to submit membership application.",
+
+                error:
+                    error.message,
+
+                code:
+                    error.code ||
+                    null,
+
+                detail:
+                    error.detail ||
+                    null
+
+            });
+
+        }
+
     }
-});
+);
 
-app.get("/api/admin/applications", async (req, res) => {
-    try {
-        const result = await pool.query(`
-            SELECT
-                a.id,
-                a.user_id,
-                u.full_name,
-                u.email,
-                u.phone,
-                a.membership_plan,
-                a.amount,
-                a.gcash_reference,
-                a.payment_screenshot,
-                a.payment_date,
-                a.status,
-                a.rejection_reason,
-                a.created_at
-            FROM applications a
-            JOIN users u
-                ON u.id = a.user_id
-            ORDER BY
-                a.created_at DESC,
-                a.id DESC
-        `);
 
-        res.json({
-            success: true,
-            applications: result.rows
-        });
-    } catch (error) {
-        console.error(
-            "Admin applications error:",
-            error
-        );
+// =====================================
+// ADMIN APPLICATIONS
+// =====================================
 
-        res.status(500).json({
-            success: false,
-            message: "Unable to load applications.",
-            error: error.message
-        });
+app.get(
+    "/api/admin/applications",
+    async (req, res) => {
+
+        try {
+
+            const result =
+                await pool.query(
+                    `
+                    SELECT
+                        a.id,
+                        a.user_id,
+                        u.full_name,
+                        u.email,
+                        u.phone,
+                        a.membership_plan,
+                        a.amount,
+                        a.gcash_reference,
+                        a.payment_screenshot,
+                        a.payment_date,
+                        a.status,
+                        a.rejection_reason,
+                        a.created_at
+                    FROM applications a
+                    JOIN users u
+                        ON u.id = a.user_id
+                    ORDER BY
+                        a.created_at DESC,
+                        a.id DESC
+                    `
+                );
+
+
+            res.json({
+
+                success:
+                    true,
+
+                applications:
+                    result.rows
+
+            });
+
+
+        } catch (error) {
+
+            console.error(
+                "Admin applications error:",
+                error
+            );
+
+
+            res.status(
+                500
+            ).json({
+
+                success:
+                    false,
+
+                message:
+                    "Unable to load applications.",
+
+                error:
+                    error.message
+
+            });
+
+        }
+
     }
-});
+);
+
+
+// =====================================
+// APPROVE APPLICATION
+// =====================================
 
 app.post(
     "/api/admin/applications/:id/approve",
     async (req, res) => {
-        const client = await pool.connect();
-        let transactionStarted = false;
+
+        const client =
+            await pool.connect();
+
+        let transactionStarted =
+            false;
 
         try {
+
             const applicationId =
-                Number(req.params.id);
+                Number(
+                    req.params.id
+                );
+
 
             if (
                 !Number.isInteger(
                     applicationId
                 )
             ) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Invalid application ID."
+
+                return res.status(
+                    400
+                ).json({
+
+                    success:
+                        false,
+
+                    message:
+                        "Invalid application ID."
+
                 });
+
             }
 
-            await client.query("BEGIN");
-            transactionStarted = true;
+
+            await client.query(
+                "BEGIN"
+            );
+
+            transactionStarted =
+                true;
+
 
             const applicationResult =
                 await client.query(
@@ -841,24 +1752,43 @@ app.post(
                     WHERE id = $1
                     FOR UPDATE
                     `,
-                    [applicationId]
+                    [
+                        applicationId
+                    ]
                 );
+
 
             if (
                 applicationResult.rows.length ===
                 0
             ) {
-                await client.query("ROLLBACK");
-                transactionStarted = false;
 
-                return res.status(404).json({
-                    success: false,
-                    message: "Application not found."
+                await client.query(
+                    "ROLLBACK"
+                );
+
+                transactionStarted =
+                    false;
+
+
+                return res.status(
+                    404
+                ).json({
+
+                    success:
+                        false,
+
+                    message:
+                        "Application not found."
+
                 });
+
             }
+
 
             const application =
                 applicationResult.rows[0];
+
 
             if (
                 String(
@@ -868,15 +1798,29 @@ app.post(
                     .toUpperCase() !==
                 "PENDING"
             ) {
-                await client.query("ROLLBACK");
-                transactionStarted = false;
 
-                return res.status(400).json({
-                    success: false,
+                await client.query(
+                    "ROLLBACK"
+                );
+
+                transactionStarted =
+                    false;
+
+
+                return res.status(
+                    400
+                ).json({
+
+                    success:
+                        false,
+
                     message:
                         `Application is already ${application.status}.`
+
                 });
+
             }
+
 
             const memberResult =
                 await client.query(
@@ -890,30 +1834,50 @@ app.post(
                         qr_code
                     FROM members
                     WHERE user_id = $1
-                    ORDER BY id DESC
+                    ORDER BY
+                        id DESC
                     LIMIT 1
                     FOR UPDATE
                     `,
-                    [application.user_id]
+                    [
+                        application.user_id
+                    ]
                 );
 
-            const today = new Date();
+
+            const today =
+                new Date();
+
 
             const startDate =
-                today.toISOString().slice(0, 10);
+                today
+                    .toISOString()
+                    .slice(
+                        0,
+                        10
+                    );
 
-            let memberId = null;
-            let expirationDate = null;
+
+            let memberId =
+                null;
+
+
+            let expirationDate =
+                null;
+
 
             if (
                 memberResult.rows.length >
                 0
             ) {
+
                 const member =
                     memberResult.rows[0];
 
+
                 memberId =
                     member.member_id;
+
 
                 const existingExpiration =
                     member.expiration_date
@@ -922,23 +1886,34 @@ app.post(
                         )
                         : today;
 
+
                 const baseDate =
                     existingExpiration >
                     today
                         ? existingExpiration
                         : today;
 
+
                 const newExpiration =
-                    new Date(baseDate);
+                    new Date(
+                        baseDate
+                    );
+
 
                 newExpiration.setMonth(
-                    newExpiration.getMonth() + 1
+                    newExpiration.getMonth() +
+                    1
                 );
+
 
                 expirationDate =
                     newExpiration
                         .toISOString()
-                        .slice(0, 10);
+                        .slice(
+                            0,
+                            10
+                        );
+
 
                 await client.query(
                     `
@@ -953,31 +1928,51 @@ app.post(
                     [
                         application.membership_plan ||
                             "Monthly",
+
                         startDate,
+
                         expirationDate,
+
                         member.id
                     ]
                 );
+
+
             } else {
+
                 const newMemberId =
                     `GYM-${String(
                         application.user_id
-                    ).padStart(6, "0")}`;
+                    ).padStart(
+                        6,
+                        "0"
+                    )}`;
+
 
                 const qrCode =
                     `ANCHOR-${crypto.randomUUID()}`;
 
+
                 const expiration =
-                    new Date(today);
+                    new Date(
+                        today
+                    );
+
 
                 expiration.setMonth(
-                    expiration.getMonth() + 1
+                    expiration.getMonth() +
+                    1
                 );
+
 
                 expirationDate =
                     expiration
                         .toISOString()
-                        .slice(0, 10);
+                        .slice(
+                            0,
+                            10
+                        );
+
 
                 const newMember =
                     await client.query(
@@ -1010,18 +2005,28 @@ app.post(
                         `,
                         [
                             application.user_id,
+
                             newMemberId,
+
                             application.membership_plan ||
                                 "Monthly",
+
                             startDate,
+
                             expirationDate,
+
                             qrCode
                         ]
                     );
 
+
                 memberId =
-                    newMember.rows[0].member_id;
+                    newMember
+                        .rows[0]
+                        .member_id;
+
             }
+
 
             await client.query(
                 `
@@ -1031,8 +2036,11 @@ app.post(
                     rejection_reason = NULL
                 WHERE id = $1
                 `,
-                [applicationId]
+                [
+                    applicationId
+                ]
             );
+
 
             await client.query(
                 `
@@ -1059,520 +2067,1054 @@ app.post(
                 `,
                 [
                     application.user_id,
+
                     applicationId,
+
                     application.amount,
+
                     application.gcash_reference
                 ]
             );
 
-            await client.query("COMMIT");
-            transactionStarted = false;
+
+            // ---------------------------------
+            // CUSTOMER NOTIFICATION
+            // ---------------------------------
+
+            await createNotification(
+                client,
+
+                application.user_id,
+
+                "Membership Application Approved",
+
+                `Your membership application has been approved. Your membership is now ACTIVE until ${expirationDate}.`,
+
+                "SUCCESS"
+            );
+
+
+            await client.query(
+                "COMMIT"
+            );
+
+            transactionStarted =
+                false;
+
 
             res.json({
-                success: true,
+
+                success:
+                    true,
+
                 message:
                     "Application approved. Membership is now ACTIVE.",
-                member_id: memberId,
-                expiration_date: expirationDate
+
+                member_id:
+                    memberId,
+
+                expiration_date:
+                    expirationDate
+
             });
+
+
         } catch (error) {
-            if (transactionStarted) {
+
+            if (
+                transactionStarted
+            ) {
+
                 try {
-                    await client.query("ROLLBACK");
-                } catch (rollbackError) {
+
+                    await client.query(
+                        "ROLLBACK"
+                    );
+
+                } catch (
+                    rollbackError
+                ) {
+
                     console.error(
                         "Rollback error:",
                         rollbackError
                     );
+
                 }
+
             }
+
 
             console.error(
                 "Approval error:",
                 error
             );
 
-            res.status(500).json({
-                success: false,
+
+            res.status(
+                500
+            ).json({
+
+                success:
+                    false,
+
                 message:
                     "Unable to approve application.",
+
                 error:
                     error.message,
+
                 code:
-                    error.code || null,
+                    error.code ||
+                    null,
+
                 detail:
-                    error.detail || null
+                    error.detail ||
+                    null
+
             });
+
         } finally {
+
             client.release();
+
         }
+
     }
 );
+
+
+// =====================================
+// REJECT APPLICATION
+// =====================================
 
 app.post(
     "/api/admin/applications/:id/reject",
     async (req, res) => {
+
+        const client =
+            await pool.connect();
+
+        let transactionStarted =
+            false;
+
         try {
+
             const applicationId =
-                Number(req.params.id);
+                Number(
+                    req.params.id
+                );
+
 
             if (
                 !Number.isInteger(
                     applicationId
                 )
             ) {
-                return res.status(400).json({
-                    success: false,
+
+                return res.status(
+                    400
+                ).json({
+
+                    success:
+                        false,
+
                     message:
                         "Invalid application ID."
+
                 });
+
             }
 
-            const reason = String(
-                req.body.reason || ""
-            ).trim();
+
+            const reason =
+                String(
+                    req.body.reason ||
+                    ""
+                ).trim();
+
 
             if (!reason) {
-                return res.status(400).json({
-                    success: false,
+
+                return res.status(
+                    400
+                ).json({
+
+                    success:
+                        false,
+
                     message:
                         "Rejection reason is required."
+
                 });
+
             }
 
-            const result = await pool.query(
-                `
-                UPDATE applications
-                SET
-                    status = 'REJECTED',
-                    rejection_reason = $1
-                WHERE id = $2
-                  AND UPPER(status) = 'PENDING'
-                RETURNING
-                    id,
-                    status,
-                    rejection_reason
-                `,
-                [
-                    reason,
-                    applicationId
-                ]
+
+            await client.query(
+                "BEGIN"
             );
+
+            transactionStarted =
+                true;
+
+
+            const result =
+                await client.query(
+                    `
+                    UPDATE applications
+                    SET
+                        status = 'REJECTED',
+                        rejection_reason = $1
+                    WHERE id = $2
+                      AND UPPER(status) = 'PENDING'
+                    RETURNING
+                        id,
+                        user_id,
+                        status,
+                        rejection_reason
+                    `,
+                    [
+                        reason,
+
+                        applicationId
+                    ]
+                );
+
 
             if (
                 result.rows.length ===
                 0
             ) {
-                return res.status(404).json({
-                    success: false,
+
+                await client.query(
+                    "ROLLBACK"
+                );
+
+                transactionStarted =
+                    false;
+
+
+                return res.status(
+                    404
+                ).json({
+
+                    success:
+                        false,
+
                     message:
                         "Pending application not found."
+
                 });
+
             }
 
+
+            const rejectedApplication =
+                result.rows[0];
+
+
+            // ---------------------------------
+            // CUSTOMER NOTIFICATION
+            // ---------------------------------
+
+            await createNotification(
+                client,
+
+                rejectedApplication.user_id,
+
+                "Membership Application Rejected",
+
+                `Your membership application was rejected. Reason: ${reason}`,
+
+                "ERROR"
+            );
+
+
+            await client.query(
+                "COMMIT"
+            );
+
+            transactionStarted =
+                false;
+
+
             res.json({
-                success: true,
+
+                success:
+                    true,
+
                 message:
                     "Application rejected.",
+
                 application:
-                    result.rows[0]
+                    rejectedApplication
+
             });
+
+
         } catch (error) {
+
+            if (
+                transactionStarted
+            ) {
+
+                try {
+
+                    await client.query(
+                        "ROLLBACK"
+                    );
+
+                } catch (
+                    rollbackError
+                ) {
+
+                    console.error(
+                        "Rollback error:",
+                        rollbackError
+                    );
+
+                }
+
+            }
+
+
             console.error(
                 "Rejection error:",
                 error
             );
 
-            res.status(500).json({
-                success: false,
+
+            res.status(
+                500
+            ).json({
+
+                success:
+                    false,
+
                 message:
                     "Unable to reject application.",
+
                 error:
-                    error.message
+                    error.message,
+
+                code:
+                    error.code ||
+                    null,
+
+                detail:
+                    error.detail ||
+                    null
+
             });
+
+        } finally {
+
+            client.release();
+
         }
+
     }
 );
 
-app.get("/api/admin/dashboard", async (req, res) => {
-    try {
-        const registeredResult =
-            await pool.query(`
-                SELECT
-                    COUNT(*)::int AS total_registered
-                FROM users
-                WHERE LOWER(role) = 'customer'
-            `);
 
-        const membersResult =
-            await pool.query(`
-                SELECT
-                    COUNT(*)::int AS total_members,
-                    COUNT(*) FILTER (
-                        WHERE UPPER(status) = 'ACTIVE'
-                    )::int AS active_members,
-                    COUNT(*) FILTER (
-                        WHERE UPPER(status) = 'EXPIRED'
-                    )::int AS expired_members,
-                    COUNT(*) FILTER (
-                        WHERE UPPER(status) = 'SUSPENDED'
-                    )::int AS suspended_members
-                FROM members
-            `);
+// =====================================
+// ADMIN DASHBOARD
+// =====================================
 
-        const applicationsResult =
-            await pool.query(`
-                SELECT
-                    COUNT(*) FILTER (
-                        WHERE UPPER(status) = 'PENDING'
-                    )::int AS pending_applications,
-                    COUNT(*) FILTER (
-                        WHERE UPPER(status) = 'REJECTED'
-                    )::int AS rejected_applications
-                FROM applications
-            `);
+app.get(
+    "/api/admin/dashboard",
+    async (req, res) => {
 
-        const attendanceResult =
-            await pool.query(`
-                SELECT
-                    COUNT(*) FILTER (
-                        WHERE UPPER(user_type) = 'MEMBER'
-                          AND check_out IS NULL
-                    )::int AS members_inside,
-                    COUNT(*) FILTER (
-                        WHERE UPPER(user_type) = 'GUEST'
-                          AND check_out IS NULL
-                    )::int AS guests_inside
-                FROM attendance
-            `);
+        try {
 
-        const totalRegistered = Number(
-            registeredResult.rows[0]
-                .total_registered || 0
-        );
+            const registeredResult =
+                await pool.query(
+                    `
+                    SELECT
+                        COUNT(*)::int AS total_registered
+                    FROM users
+                    WHERE LOWER(role) = 'customer'
+                    `
+                );
 
-        const totalMembers = Number(
-            membersResult.rows[0]
-                .total_members || 0
-        );
 
-        const activeMembers = Number(
-            membersResult.rows[0]
-                .active_members || 0
-        );
+            const membersResult =
+                await pool.query(
+                    `
+                    SELECT
+                        COUNT(*)::int AS total_members,
 
-        const expiredMembers = Number(
-            membersResult.rows[0]
-                .expired_members || 0
-        );
+                        COUNT(*) FILTER (
+                            WHERE UPPER(status) = 'ACTIVE'
+                        )::int AS active_members,
 
-        const suspendedMembers = Number(
-            membersResult.rows[0]
-                .suspended_members || 0
-        );
+                        COUNT(*) FILTER (
+                            WHERE UPPER(status) = 'EXPIRED'
+                        )::int AS expired_members,
 
-        const pendingApplications = Number(
-            applicationsResult.rows[0]
-                .pending_applications || 0
-        );
+                        COUNT(*) FILTER (
+                            WHERE UPPER(status) = 'SUSPENDED'
+                        )::int AS suspended_members
+                    FROM members
+                    `
+                );
 
-        const rejectedApplications = Number(
-            applicationsResult.rows[0]
-                .rejected_applications || 0
-        );
 
-        const membersInside = Number(
-            attendanceResult.rows[0]
-                .members_inside || 0
-        );
+            const applicationsResult =
+                await pool.query(
+                    `
+                    SELECT
+                        COUNT(*) FILTER (
+                            WHERE UPPER(status) = 'PENDING'
+                        )::int AS pending_applications,
 
-        const guestsInside = Number(
-            attendanceResult.rows[0]
-                .guests_inside || 0
-        );
+                        COUNT(*) FILTER (
+                            WHERE UPPER(status) = 'REJECTED'
+                        )::int AS rejected_applications
+                    FROM applications
+                    `
+                );
 
-        const occupancy =
-            membersInside +
-            guestsInside;
 
-        res.json({
-            success: true,
-            totalRegistered,
-            totalMembers,
-            activeMembers,
-            expiredMembers,
-            suspendedMembers,
-            pendingApplications,
-            rejectedApplications,
-            membersInside,
-            guestsInside,
-            occupancy,
-            capacity: 120
-        });
-    } catch (error) {
-        console.error(
-            "Dashboard error:",
-            error
-        );
+            const attendanceResult =
+                await pool.query(
+                    `
+                    SELECT
+                        COUNT(*) FILTER (
+                            WHERE UPPER(user_type) = 'MEMBER'
+                              AND check_out IS NULL
+                        )::int AS members_inside,
 
-        res.status(500).json({
-            success: false,
-            message:
-                "Unable to load dashboard data.",
-            error:
-                error.message
-        });
+                        COUNT(*) FILTER (
+                            WHERE UPPER(user_type) = 'GUEST'
+                              AND check_out IS NULL
+                        )::int AS guests_inside
+                    FROM attendance
+                    `
+                );
+
+
+            const totalRegistered =
+                Number(
+                    registeredResult
+                        .rows[0]
+                        .total_registered ||
+                    0
+                );
+
+
+            const totalMembers =
+                Number(
+                    membersResult
+                        .rows[0]
+                        .total_members ||
+                    0
+                );
+
+
+            const activeMembers =
+                Number(
+                    membersResult
+                        .rows[0]
+                        .active_members ||
+                    0
+                );
+
+
+            const expiredMembers =
+                Number(
+                    membersResult
+                        .rows[0]
+                        .expired_members ||
+                    0
+                );
+
+
+            const suspendedMembers =
+                Number(
+                    membersResult
+                        .rows[0]
+                        .suspended_members ||
+                    0
+                );
+
+
+            const pendingApplications =
+                Number(
+                    applicationsResult
+                        .rows[0]
+                        .pending_applications ||
+                    0
+                );
+
+
+            const rejectedApplications =
+                Number(
+                    applicationsResult
+                        .rows[0]
+                        .rejected_applications ||
+                    0
+                );
+
+
+            const membersInside =
+                Number(
+                    attendanceResult
+                        .rows[0]
+                        .members_inside ||
+                    0
+                );
+
+
+            const guestsInside =
+                Number(
+                    attendanceResult
+                        .rows[0]
+                        .guests_inside ||
+                    0
+                );
+
+
+            const occupancy =
+                membersInside +
+                guestsInside;
+
+
+            res.json({
+
+                success:
+                    true,
+
+                totalRegistered,
+
+                totalMembers,
+
+                activeMembers,
+
+                expiredMembers,
+
+                suspendedMembers,
+
+                pendingApplications,
+
+                rejectedApplications,
+
+                membersInside,
+
+                guestsInside,
+
+                occupancy,
+
+                capacity:
+                    120
+
+            });
+
+
+        } catch (error) {
+
+            console.error(
+                "Dashboard error:",
+                error
+            );
+
+
+            res.status(
+                500
+            ).json({
+
+                success:
+                    false,
+
+                message:
+                    "Unable to load dashboard data.",
+
+                error:
+                    error.message
+
+            });
+
+        }
+
     }
-});
+);
 
-app.get("/api/admin/members", async (req, res) => {
-    try {
-        const result = await pool.query(`
-            SELECT
-                m.id,
-                m.user_id,
-                m.member_id,
-                u.full_name,
-                u.email,
-                m.registration_type,
-                m.membership_plan,
-                m.start_date,
-                m.expiration_date,
-                m.status
-            FROM members m
-            JOIN users u
-                ON u.id = m.user_id
-            ORDER BY
-                m.id DESC
-        `);
 
-        res.json({
-            success: true,
-            members: result.rows
-        });
-    } catch (error) {
-        console.error(
-            "Members error:",
-            error
-        );
+// =====================================
+// ADMIN MEMBERS
+// =====================================
 
-        res.status(500).json({
-            success: false,
-            message:
-                "Unable to load members.",
-            error:
-                error.message
-        });
+app.get(
+    "/api/admin/members",
+    async (req, res) => {
+
+        try {
+
+            const result =
+                await pool.query(
+                    `
+                    SELECT
+                        m.id,
+                        m.user_id,
+                        m.member_id,
+                        u.full_name,
+                        u.email,
+                        m.registration_type,
+                        m.membership_plan,
+                        m.start_date,
+                        m.expiration_date,
+                        m.status
+                    FROM members m
+                    JOIN users u
+                        ON u.id = m.user_id
+                    ORDER BY
+                        m.id DESC
+                    `
+                );
+
+
+            res.json({
+
+                success:
+                    true,
+
+                members:
+                    result.rows
+
+            });
+
+
+        } catch (error) {
+
+            console.error(
+                "Members error:",
+                error
+            );
+
+
+            res.status(
+                500
+            ).json({
+
+                success:
+                    false,
+
+                message:
+                    "Unable to load members.",
+
+                error:
+                    error.message
+
+            });
+
+        }
+
     }
-});
+);
+
+
+// =====================================
+// REMOVE MEMBER
+// =====================================
 
 app.delete(
     "/api/admin/members/:id",
     async (req, res) => {
-        const client = await pool.connect();
-        let transactionStarted = false;
+
+        const client =
+            await pool.connect();
+
+        let transactionStarted =
+            false;
 
         try {
-            const memberId = Number(req.params.id);
 
-            if (!Number.isInteger(memberId)) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Invalid member ID."
+            const memberId =
+                Number(
+                    req.params.id
+                );
+
+
+            if (
+                !Number.isInteger(
+                    memberId
+                )
+            ) {
+
+                return res.status(
+                    400
+                ).json({
+
+                    success:
+                        false,
+
+                    message:
+                        "Invalid member ID."
+
                 });
+
             }
 
-            await client.query("BEGIN");
-            transactionStarted = true;
 
-            const memberResult = await client.query(
-                `
-                SELECT
-                    m.id,
-                    m.user_id,
-                    m.member_id,
-                    m.registration_type,
-                    m.membership_plan,
-                    m.start_date,
-                    m.expiration_date,
-                    m.status,
-                    m.qr_code,
-                    u.full_name,
-                    u.email
-                FROM members m
-                JOIN users u
-                    ON u.id = m.user_id
-                WHERE m.id = $1
-                FOR UPDATE OF m
-                `,
-                [memberId]
-            );
+            const reason =
+                String(
+                    req.body?.reason ||
+                    ""
+                ).trim();
 
-            if (memberResult.rows.length === 0) {
-                await client.query("ROLLBACK");
-                transactionStarted = false;
 
-                return res.status(404).json({
-                    success: false,
-                    message: "Member not found."
+            if (!reason) {
+
+                return res.status(
+                    400
+                ).json({
+
+                    success:
+                        false,
+
+                    message:
+                        "Removal reason is required."
+
                 });
+
             }
 
-            const member = memberResult.rows[0];
 
-            const activeAttendance = await client.query(
-                `
-                SELECT id
-                FROM attendance
-                WHERE member_id = $1
-                  AND check_out IS NULL
-                LIMIT 1
-                `,
-                [memberId]
+            await client.query(
+                "BEGIN"
             );
 
-            if (activeAttendance.rows.length > 0) {
-                await client.query("ROLLBACK");
-                transactionStarted = false;
+            transactionStarted =
+                true;
 
-                return res.status(400).json({
-                    success: false,
+
+            const memberResult =
+                await client.query(
+                    `
+                    SELECT
+                        m.id,
+                        m.user_id,
+                        m.member_id,
+                        m.registration_type,
+                        m.membership_plan,
+                        m.start_date,
+                        m.expiration_date,
+                        m.status,
+                        m.qr_code,
+                        u.full_name,
+                        u.email
+                    FROM members m
+                    JOIN users u
+                        ON u.id = m.user_id
+                    WHERE m.id = $1
+                    FOR UPDATE OF m
+                    `,
+                    [
+                        memberId
+                    ]
+                );
+
+
+            if (
+                memberResult.rows.length ===
+                0
+            ) {
+
+                await client.query(
+                    "ROLLBACK"
+                );
+
+                transactionStarted =
+                    false;
+
+
+                return res.status(
+                    404
+                ).json({
+
+                    success:
+                        false,
+
+                    message:
+                        "Member not found."
+
+                });
+
+            }
+
+
+            const member =
+                memberResult.rows[0];
+
+
+            const activeAttendance =
+                await client.query(
+                    `
+                    SELECT id
+                    FROM attendance
+                    WHERE member_id = $1
+                      AND check_out IS NULL
+                    LIMIT 1
+                    `,
+                    [
+                        memberId
+                    ]
+                );
+
+
+            if (
+                activeAttendance.rows.length >
+                0
+            ) {
+
+                await client.query(
+                    "ROLLBACK"
+                );
+
+                transactionStarted =
+                    false;
+
+
+                return res.status(
+                    400
+                ).json({
+
+                    success:
+                        false,
+
                     message:
                         "This member is currently inside the gym. Check out the member before removing the membership."
+
                 });
+
             }
 
-            const archiveResult = await client.query(
-                `
-                INSERT INTO archived_members
-                (
-                    original_member_id,
-                    user_id,
-                    member_id,
-                    full_name,
-                    email,
-                    registration_type,
-                    membership_plan,
-                    start_date,
-                    expiration_date,
-                    status,
-                    qr_code,
-                    removal_reason
-                )
-                VALUES
-                (
-                    $1,
-                    $2,
-                    $3,
-                    $4,
-                    $5,
-                    $6,
-                    $7,
-                    $8,
-                    $9,
-                    $10,
-                    $11,
-                    $12
-                )
-                RETURNING
-                    archive_id,
-                    original_member_id,
-                    user_id,
-                    member_id,
-                    full_name,
-                    email,
-                    registration_type,
-                    membership_plan,
-                    start_date,
-                    expiration_date,
-                    status,
-                    qr_code,
-                    archived_at,
-                    restored_at,
-                    removal_reason
-                `,
-                [
-                    member.id,
-                    member.user_id,
-                    member.member_id,
-                    member.full_name,
-                    member.email,
-                    member.registration_type,
-                    member.membership_plan,
-                    member.start_date,
-                    member.expiration_date,
-                    member.status,
-                    member.qr_code,
-                    "Membership removed by admin."
-                ]
-            );
+
+            const archiveResult =
+                await client.query(
+                    `
+                    INSERT INTO archived_members
+                    (
+                        original_member_id,
+                        user_id,
+                        member_id,
+                        full_name,
+                        email,
+                        registration_type,
+                        membership_plan,
+                        start_date,
+                        expiration_date,
+                        status,
+                        qr_code,
+                        removal_reason
+                    )
+                    VALUES
+                    (
+                        $1,
+                        $2,
+                        $3,
+                        $4,
+                        $5,
+                        $6,
+                        $7,
+                        $8,
+                        $9,
+                        $10,
+                        $11,
+                        $12
+                    )
+                    RETURNING
+                        archive_id,
+                        original_member_id,
+                        user_id,
+                        member_id,
+                        full_name,
+                        email,
+                        registration_type,
+                        membership_plan,
+                        start_date,
+                        expiration_date,
+                        status,
+                        qr_code,
+                        archived_at,
+                        restored_at,
+                        removal_reason
+                    `,
+                    [
+                        member.id,
+
+                        member.user_id,
+
+                        member.member_id,
+
+                        member.full_name,
+
+                        member.email,
+
+                        member.registration_type,
+
+                        member.membership_plan,
+
+                        member.start_date,
+
+                        member.expiration_date,
+
+                        member.status,
+
+                        member.qr_code,
+
+                        reason
+                    ]
+                );
+
 
             await client.query(
                 `
                 UPDATE attendance
-                SET member_id = NULL
+                SET
+                    member_id = NULL
                 WHERE member_id = $1
                 `,
-                [memberId]
+                [
+                    memberId
+                ]
             );
 
-            const deleteResult = await client.query(
-                `
-                DELETE FROM members
-                WHERE id = $1
-                RETURNING
-                    id,
-                    member_id,
-                    user_id
-                `,
-                [memberId]
+
+            const deleteResult =
+                await client.query(
+                    `
+                    DELETE FROM members
+                    WHERE id = $1
+                    RETURNING
+                        id,
+                        member_id,
+                        user_id
+                    `,
+                    [
+                        memberId
+                    ]
+                );
+
+
+            // ---------------------------------
+            // CUSTOMER NOTIFICATION
+            // ---------------------------------
+
+            await createNotification(
+                client,
+
+                member.user_id,
+
+                "Membership Removed",
+
+                `Your membership has been removed by the gym administrator. Reason: ${reason}`,
+
+                "ERROR"
             );
 
-            await client.query("COMMIT");
-            transactionStarted = false;
+
+            await client.query(
+                "COMMIT"
+            );
+
+            transactionStarted =
+                false;
+
 
             res.json({
-                success: true,
+
+                success:
+                    true,
+
                 message:
                     "Membership archived and removed successfully.",
-                member: deleteResult.rows[0],
-                archive: archiveResult.rows[0]
+
+                member:
+                    deleteResult.rows[0],
+
+                archive:
+                    archiveResult.rows[0]
+
             });
+
+
         } catch (error) {
-            if (transactionStarted) {
+
+            if (
+                transactionStarted
+            ) {
+
                 try {
-                    await client.query("ROLLBACK");
-                } catch (rollbackError) {
+
+                    await client.query(
+                        "ROLLBACK"
+                    );
+
+                } catch (
+                    rollbackError
+                ) {
+
                     console.error(
                         "Rollback error:",
                         rollbackError
                     );
+
                 }
+
             }
+
 
             console.error(
                 "Archive/remove member error:",
                 error
             );
 
-            res.status(500).json({
-                success: false,
+
+            res.status(
+                500
+            ).json({
+
+                success:
+                    false,
+
                 message:
                     "Unable to archive and remove membership.",
-                error: error.message,
-                code: error.code || null,
-                detail: error.detail || null
+
+                error:
+                    error.message,
+
+                code:
+                    error.code ||
+                    null,
+
+                detail:
+                    error.detail ||
+                    null
+
             });
+
         } finally {
+
             client.release();
+
         }
+
     }
 );
+
+
+// =====================================
+// ARCHIVED MEMBERS
+// =====================================
 
 app.get(
     "/api/admin/archived-members",
     async (req, res) => {
+
         try {
+
             const result =
                 await pool.query(
                     `
@@ -1599,235 +3141,414 @@ app.get(
                     `
                 );
 
+
             res.json({
-                success: true,
+
+                success:
+                    true,
+
                 archivedMembers:
                     result.rows
+
             });
+
+
         } catch (error) {
+
             console.error(
                 "Archived members error:",
                 error
             );
 
-            res.status(500).json({
-                success: false,
+
+            res.status(
+                500
+            ).json({
+
+                success:
+                    false,
+
                 message:
                     "Unable to load archived members.",
+
                 error:
                     error.message
+
             });
+
         }
+
     }
 );
+
+
+// =====================================
+// RESTORE ARCHIVED MEMBER
+// =====================================
 
 app.post(
     "/api/admin/archived-members/:id/restore",
     async (req, res) => {
-        const client = await pool.connect();
-        let transactionStarted = false;
+
+        const client =
+            await pool.connect();
+
+        let transactionStarted =
+            false;
 
         try {
-            const archiveId = Number(req.params.id);
+
+            const archiveId =
+                Number(
+                    req.params.id
+                );
+
 
             if (
-                !Number.isInteger(archiveId) ||
+                !Number.isInteger(
+                    archiveId
+                ) ||
                 archiveId <= 0
             ) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Invalid archive ID."
+
+                return res.status(
+                    400
+                ).json({
+
+                    success:
+                        false,
+
+                    message:
+                        "Invalid archive ID."
+
                 });
+
             }
 
-            await client.query("BEGIN");
-            transactionStarted = true;
 
-            const archiveResult = await client.query(
-                `
-                SELECT
-                    archive_id,
-                    original_member_id,
-                    user_id,
-                    member_id,
-                    full_name,
-                    email,
-                    registration_type,
-                    membership_plan,
-                    start_date,
-                    expiration_date,
-                    status,
-                    qr_code,
-                    archived_at,
-                    restored_at,
-                    removal_reason
-                FROM archived_members
-                WHERE archive_id = $1
-                FOR UPDATE
-                `,
-                [archiveId]
+            await client.query(
+                "BEGIN"
             );
 
-            if (archiveResult.rows.length === 0) {
-                await client.query("ROLLBACK");
-                transactionStarted = false;
+            transactionStarted =
+                true;
 
-                return res.status(404).json({
-                    success: false,
-                    message: "Archived membership not found."
+
+            const archiveResult =
+                await client.query(
+                    `
+                    SELECT
+                        archive_id,
+                        original_member_id,
+                        user_id,
+                        member_id,
+                        full_name,
+                        email,
+                        registration_type,
+                        membership_plan,
+                        start_date,
+                        expiration_date,
+                        status,
+                        qr_code,
+                        archived_at,
+                        restored_at,
+                        removal_reason
+                    FROM archived_members
+                    WHERE archive_id = $1
+                    FOR UPDATE
+                    `,
+                    [
+                        archiveId
+                    ]
+                );
+
+
+            if (
+                archiveResult.rows.length ===
+                0
+            ) {
+
+                await client.query(
+                    "ROLLBACK"
+                );
+
+                transactionStarted =
+                    false;
+
+
+                return res.status(
+                    404
+                ).json({
+
+                    success:
+                        false,
+
+                    message:
+                        "Archived membership not found."
+
                 });
+
             }
 
-            const archived = archiveResult.rows[0];
 
-            if (archived.restored_at) {
-                await client.query("ROLLBACK");
-                transactionStarted = false;
+            const archived =
+                archiveResult.rows[0];
 
-                return res.status(400).json({
-                    success: false,
-                    message: "This membership has already been restored."
+
+            if (
+                archived.restored_at
+            ) {
+
+                await client.query(
+                    "ROLLBACK"
+                );
+
+                transactionStarted =
+                    false;
+
+
+                return res.status(
+                    400
+                ).json({
+
+                    success:
+                        false,
+
+                    message:
+                        "This membership has already been restored."
+
                 });
+
             }
 
-            const userResult = await client.query(
-                `
-                SELECT
-                    id,
-                    full_name,
-                    email
-                FROM users
-                WHERE id = $1
-                  AND LOWER(role) = 'customer'
-                FOR UPDATE
-                `,
-                [archived.user_id]
-            );
 
-            if (userResult.rows.length === 0) {
-                await client.query("ROLLBACK");
-                transactionStarted = false;
+            const userResult =
+                await client.query(
+                    `
+                    SELECT
+                        id,
+                        full_name,
+                        email
+                    FROM users
+                    WHERE id = $1
+                      AND LOWER(role) = 'customer'
+                    FOR UPDATE
+                    `,
+                    [
+                        archived.user_id
+                    ]
+                );
 
-                return res.status(404).json({
-                    success: false,
-                    message: "Customer account no longer exists."
+
+            if (
+                userResult.rows.length ===
+                0
+            ) {
+
+                await client.query(
+                    "ROLLBACK"
+                );
+
+                transactionStarted =
+                    false;
+
+
+                return res.status(
+                    404
+                ).json({
+
+                    success:
+                        false,
+
+                    message:
+                        "Customer account no longer exists."
+
                 });
+
             }
 
-            const existingMemberResult = await client.query(
-                `
-                SELECT
-                    id,
-                    member_id,
-                    status
-                FROM members
-                WHERE user_id = $1
-                FOR UPDATE
-                `,
-                [archived.user_id]
-            );
 
-            if (existingMemberResult.rows.length > 0) {
-                await client.query("ROLLBACK");
-                transactionStarted = false;
+            const existingMemberResult =
+                await client.query(
+                    `
+                    SELECT
+                        id,
+                        member_id,
+                        status
+                    FROM members
+                    WHERE user_id = $1
+                    FOR UPDATE
+                    `,
+                    [
+                        archived.user_id
+                    ]
+                );
 
-                return res.status(400).json({
-                    success: false,
-                    message: "This customer already has a membership."
+
+            if (
+                existingMemberResult.rows.length >
+                0
+            ) {
+
+                await client.query(
+                    "ROLLBACK"
+                );
+
+                transactionStarted =
+                    false;
+
+
+                return res.status(
+                    400
+                ).json({
+
+                    success:
+                        false,
+
+                    message:
+                        "This customer already has a membership."
+
                 });
+
             }
 
-            let restoredMemberId = archived.member_id;
 
-            const duplicateMemberResult = await client.query(
-                `
-                SELECT id
-                FROM members
-                WHERE member_id = $1
-                `,
-                [restoredMemberId]
-            );
+            let restoredMemberId =
+                archived.member_id;
 
-            if (duplicateMemberResult.rows.length > 0) {
+
+            const duplicateMemberResult =
+                await client.query(
+                    `
+                    SELECT id
+                    FROM members
+                    WHERE member_id = $1
+                    `,
+                    [
+                        restoredMemberId
+                    ]
+                );
+
+
+            if (
+                duplicateMemberResult.rows.length >
+                0
+            ) {
+
                 restoredMemberId =
-                    `GYM-${String(archived.user_id).padStart(6, "0")}-${Date.now()}`;
+                    `GYM-${String(
+                        archived.user_id
+                    ).padStart(
+                        6,
+                        "0"
+                    )}-${Date.now()}`;
+
             }
 
-            const dateResult = await client.query(
-                `
-                SELECT
-                    CASE
-                        WHEN expiration_date IS NOT NULL
-                             AND expiration_date >= CURRENT_DATE
-                        THEN COALESCE(start_date, CURRENT_DATE)
-                        ELSE CURRENT_DATE
-                    END AS start_date,
-                    CASE
-                        WHEN expiration_date IS NOT NULL
-                             AND expiration_date >= CURRENT_DATE
-                        THEN expiration_date
-                        ELSE (CURRENT_DATE + INTERVAL '1 month')::date
-                    END AS expiration_date
-                FROM archived_members
-                WHERE archive_id = $1
-                `,
-                [archiveId]
-            );
+
+            const dateResult =
+                await client.query(
+                    `
+                    SELECT
+                        CASE
+                            WHEN expiration_date IS NOT NULL
+                                 AND expiration_date >= CURRENT_DATE
+                            THEN COALESCE(
+                                start_date,
+                                CURRENT_DATE
+                            )
+                            ELSE CURRENT_DATE
+                        END AS start_date,
+
+                        CASE
+                            WHEN expiration_date IS NOT NULL
+                                 AND expiration_date >= CURRENT_DATE
+                            THEN expiration_date
+                            ELSE (
+                                CURRENT_DATE +
+                                INTERVAL '1 month'
+                            )::date
+                        END AS expiration_date
+
+                    FROM archived_members
+
+                    WHERE archive_id = $1
+                    `,
+                    [
+                        archiveId
+                    ]
+                );
+
 
             const startDate =
-                dateResult.rows[0].start_date;
+                dateResult.rows[0]
+                    .start_date;
+
 
             const expirationDate =
-                dateResult.rows[0].expiration_date;
+                dateResult.rows[0]
+                    .expiration_date;
+
 
             const newQrCode =
                 `ANCHOR-${crypto.randomUUID()}`;
 
-            const memberResult = await client.query(
-                `
-                INSERT INTO members
-                (
-                    user_id,
-                    member_id,
-                    registration_type,
-                    membership_plan,
-                    start_date,
-                    expiration_date,
-                    status,
-                    qr_code
-                )
-                VALUES
-                (
-                    $1,
-                    $2,
-                    $3,
-                    $4,
-                    $5,
-                    $6,
-                    'ACTIVE',
-                    $7
-                )
-                RETURNING
-                    id,
-                    user_id,
-                    member_id,
-                    registration_type,
-                    membership_plan,
-                    start_date,
-                    expiration_date,
-                    status,
-                    qr_code
-                `,
-                [
-                    archived.user_id,
-                    restoredMemberId,
-                    archived.registration_type || "ONLINE",
-                    archived.membership_plan || "Monthly",
-                    startDate,
-                    expirationDate,
-                    newQrCode
-                ]
-            );
+
+            const memberResult =
+                await client.query(
+                    `
+                    INSERT INTO members
+                    (
+                        user_id,
+                        member_id,
+                        registration_type,
+                        membership_plan,
+                        start_date,
+                        expiration_date,
+                        status,
+                        qr_code
+                    )
+                    VALUES
+                    (
+                        $1,
+                        $2,
+                        $3,
+                        $4,
+                        $5,
+                        $6,
+                        'ACTIVE',
+                        $7
+                    )
+                    RETURNING
+                        id,
+                        user_id,
+                        member_id,
+                        registration_type,
+                        membership_plan,
+                        start_date,
+                        expiration_date,
+                        status,
+                        qr_code
+                    `,
+                    [
+                        archived.user_id,
+
+                        restoredMemberId,
+
+                        archived.registration_type ||
+                            "ONLINE",
+
+                        archived.membership_plan ||
+                            "Monthly",
+
+                        startDate,
+
+                        expirationDate,
+
+                        newQrCode
+                    ]
+                );
+
 
             await client.query(
                 `
@@ -1837,53 +3558,112 @@ app.post(
                     status = 'RESTORED'
                 WHERE archive_id = $1
                 `,
-                [archiveId]
+                [
+                    archiveId
+                ]
             );
 
-            await client.query("COMMIT");
-            transactionStarted = false;
+
+            await client.query(
+                "COMMIT"
+            );
+
+            transactionStarted =
+                false;
+
 
             res.json({
-                success: true,
-                message: "Membership restored successfully.",
-                member: memberResult.rows[0]
+
+                success:
+                    true,
+
+                message:
+                    "Membership restored successfully.",
+
+                member:
+                    memberResult.rows[0]
+
             });
+
+
         } catch (error) {
-            if (transactionStarted) {
+
+            if (
+                transactionStarted
+            ) {
+
                 try {
-                    await client.query("ROLLBACK");
-                } catch (rollbackError) {
+
+                    await client.query(
+                        "ROLLBACK"
+                    );
+
+                } catch (
+                    rollbackError
+                ) {
+
                     console.error(
                         "Rollback error:",
                         rollbackError
                     );
+
                 }
+
             }
+
 
             console.error(
                 "Restore archived membership error:",
                 error
             );
 
-            res.status(500).json({
-                success: false,
-                message: "Unable to restore membership.",
-                error: error.message,
-                code: error.code || null,
-                detail: error.detail || null
+
+            res.status(
+                500
+            ).json({
+
+                success:
+                    false,
+
+                message:
+                    "Unable to restore membership.",
+
+                error:
+                    error.message,
+
+                code:
+                    error.code ||
+                    null,
+
+                detail:
+                    error.detail ||
+                    null
+
             });
+
         } finally {
+
             client.release();
+
         }
+
     }
 );
+
+
+// =====================================
+// ADMIN TRANSACTIONS
+// =====================================
 
 app.get(
     "/api/admin/transactions",
     async (req, res) => {
+
         try {
+
             const result =
-                await pool.query(`
+                await pool.query(
+                    `
                     SELECT
                         t.id,
                         t.user_id,
@@ -1901,48 +3681,86 @@ app.get(
                     ORDER BY
                         t.transaction_date DESC,
                         t.id DESC
-                `);
+                    `
+                );
+
 
             res.json({
-                success: true,
+
+                success:
+                    true,
+
                 transactions:
                     result.rows
+
             });
+
+
         } catch (error) {
+
             console.error(
                 "Transactions error:",
                 error
             );
 
-            res.status(500).json({
-                success: false,
+
+            res.status(
+                500
+            ).json({
+
+                success:
+                    false,
+
                 message:
                     "Unable to load transactions.",
+
                 error:
                     error.message
+
             });
+
         }
+
     }
 );
+
+
+// =====================================
+// DELETE TRANSACTION
+// =====================================
 
 app.delete(
     "/api/admin/transactions/:id",
     async (req, res) => {
+
         try {
+
             const transactionId =
-                Number(req.params.id);
+                Number(
+                    req.params.id
+                );
+
 
             if (
                 !Number.isInteger(
                     transactionId
                 )
             ) {
-                return res.status(400).json({
-                    success: false,
+
+                return res.status(
+                    400
+                ).json({
+
+                    success:
+                        false,
+
                     message:
                         "Invalid transaction ID."
+
                 });
+
             }
+
 
             const result =
                 await pool.query(
@@ -1951,50 +3769,88 @@ app.delete(
                     WHERE id = $1
                     RETURNING id
                     `,
-                    [transactionId]
+                    [
+                        transactionId
+                    ]
                 );
+
 
             if (
                 result.rows.length ===
                 0
             ) {
-                return res.status(404).json({
-                    success: false,
+
+                return res.status(
+                    404
+                ).json({
+
+                    success:
+                        false,
+
                     message:
                         "Transaction not found."
+
                 });
+
             }
 
+
             res.json({
-                success: true,
+
+                success:
+                    true,
+
                 message:
                     "Transaction deleted successfully.",
+
                 transaction:
                     result.rows[0]
+
             });
+
+
         } catch (error) {
+
             console.error(
                 "Delete transaction error:",
                 error
             );
 
-            res.status(500).json({
-                success: false,
+
+            res.status(
+                500
+            ).json({
+
+                success:
+                    false,
+
                 message:
                     "Unable to delete transaction.",
+
                 error:
                     error.message
+
             });
+
         }
+
     }
 );
+
+
+// =====================================
+// ADMIN ATTENDANCE
+// =====================================
 
 app.get(
     "/api/admin/attendance",
     async (req, res) => {
+
         try {
+
             const result =
-                await pool.query(`
+                await pool.query(
+                    `
                     SELECT
                         a.id,
                         a.member_id,
@@ -2002,50 +3858,87 @@ app.get(
                         a.user_type,
                         a.check_in,
                         a.check_out,
+
                         CASE
-                            WHEN UPPER(a.user_type) = 'MEMBER'
+                            WHEN UPPER(
+                                a.user_type
+                            ) = 'MEMBER'
                             THEN u.full_name
-                            WHEN UPPER(a.user_type) = 'GUEST'
+
+                            WHEN UPPER(
+                                a.user_type
+                            ) = 'GUEST'
                             THEN g.full_name
+
                             ELSE 'Unknown'
                         END AS full_name
+
                     FROM attendance a
+
                     LEFT JOIN members m
                         ON m.id = a.member_id
+
                     LEFT JOIN users u
                         ON u.id = m.user_id
+
                     LEFT JOIN guests g
                         ON g.id = a.guest_id
+
                     ORDER BY
                         a.check_in DESC,
                         a.id DESC
-                `);
+                    `
+                );
+
 
             res.json({
-                success: true,
+
+                success:
+                    true,
+
                 attendance:
                     result.rows
+
             });
+
+
         } catch (error) {
+
             console.error(
                 "Attendance error:",
                 error
             );
 
-            res.status(500).json({
-                success: false,
+
+            res.status(
+                500
+            ).json({
+
+                success:
+                    false,
+
                 message:
                     "Unable to load attendance.",
+
                 error:
                     error.message
+
             });
+
         }
+
     }
 );
+
+
+// =====================================
+// MEMBER QR ATTENDANCE
+// =====================================
 
 app.post(
     "/api/admin/attendance/scan",
     async (req, res) => {
+
         const client =
             await pool.connect();
 
@@ -2053,22 +3946,38 @@ app.post(
             false;
 
         try {
+
             const qrCode =
                 String(
                     req.body.qr_code ||
                     ""
                 ).trim();
 
+
             if (!qrCode) {
-                return res.status(400).json({
-                    success: false,
+
+                return res.status(
+                    400
+                ).json({
+
+                    success:
+                        false,
+
                     message:
                         "QR code is required."
+
                 });
+
             }
 
-            await client.query("BEGIN");
-            transactionStarted = true;
+
+            await client.query(
+                "BEGIN"
+            );
+
+            transactionStarted =
+                true;
+
 
             const memberResult =
                 await client.query(
@@ -2090,32 +3999,52 @@ app.post(
                     LIMIT 1
                     FOR UPDATE
                     `,
-                    [qrCode]
+                    [
+                        qrCode
+                    ]
                 );
+
 
             if (
                 memberResult.rows.length ===
                 0
             ) {
-                await client.query("ROLLBACK");
-                transactionStarted = false;
 
-                return res.status(404).json({
-                    success: false,
+                await client.query(
+                    "ROLLBACK"
+                );
+
+                transactionStarted =
+                    false;
+
+
+                return res.status(
+                    404
+                ).json({
+
+                    success:
+                        false,
+
                     message:
                         "QR code does not belong to a gym member."
+
                 });
+
             }
+
 
             const member =
                 memberResult.rows[0];
 
+
             const status =
                 String(
-                    member.status || ""
+                    member.status ||
+                    ""
                 )
                     .trim()
                     .toUpperCase();
+
 
             const expiration =
                 member.expiration_date
@@ -2124,56 +4053,101 @@ app.post(
                     )
                     : null;
 
+
             const expirationEnd =
                 expiration
-                    ? new Date(expiration)
+                    ? new Date(
+                        expiration
+                    )
                     : null;
 
-            if (expirationEnd) {
+
+            if (
+                expirationEnd
+            ) {
+
                 expirationEnd.setHours(
                     23,
                     59,
                     59,
                     999
                 );
+
             }
+
 
             if (
                 expirationEnd &&
                 !Number.isNaN(
                     expirationEnd.getTime()
                 ) &&
-                expirationEnd < new Date()
+                expirationEnd <
+                new Date()
             ) {
+
                 await client.query(
                     `
                     UPDATE members
-                    SET status = 'EXPIRED'
+                    SET
+                        status = 'EXPIRED'
                     WHERE id = $1
                     `,
-                    [member.id]
+                    [
+                        member.id
+                    ]
                 );
 
-                await client.query("COMMIT");
-                transactionStarted = false;
 
-                return res.status(400).json({
-                    success: false,
+                await client.query(
+                    "COMMIT"
+                );
+
+                transactionStarted =
+                    false;
+
+
+                return res.status(
+                    400
+                ).json({
+
+                    success:
+                        false,
+
                     message:
                         "This membership has expired."
+
                 });
+
             }
 
-            if (status !== "ACTIVE") {
-                await client.query("ROLLBACK");
-                transactionStarted = false;
 
-                return res.status(400).json({
-                    success: false,
+            if (
+                status !==
+                "ACTIVE"
+            ) {
+
+                await client.query(
+                    "ROLLBACK"
+                );
+
+                transactionStarted =
+                    false;
+
+
+                return res.status(
+                    400
+                ).json({
+
+                    success:
+                        false,
+
                     message:
                         "This member does not have an active membership."
+
                 });
+
             }
+
 
             const openAttendanceResult =
                 await client.query(
@@ -2192,24 +4166,32 @@ app.post(
                     LIMIT 1
                     FOR UPDATE
                     `,
-                    [member.id]
+                    [
+                        member.id
+                    ]
                 );
+
 
             let action;
             let attendance;
+
 
             if (
                 openAttendanceResult.rows.length >
                 0
             ) {
+
                 const activeAttendance =
                     openAttendanceResult.rows[0];
+
 
                 const checkoutResult =
                     await client.query(
                         `
                         UPDATE attendance
-                        SET check_out = CURRENT_TIMESTAMP
+                        SET
+                            check_out =
+                                CURRENT_TIMESTAMP
                         WHERE id = $1
                         RETURNING
                             id,
@@ -2219,14 +4201,22 @@ app.post(
                             check_in,
                             check_out
                         `,
-                        [activeAttendance.id]
+                        [
+                            activeAttendance.id
+                        ]
                     );
+
 
                 attendance =
                     checkoutResult.rows[0];
 
-                action = "CHECKED_OUT";
+
+                action =
+                    "CHECKED_OUT";
+
+
             } else {
+
                 const checkinResult =
                     await client.query(
                         `
@@ -2248,114 +4238,198 @@ app.post(
                             check_in,
                             check_out
                         `,
-                        [member.id]
+                        [
+                            member.id
+                        ]
                     );
+
 
                 attendance =
                     checkinResult.rows[0];
 
-                action = "CHECKED_IN";
+
+                action =
+                    "CHECKED_IN";
+
             }
 
+
             const occupancyResult =
-                await client.query(`
+                await client.query(
+                    `
                     SELECT
                         COUNT(*) FILTER (
                             WHERE UPPER(user_type) = 'MEMBER'
                               AND check_out IS NULL
                         )::int AS members_inside,
+
                         COUNT(*) FILTER (
                             WHERE UPPER(user_type) = 'GUEST'
                               AND check_out IS NULL
                         )::int AS guests_inside
+
                     FROM attendance
-                `);
+                    `
+                );
+
 
             const membersInside =
                 Number(
-                    occupancyResult.rows[0]
-                        .members_inside || 0
+                    occupancyResult
+                        .rows[0]
+                        .members_inside ||
+                    0
                 );
+
 
             const guestsInside =
                 Number(
-                    occupancyResult.rows[0]
-                        .guests_inside || 0
+                    occupancyResult
+                        .rows[0]
+                        .guests_inside ||
+                    0
                 );
+
 
             const occupancy =
                 membersInside +
                 guestsInside;
 
-            await client.query("COMMIT");
-            transactionStarted = false;
+
+            await client.query(
+                "COMMIT"
+            );
+
+            transactionStarted =
+                false;
+
 
             res.json({
-                success: true,
+
+                success:
+                    true,
+
                 action,
+
                 message:
-                    action === "CHECKED_IN"
+                    action ===
+                    "CHECKED_IN"
                         ? `${member.full_name} checked in successfully.`
                         : `${member.full_name} checked out successfully.`,
+
                 member: {
+
                     id:
                         member.id,
+
                     user_id:
                         member.user_id,
+
                     member_id:
                         member.member_id,
+
                     full_name:
                         member.full_name,
+
                     email:
                         member.email,
+
                     membership_plan:
                         member.membership_plan,
+
                     status:
                         member.status
+
                 },
+
                 attendance,
+
                 membersInside,
+
                 guestsInside,
+
                 occupancy,
-                capacity: 120
+
+                capacity:
+                    120
+
             });
+
+
         } catch (error) {
-            if (transactionStarted) {
+
+            if (
+                transactionStarted
+            ) {
+
                 try {
-                    await client.query("ROLLBACK");
-                } catch (rollbackError) {
+
+                    await client.query(
+                        "ROLLBACK"
+                    );
+
+                } catch (
+                    rollbackError
+                ) {
+
                     console.error(
                         "Rollback error:",
                         rollbackError
                     );
+
                 }
+
             }
+
 
             console.error(
                 "QR attendance error:",
                 error
             );
 
-            res.status(500).json({
-                success: false,
+
+            res.status(
+                500
+            ).json({
+
+                success:
+                    false,
+
                 message:
                     "Unable to process QR scan.",
+
                 error:
                     error.message,
+
                 code:
-                    error.code || null,
+                    error.code ||
+                    null,
+
                 detail:
-                    error.detail || null
+                    error.detail ||
+                    null
+
             });
+
+
         } finally {
+
             client.release();
+
         }
+
     }
 );
+
+
+// =====================================
+// GUEST / WALK-IN
+// =====================================
 
 app.post(
     "/api/admin/guests",
     async (req, res) => {
+
         const client =
             await pool.connect();
 
@@ -2363,41 +4437,230 @@ app.post(
             false;
 
         try {
+
             const {
                 full_name,
                 phone,
                 visit_type,
+                hours,
                 amount_paid,
                 payment_method
             } = req.body;
 
-            if (
-                !full_name ||
-                !String(full_name).trim()
-            ) {
-                return res.status(400).json({
-                    success: false,
+
+            const finalName =
+                String(
+                    full_name ||
+                    ""
+                ).trim();
+
+
+            const finalVisitType =
+                String(
+                    visit_type ||
+                    ""
+                )
+                    .trim()
+                    .toUpperCase();
+
+
+            const finalPaymentMethod =
+                String(
+                    payment_method ||
+                    ""
+                )
+                    .trim()
+                    .toUpperCase();
+
+
+            if (!finalName) {
+
+                return res.status(
+                    400
+                ).json({
+
+                    success:
+                        false,
+
                     message:
                         "Guest name is required."
+
                 });
+
             }
 
-            const amount =
-                Number(amount_paid || 0);
 
             if (
-                Number.isNaN(amount) ||
-                amount < 0
+                finalVisitType !==
+                "GUEST" &&
+                finalVisitType !==
+                "DAY PASS"
             ) {
-                return res.status(400).json({
-                    success: false,
+
+                return res.status(
+                    400
+                ).json({
+
+                    success:
+                        false,
+
                     message:
-                        "Invalid amount paid."
+                        "Invalid guest visit type."
+
                 });
+
             }
 
-            await client.query("BEGIN");
-            transactionStarted = true;
+
+            if (!finalPaymentMethod) {
+
+                return res.status(
+                    400
+                ).json({
+
+                    success:
+                        false,
+
+                    message:
+                        "Payment method is required."
+
+                });
+
+            }
+
+
+            if (
+                finalPaymentMethod !==
+                "CASH" &&
+                finalPaymentMethod !==
+                "GCASH"
+            ) {
+
+                return res.status(
+                    400
+                ).json({
+
+                    success:
+                        false,
+
+                    message:
+                        "Invalid payment method."
+
+                });
+
+            }
+
+
+            let finalHours =
+                null;
+
+
+            let finalAmount =
+                0;
+
+
+            // ---------------------------------
+            // DAY PASS
+            // ---------------------------------
+
+            if (
+                finalVisitType ===
+                "DAY PASS"
+            ) {
+
+                finalHours =
+                    null;
+
+                finalAmount =
+                    100;
+
+
+            // ---------------------------------
+            // GUEST VISIT
+            // ---------------------------------
+
+            } else {
+
+                finalHours =
+                    Number(
+                        hours
+                    );
+
+
+                if (
+                    !Number.isInteger(
+                        finalHours
+                    ) ||
+                    finalHours < 1 ||
+                    finalHours > 3
+                ) {
+
+                    return res.status(
+                        400
+                    ).json({
+
+                        success:
+                            false,
+
+                        message:
+                            "Guest Visit must be between 1 and 3 hours."
+
+                    });
+
+                }
+
+
+                finalAmount =
+                    finalHours *
+                    30;
+
+            }
+
+
+            // ---------------------------------
+            // FRONTEND AMOUNT CHECK
+            // ---------------------------------
+
+            const submittedAmount =
+                Number(
+                    amount_paid
+                );
+
+
+            if (
+                !Number.isFinite(
+                    submittedAmount
+                ) ||
+                submittedAmount !==
+                finalAmount
+            ) {
+
+                return res.status(
+                    400
+                ).json({
+
+                    success:
+                        false,
+
+                    message:
+                        `Payment amount must be exactly ₱${finalAmount}.`
+
+                });
+
+            }
+
+
+            await client.query(
+                "BEGIN"
+            );
+
+            transactionStarted =
+                true;
+
+
+            // ---------------------------------
+            // INSERT GUEST
+            // ---------------------------------
 
             const guestResult =
                 await client.query(
@@ -2407,6 +4670,7 @@ app.post(
                         full_name,
                         phone,
                         visit_type,
+                        hours,
                         amount_paid,
                         payment_method
                     )
@@ -2416,38 +4680,47 @@ app.post(
                         $2,
                         $3,
                         $4,
-                        $5
+                        $5,
+                        $6
                     )
                     RETURNING
                         id,
                         full_name,
                         phone,
                         visit_type,
+                        hours,
                         amount_paid,
                         payment_method,
                         created_at
                     `,
                     [
+
+                        finalName,
+
                         String(
-                            full_name
-                        ).trim(),
-                        String(
-                            phone || ""
-                        ).trim(),
-                        String(
-                            visit_type ||
-                            "GUEST"
-                        ).trim(),
-                        amount,
-                        String(
-                            payment_method ||
+                            phone ||
                             ""
-                        ).trim()
+                        ).trim(),
+
+                        finalVisitType,
+
+                        finalHours,
+
+                        finalAmount,
+
+                        finalPaymentMethod
+
                     ]
                 );
 
+
             const guest =
                 guestResult.rows[0];
+
+
+            // ---------------------------------
+            // INSERT ATTENDANCE
+            // ---------------------------------
 
             const attendanceResult =
                 await client.query(
@@ -2469,78 +4742,148 @@ app.post(
                         check_in,
                         check_out
                     `,
-                    [guest.id]
+                    [
+                        guest.id
+                    ]
                 );
 
-            await client.query("COMMIT");
-            transactionStarted = false;
 
-            res.status(201).json({
-                success: true,
+            await client.query(
+                "COMMIT"
+            );
+
+            transactionStarted =
+                false;
+
+
+            res.status(
+                201
+            ).json({
+
+                success:
+                    true,
+
                 message:
                     "Guest recorded and checked in.",
+
                 guest,
+
                 attendance:
                     attendanceResult.rows[0]
+
             });
+
+
         } catch (error) {
-            if (transactionStarted) {
+
+            if (
+                transactionStarted
+            ) {
+
                 try {
-                    await client.query("ROLLBACK");
-                } catch (rollbackError) {
+
+                    await client.query(
+                        "ROLLBACK"
+                    );
+
+                } catch (
+                    rollbackError
+                ) {
+
                     console.error(
                         "Rollback error:",
                         rollbackError
                     );
+
                 }
+
             }
+
 
             console.error(
                 "Guest error:",
                 error
             );
 
-            res.status(500).json({
-                success: false,
+
+            res.status(
+                500
+            ).json({
+
+                success:
+                    false,
+
                 message:
                     "Unable to record guest.",
+
                 error:
                     error.message,
+
                 code:
-                    error.code || null,
+                    error.code ||
+                    null,
+
                 detail:
-                    error.detail || null
+                    error.detail ||
+                    null
+
             });
+
+
         } finally {
+
             client.release();
+
         }
+
     }
 );
+
+
+// =====================================
+// CHECK OUT ATTENDANCE
+// =====================================
 
 app.patch(
     "/api/admin/attendance/:id/checkout",
     async (req, res) => {
+
         try {
+
             const attendanceId =
-                Number(req.params.id);
+                Number(
+                    req.params.id
+                );
+
 
             if (
                 !Number.isInteger(
                     attendanceId
                 )
             ) {
-                return res.status(400).json({
-                    success: false,
+
+                return res.status(
+                    400
+                ).json({
+
+                    success:
+                        false,
+
                     message:
                         "Invalid attendance ID."
+
                 });
+
             }
+
 
             const result =
                 await pool.query(
                     `
                     UPDATE attendance
-                    SET check_out = CURRENT_TIMESTAMP
+                    SET
+                        check_out =
+                            CURRENT_TIMESTAMP
                     WHERE id = $1
                       AND check_out IS NULL
                     RETURNING
@@ -2551,148 +4894,292 @@ app.patch(
                         check_in,
                         check_out
                     `,
-                    [attendanceId]
+                    [
+                        attendanceId
+                    ]
                 );
+
 
             if (
                 result.rows.length ===
                 0
             ) {
-                return res.status(404).json({
-                    success: false,
+
+                return res.status(
+                    404
+                ).json({
+
+                    success:
+                        false,
+
                     message:
                         "Active attendance record not found."
+
                 });
+
             }
 
+
             res.json({
-                success: true,
+
+                success:
+                    true,
+
                 message:
                     "Checked out successfully.",
+
                 attendance:
                     result.rows[0]
+
             });
+
+
         } catch (error) {
+
             console.error(
                 "Checkout error:",
                 error
             );
 
-            res.status(500).json({
-                success: false,
+
+            res.status(
+                500
+            ).json({
+
+                success:
+                    false,
+
                 message:
                     "Unable to check out.",
+
                 error:
                     error.message
+
             });
+
         }
+
     }
 );
+
+
+// =====================================
+// REPORTS
+// =====================================
 
 app.get(
     "/api/admin/reports",
     async (req, res) => {
+
         try {
+
             const totalVisitsResult =
-                await pool.query(`
-                    SELECT COUNT(*)::int AS total_visits
+                await pool.query(
+                    `
+                    SELECT
+                        COUNT(*)::int AS total_visits
                     FROM attendance
-                `);
+                    `
+                );
+
 
             const memberVisitsResult =
-                await pool.query(`
-                    SELECT COUNT(*)::int AS member_visits
+                await pool.query(
+                    `
+                    SELECT
+                        COUNT(*)::int AS member_visits
                     FROM attendance
                     WHERE UPPER(user_type) = 'MEMBER'
-                `);
+                    `
+                );
+
 
             const guestVisitsResult =
-                await pool.query(`
-                    SELECT COUNT(*)::int AS guest_visits
+                await pool.query(
+                    `
+                    SELECT
+                        COUNT(*)::int AS guest_visits
                     FROM attendance
                     WHERE UPPER(user_type) = 'GUEST'
-                `);
+                    `
+                );
+
 
             const dailyResult =
-                await pool.query(`
+                await pool.query(
+                    `
                     SELECT
-                        EXTRACT(HOUR FROM check_in)::int AS hour,
+                        EXTRACT(
+                            HOUR
+                            FROM check_in
+                        )::int AS hour,
+
                         COUNT(*)::int AS visits
+
                     FROM attendance
-                    WHERE check_in::date = CURRENT_DATE
-                    GROUP BY EXTRACT(HOUR FROM check_in)
-                    ORDER BY hour
-                `);
+
+                    WHERE check_in::date =
+                          CURRENT_DATE
+
+                    GROUP BY
+                        EXTRACT(
+                            HOUR
+                            FROM check_in
+                        )
+
+                    ORDER BY
+                        hour
+                    `
+                );
+
 
             res.json({
-                success: true,
+
+                success:
+                    true,
+
                 totalVisits:
-                    totalVisitsResult.rows[0]
-                        .total_visits || 0,
+                    totalVisitsResult
+                        .rows[0]
+                        .total_visits ||
+                    0,
+
                 memberVisits:
-                    memberVisitsResult.rows[0]
-                        .member_visits || 0,
+                    memberVisitsResult
+                        .rows[0]
+                        .member_visits ||
+                    0,
+
                 guestVisits:
-                    guestVisitsResult.rows[0]
-                        .guest_visits || 0,
+                    guestVisitsResult
+                        .rows[0]
+                        .guest_visits ||
+                    0,
+
                 hourly:
                     dailyResult.rows
+
             });
+
+
         } catch (error) {
+
             console.error(
                 "Reports error:",
                 error
             );
 
-            res.status(500).json({
-                success: false,
+
+            res.status(
+                500
+            ).json({
+
+                success:
+                    false,
+
                 message:
                     "Unable to load reports.",
+
                 error:
                     error.message
+
             });
+
         }
+
     }
 );
+
+
+// =====================================
+// EQUIPMENT
+// =====================================
 
 app.get(
     "/api/admin/equipment",
     async (req, res) => {
+
         try {
+
             res.json({
-                success: true,
-                equipment: []
+
+                success:
+                    true,
+
+                equipment:
+                    []
+
             });
+
+
         } catch (error) {
+
             console.error(
                 "Equipment error:",
                 error
             );
 
-            res.status(500).json({
-                success: false,
+
+            res.status(
+                500
+            ).json({
+
+                success:
+                    false,
+
                 message:
                     "Unable to load equipment.",
+
                 error:
                     error.message
+
             });
+
         }
+
     }
 );
+
+
+// =====================================
+// API 404
+// =====================================
 
 app.use(
     "/api",
     (req, res) => {
-        res.status(404).json({
-            success: false,
-            message: "API route not found.",
-            path: req.originalUrl
+
+        res.status(
+            404
+        ).json({
+
+            success:
+                false,
+
+            message:
+                "API route not found.",
+
+            path:
+                req.originalUrl
+
         });
+
     }
 );
 
-app.listen(PORT, "0.0.0.0", () => {
-    console.log(
-        `ANCHOR server running on port ${PORT}`
-    );
-});
+
+// =====================================
+// START SERVER
+// =====================================
+
+app.listen(
+    PORT,
+    "0.0.0.0",
+    () => {
+
+        console.log(
+            `ANCHOR server running on port ${PORT}`
+        );
+
+    }
+);

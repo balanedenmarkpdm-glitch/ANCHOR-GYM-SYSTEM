@@ -1,6 +1,15 @@
+// =====================================
+// ANCHOR GYM - ADMIN DASHBOARD
+// =====================================
+
 let refreshTimer = null;
 let qrScanner = null;
 let qrScanBusy = false;
+
+
+// =====================================
+// CHECK ADMIN ACCESS
+// =====================================
 
 function checkAdminAccess() {
 
@@ -9,7 +18,10 @@ function checkAdminAccess() {
             "anchorAdminLoggedIn"
         );
 
-    if (loggedIn !== "true") {
+    if (
+        loggedIn !==
+        "true"
+    ) {
 
         window.location.href =
             "admin-login.html";
@@ -20,6 +32,11 @@ function checkAdminAccess() {
     return true;
 }
 
+
+// =====================================
+// API REQUEST
+// =====================================
+
 async function apiRequest(
     url,
     options = {}
@@ -29,7 +46,8 @@ async function apiRequest(
         await fetch(
             url,
             {
-                cache: "no-store",
+                cache:
+                    "no-store",
                 ...options
             }
         );
@@ -42,7 +60,9 @@ async function apiRequest(
     try {
 
         data =
-            JSON.parse(text);
+            JSON.parse(
+                text
+            );
 
     } catch (error) {
 
@@ -66,44 +86,60 @@ async function apiRequest(
     return data;
 }
 
+
+// =====================================
+// PAGE NAVIGATION
+// =====================================
+
 function showPage(
     id,
     button = null
 ) {
 
     document
-        .querySelectorAll(".page")
+        .querySelectorAll(
+            ".page"
+        )
         .forEach(
-            (page) => {
+            page => {
+
                 page.classList.remove(
                     "active"
                 );
+
             }
         );
+
 
     const page =
         document.getElementById(
             id
         );
 
+
     if (page) {
 
         page.classList.add(
             "active"
         );
+
     }
+
 
     document
         .querySelectorAll(
             ".sidebar button"
         )
         .forEach(
-            (item) => {
+            item => {
+
                 item.classList.remove(
                     "active"
                 );
+
             }
         );
+
 
     if (button) {
 
@@ -118,31 +154,54 @@ function showPage(
                 `.sidebar button[onclick*="showPage('${id}'"]`
             );
 
+
         if (sidebarButton) {
 
             sidebarButton.classList.add(
                 "active"
             );
+
         }
+
     }
 
-    loadPageData(id);
+
+    loadPageData(
+        id
+    );
+
 }
 
-function showPageById(id) {
+
+// =====================================
+// SHOW PAGE BY ID
+// =====================================
+
+function showPageById(
+    id
+) {
 
     const button =
         document.querySelector(
             `.sidebar button[onclick*="showPage('${id}'"]`
         );
 
+
     showPage(
         id,
         button
     );
+
 }
 
-async function loadPageData(id) {
+
+// =====================================
+// LOAD PAGE DATA
+// =====================================
+
+async function loadPageData(
+    id
+) {
 
     if (
         id ===
@@ -157,7 +216,9 @@ async function loadPageData(id) {
             loadAttendance(),
             loadReports()
         ]);
+
     }
+
 
     if (
         id ===
@@ -165,7 +226,9 @@ async function loadPageData(id) {
     ) {
 
         await loadMembers();
+
     }
+
 
     if (
         id ===
@@ -173,7 +236,9 @@ async function loadPageData(id) {
     ) {
 
         await loadArchivedMembers();
+
     }
+
 
     if (
         id ===
@@ -181,7 +246,9 @@ async function loadPageData(id) {
     ) {
 
         await loadApplications();
+
     }
+
 
     if (
         id ===
@@ -189,7 +256,9 @@ async function loadPageData(id) {
     ) {
 
         await loadTransactions();
+
     }
+
 
     if (
         id ===
@@ -197,7 +266,9 @@ async function loadPageData(id) {
     ) {
 
         await loadAttendance();
+
     }
+
 
     if (
         id ===
@@ -205,7 +276,9 @@ async function loadPageData(id) {
     ) {
 
         updateGuestPricing();
+
     }
+
 
     if (
         id ===
@@ -213,7 +286,9 @@ async function loadPageData(id) {
     ) {
 
         await loadReports();
+
     }
+
 
     if (
         id ===
@@ -221,8 +296,15 @@ async function loadPageData(id) {
     ) {
 
         await loadEquipment();
+
     }
+
 }
+
+
+// =====================================
+// ADMIN DASHBOARD
+// =====================================
 
 async function loadAdminDashboard() {
 
@@ -233,11 +315,13 @@ async function loadAdminDashboard() {
                 "/api/admin/dashboard"
             );
 
+
         setText(
             "dashboardTotalMembers",
             data.totalRegistered ??
             0
         );
+
 
         setText(
             "dashboardActiveMembers",
@@ -245,11 +329,13 @@ async function loadAdminDashboard() {
             0
         );
 
+
         setText(
             "dashboardPendingCount",
             data.pendingApplications ??
             0
         );
+
 
         setText(
             "dashboardRejectedCount",
@@ -257,10 +343,12 @@ async function loadAdminDashboard() {
             0
         );
 
+
         setText(
             "dashboardOccupancy",
             `${data.occupancy ?? 0} / ${data.capacity ?? 120}`
         );
+
 
         setText(
             "dashboardMembersInside",
@@ -268,11 +356,13 @@ async function loadAdminDashboard() {
             0
         );
 
+
         setText(
             "dashboardGuestsInside",
             data.guestsInside ??
             0
         );
+
 
         setText(
             "dashboardMembershipTotal",
@@ -280,11 +370,13 @@ async function loadAdminDashboard() {
             0
         );
 
+
         setText(
             "dashboardActiveLegend",
             data.activeMembers ??
             0
         );
+
 
         setText(
             "dashboardExpiredLegend",
@@ -292,11 +384,13 @@ async function loadAdminDashboard() {
             0
         );
 
+
         setText(
             "dashboardSuspendedLegend",
             data.suspendedMembers ??
             0
         );
+
 
         setText(
             "dashboardPendingLegend",
@@ -304,12 +398,15 @@ async function loadAdminDashboard() {
             0
         );
 
+
         updateOccupancyBar(
             data.occupancy ??
             0,
+
             data.capacity ??
             120
         );
+
 
     } catch (error) {
 
@@ -317,8 +414,15 @@ async function loadAdminDashboard() {
             "Dashboard loading error:",
             error
         );
+
     }
+
 }
+
+
+// =====================================
+// APPLICATIONS
+// =====================================
 
 async function loadApplications() {
 
@@ -329,56 +433,59 @@ async function loadApplications() {
                 "/api/admin/applications"
             );
 
+
         const applications =
             data.applications ||
             [];
 
+
         const pendingApplications =
             applications.filter(
-                (application) =>
+                application =>
                     getStatus(
                         application.status
                     ) ===
                     "PENDING"
             );
 
+
         const rejectedApplications =
             applications.filter(
-                (application) =>
+                application =>
                     getStatus(
                         application.status
                     ) ===
                     "REJECTED"
             );
 
-        const approvedApplications =
-            applications.filter(
-                (application) =>
-                    getStatus(
-                        application.status
-                    ) ===
-                    "APPROVED"
-            );
 
         setText(
             "applicationCount",
             pendingApplications.length
         );
 
+
         setText(
             "dashboardPendingCount",
             pendingApplications.length
         );
+
 
         setText(
             "dashboardRejectedCount",
             rejectedApplications.length
         );
 
+
+        // ---------------------------------
+        // RECENT APPLICATIONS
+        // ---------------------------------
+
         const recentBody =
             document.getElementById(
                 "recentApplicationsBody"
             );
+
 
         if (recentBody) {
 
@@ -387,6 +494,7 @@ async function loadApplications() {
                     0,
                     5
                 );
+
 
             if (
                 recent.length ===
@@ -408,19 +516,27 @@ async function loadApplications() {
                 recentBody.innerHTML =
                     recent
                         .map(
-                            (application) =>
+                            application =>
                                 createRecentApplicationRow(
                                     application
                                 )
                         )
                         .join("");
+
             }
+
         }
+
+
+        // ---------------------------------
+        // PENDING DASHBOARD
+        // ---------------------------------
 
         const pendingDashboard =
             document.getElementById(
                 "pendingApplicationsDashboard"
             );
+
 
         if (pendingDashboard) {
 
@@ -444,7 +560,8 @@ async function loadApplications() {
                             5
                         )
                         .map(
-                            (application) => `
+                            application =>
+                                `
                                 <div class="pending-row">
 
                                     <div>
@@ -505,16 +622,24 @@ async function loadApplications() {
                                     </div>
 
                                 </div>
-                            `
+                                `
                         )
                         .join("");
+
             }
+
         }
+
+
+        // ---------------------------------
+        // APPLICATION TABLE
+        // ---------------------------------
 
         const tableBody =
             document.getElementById(
                 "applicationsTableBody"
             );
+
 
         if (tableBody) {
 
@@ -538,16 +663,17 @@ async function loadApplications() {
                 tableBody.innerHTML =
                     pendingApplications
                         .map(
-                            (application) =>
+                            application =>
                                 createApplicationRow(
                                     application
                                 )
                         )
                         .join("");
+
             }
+
         }
 
-        void approvedApplications;
 
     } catch (error) {
 
@@ -555,8 +681,15 @@ async function loadApplications() {
             "Applications loading error:",
             error
         );
+
     }
+
 }
+
+
+// =====================================
+// RECENT APPLICATION ROW
+// =====================================
 
 function createRecentApplicationRow(
     application
@@ -566,6 +699,7 @@ function createRecentApplicationRow(
         getStatus(
             application.status
         );
+
 
     return `
         <tr>
@@ -592,14 +726,27 @@ function createRecentApplicationRow(
             </td>
 
             <td>
-                <span class="status ${getStatusClass(status)}">
-                    ${escapeHtml(status)}
+
+                <span
+                    class="status ${getStatusClass(status)}">
+
+                    ${escapeHtml(
+                        status
+                    )}
+
                 </span>
+
             </td>
 
         </tr>
     `;
+
 }
+
+
+// =====================================
+// APPLICATION ROW
+// =====================================
 
 function createApplicationRow(
     application
@@ -609,6 +756,7 @@ function createApplicationRow(
         getStatus(
             application.status
         );
+
 
     const screenshot =
         application.payment_screenshot
@@ -624,6 +772,7 @@ function createApplicationRow(
                 </button>
             `
             : "None";
+
 
     const actions =
         status ===
@@ -649,6 +798,7 @@ function createApplicationRow(
             : escapeHtml(
                 status
             );
+
 
     return `
         <tr>
@@ -685,9 +835,16 @@ function createApplicationRow(
             </td>
 
             <td>
-                <span class="status ${getStatusClass(status)}">
-                    ${escapeHtml(status)}
+
+                <span
+                    class="status ${getStatusClass(status)}">
+
+                    ${escapeHtml(
+                        status
+                    )}
+
                 </span>
+
             </td>
 
             <td>
@@ -696,7 +853,13 @@ function createApplicationRow(
 
         </tr>
     `;
+
 }
+
+
+// =====================================
+// APPROVE APPLICATION
+// =====================================
 
 async function approveApplication(
     applicationId
@@ -709,12 +872,13 @@ async function approveApplication(
                 "/api/admin/applications"
             );
 
+
         const application =
             (
                 applicationsData.applications ||
                 []
             ).find(
-                (item) =>
+                item =>
                     Number(
                         item.id
                     ) ===
@@ -723,6 +887,7 @@ async function approveApplication(
                     )
             );
 
+
         if (!application) {
 
             alert(
@@ -730,15 +895,19 @@ async function approveApplication(
             );
 
             return;
+
         }
+
 
         const customerData =
             await apiRequest(
                 `/api/customer/${application.user_id}`
             );
 
+
         const membership =
             customerData.membership;
+
 
         if (membership) {
 
@@ -746,6 +915,7 @@ async function approveApplication(
                 getStatus(
                     membership.status
                 );
+
 
             if (
                 currentStatus ===
@@ -757,20 +927,30 @@ async function approveApplication(
                         "This customer already has an active membership. Approving this application will renew the membership. Continue?"
                     );
 
+
                 if (!proceed) {
+
                     return;
+
                 }
+
             }
+
         }
+
 
         const confirmed =
             confirm(
                 `Approve the membership application for ${application.full_name || "this customer"}?`
             );
 
+
         if (!confirmed) {
+
             return;
+
         }
+
 
         const data =
             await apiRequest(
@@ -781,10 +961,12 @@ async function approveApplication(
                 }
             );
 
+
         alert(
             data.message ||
             "Application approved."
         );
+
 
         await Promise.all([
             loadAdminDashboard(),
@@ -793,6 +975,7 @@ async function approveApplication(
             loadTransactions()
         ]);
 
+
     } catch (error) {
 
         console.error(
@@ -800,37 +983,537 @@ async function approveApplication(
             error
         );
 
+
         alert(
             error.message ||
             "Unable to approve application."
         );
+
     }
+
 }
+
+
+// =====================================
+// REASON DIALOG
+// =====================================
+
+function askForReason(
+    title,
+    reasons
+) {
+
+    return new Promise(
+        resolve => {
+
+            const existing =
+                document.getElementById(
+                    "reasonDialogOverlay"
+                );
+
+
+            if (existing) {
+
+                existing.remove();
+
+            }
+
+
+            const overlay =
+                document.createElement(
+                    "div"
+                );
+
+
+            overlay.id =
+                "reasonDialogOverlay";
+
+
+            overlay.style.position =
+                "fixed";
+
+            overlay.style.inset =
+                "0";
+
+            overlay.style.background =
+                "rgba(0, 0, 0, 0.55)";
+
+            overlay.style.display =
+                "flex";
+
+            overlay.style.alignItems =
+                "center";
+
+            overlay.style.justifyContent =
+                "center";
+
+            overlay.style.zIndex =
+                "99999";
+
+            overlay.style.padding =
+                "20px";
+
+
+            const dialog =
+                document.createElement(
+                    "div"
+                );
+
+
+            dialog.style.background =
+                "#ffffff";
+
+            dialog.style.width =
+                "100%";
+
+            dialog.style.maxWidth =
+                "500px";
+
+            dialog.style.borderRadius =
+                "12px";
+
+            dialog.style.padding =
+                "24px";
+
+            dialog.style.boxShadow =
+                "0 20px 50px rgba(0,0,0,0.25)";
+
+            dialog.style.boxSizing =
+                "border-box";
+
+
+            const heading =
+                document.createElement(
+                    "h2"
+                );
+
+
+            heading.textContent =
+                title;
+
+
+            heading.style.marginTop =
+                "0";
+
+
+            const label =
+                document.createElement(
+                    "label"
+                );
+
+
+            label.textContent =
+                "Select Reason";
+
+
+            label.style.display =
+                "block";
+
+            label.style.marginBottom =
+                "8px";
+
+            label.style.fontWeight =
+                "600";
+
+
+            const select =
+                document.createElement(
+                    "select"
+                );
+
+
+            select.style.width =
+                "100%";
+
+            select.style.padding =
+                "12px";
+
+            select.style.borderRadius =
+                "8px";
+
+            select.style.border =
+                "1px solid #ccc";
+
+            select.style.boxSizing =
+                "border-box";
+
+
+            const defaultOption =
+                document.createElement(
+                    "option"
+                );
+
+
+            defaultOption.value =
+                "";
+
+            defaultOption.textContent =
+                "Select a reason";
+
+
+            select.appendChild(
+                defaultOption
+            );
+
+
+            reasons.forEach(
+                reason => {
+
+                    const option =
+                        document.createElement(
+                            "option"
+                        );
+
+
+                    option.value =
+                        reason;
+
+
+                    option.textContent =
+                        reason;
+
+
+                    select.appendChild(
+                        option
+                    );
+
+                }
+            );
+
+
+            const otherGroup =
+                document.createElement(
+                    "div"
+                );
+
+
+            otherGroup.style.display =
+                "none";
+
+            otherGroup.style.marginTop =
+                "15px";
+
+
+            const otherLabel =
+                document.createElement(
+                    "label"
+                );
+
+
+            otherLabel.textContent =
+                "Please specify";
+
+
+            otherLabel.style.display =
+                "block";
+
+            otherLabel.style.marginBottom =
+                "8px";
+
+            otherLabel.style.fontWeight =
+                "600";
+
+
+            const otherTextarea =
+                document.createElement(
+                    "textarea"
+                );
+
+
+            otherTextarea.rows =
+                4;
+
+            otherTextarea.placeholder =
+                "Enter the reason";
+
+
+            otherTextarea.style.width =
+                "100%";
+
+            otherTextarea.style.padding =
+                "12px";
+
+            otherTextarea.style.borderRadius =
+                "8px";
+
+            otherTextarea.style.border =
+                "1px solid #ccc";
+
+            otherTextarea.style.boxSizing =
+                "border-box";
+
+            otherTextarea.style.resize =
+                "vertical";
+
+
+            otherGroup.appendChild(
+                otherLabel
+            );
+
+
+            otherGroup.appendChild(
+                otherTextarea
+            );
+
+
+            select.addEventListener(
+                "change",
+                () => {
+
+                    if (
+                        select.value ===
+                        "Other..."
+                    ) {
+
+                        otherGroup.style.display =
+                            "block";
+
+                    } else {
+
+                        otherGroup.style.display =
+                            "none";
+
+                        otherTextarea.value =
+                            "";
+
+                    }
+
+                }
+            );
+
+
+            const buttons =
+                document.createElement(
+                    "div"
+                );
+
+
+            buttons.style.display =
+                "flex";
+
+            buttons.style.justifyContent =
+                "flex-end";
+
+            buttons.style.gap =
+                "10px";
+
+            buttons.style.marginTop =
+                "20px";
+
+
+            const cancelButton =
+                document.createElement(
+                    "button"
+                );
+
+
+            cancelButton.type =
+                "button";
+
+            cancelButton.textContent =
+                "Cancel";
+
+
+            cancelButton.style.padding =
+                "10px 18px";
+
+
+            const confirmButton =
+                document.createElement(
+                    "button"
+                );
+
+
+            confirmButton.type =
+                "button";
+
+            confirmButton.textContent =
+                "Continue";
+
+
+            confirmButton.className =
+                "red-button";
+
+
+            confirmButton.style.padding =
+                "10px 18px";
+
+
+            cancelButton.addEventListener(
+                "click",
+                () => {
+
+                    overlay.remove();
+
+                    resolve(
+                        null
+                    );
+
+                }
+            );
+
+
+            confirmButton.addEventListener(
+                "click",
+                () => {
+
+                    let finalReason =
+                        select.value;
+
+
+                    if (
+                        !finalReason
+                    ) {
+
+                        alert(
+                            "Please select a reason."
+                        );
+
+                        return;
+
+                    }
+
+
+                    if (
+                        finalReason ===
+                        "Other..."
+                    ) {
+
+                        finalReason =
+                            otherTextarea
+                                .value
+                                .trim();
+
+
+                        if (
+                            !finalReason
+                        ) {
+
+                            alert(
+                                "Please enter the reason."
+                            );
+
+                            return;
+
+                        }
+
+                    }
+
+
+                    overlay.remove();
+
+                    resolve(
+                        finalReason
+                    );
+
+                }
+            );
+
+
+            overlay.addEventListener(
+                "click",
+                event => {
+
+                    if (
+                        event.target ===
+                        overlay
+                    ) {
+
+                        overlay.remove();
+
+                        resolve(
+                            null
+                        );
+
+                    }
+
+                }
+            );
+
+
+            buttons.appendChild(
+                cancelButton
+            );
+
+
+            buttons.appendChild(
+                confirmButton
+            );
+
+
+            dialog.appendChild(
+                heading
+            );
+
+
+            dialog.appendChild(
+                label
+            );
+
+
+            dialog.appendChild(
+                select
+            );
+
+
+            dialog.appendChild(
+                otherGroup
+            );
+
+
+            dialog.appendChild(
+                buttons
+            );
+
+
+            overlay.appendChild(
+                dialog
+            );
+
+
+            document.body.appendChild(
+                overlay
+            );
+
+        }
+    );
+
+}
+
+
+// =====================================
+// REJECT APPLICATION
+// =====================================
 
 async function rejectApplication(
     applicationId
 ) {
 
     const reason =
-        prompt(
-            "Enter the reason for rejecting this application:"
+        await askForReason(
+            "Reason for Rejection",
+            [
+                "Invalid payment proof",
+                "Incorrect GCash reference",
+                "Payment amount is incorrect",
+                "Payment screenshot is unclear",
+                "Duplicate application",
+                "Incomplete information",
+                "Payment could not be verified",
+                "Other..."
+            ]
         );
 
-    if (reason === null) {
-        return;
-    }
 
-    const trimmedReason =
-        reason.trim();
-
-    if (!trimmedReason) {
-
-        alert(
-            "Rejection reason is required."
-        );
+    if (
+        reason ===
+        null
+    ) {
 
         return;
+
     }
+
 
     try {
 
@@ -849,20 +1532,23 @@ async function rejectApplication(
                     body:
                         JSON.stringify({
                             reason:
-                                trimmedReason
+                                reason
                         })
                 }
             );
+
 
         alert(
             data.message ||
             "Application rejected."
         );
 
+
         await Promise.all([
             loadAdminDashboard(),
             loadApplications()
         ]);
+
 
     } catch (error) {
 
@@ -871,12 +1557,20 @@ async function rejectApplication(
             error
         );
 
+
         alert(
             error.message ||
             "Unable to reject application."
         );
+
     }
+
 }
+
+
+// =====================================
+// MEMBERS
+// =====================================
 
 async function loadMembers() {
 
@@ -887,32 +1581,40 @@ async function loadMembers() {
                 "/api/admin/members"
             );
 
+
         const members =
             data.members ||
             [];
 
+
         const active =
             members.filter(
-                (member) =>
+                member =>
                     getStatus(
                         member.status
                     ) ===
                     "ACTIVE"
             );
 
+
         setText(
             "dashboardActiveMembers",
             active.length
         );
+
 
         const body =
             document.getElementById(
                 "membersTableBody"
             );
 
+
         if (!body) {
+
             return;
+
         }
+
 
         if (
             members.length ===
@@ -930,12 +1632,15 @@ async function loadMembers() {
             `;
 
             return;
+
         }
+
 
         body.innerHTML =
             members
                 .map(
-                    (member) => `
+                    member =>
+                        `
                         <tr>
 
                             <td>
@@ -973,15 +1678,20 @@ async function loadMembers() {
                             </td>
 
                             <td>
-                                <span class="status ${getStatusClass(
-                                    member.status
-                                )}">
+
+                                <span
+                                    class="status ${getStatusClass(
+                                        member.status
+                                    )}">
+
                                     ${escapeHtml(
                                         getStatus(
                                             member.status
                                         )
                                     )}
+
                                 </span>
+
                             </td>
 
                             <td>
@@ -997,9 +1707,10 @@ async function loadMembers() {
                             </td>
 
                         </tr>
-                    `
+                        `
                 )
                 .join("");
+
 
     } catch (error) {
 
@@ -1007,21 +1718,58 @@ async function loadMembers() {
             "Members loading error:",
             error
         );
+
     }
+
 }
+
+
+// =====================================
+// REMOVE MEMBER
+// =====================================
 
 async function removeMember(
     memberId
 ) {
 
-    const confirmed =
-        confirm(
-            "Remove this membership and move it to Archived Members?"
+    const reason =
+        await askForReason(
+            "Reason for Removing Member",
+            [
+                "Membership violation",
+                "Expired membership",
+                "Customer requested removal",
+                "False or invalid information",
+                "Repeated rule violation",
+                "Payment issue",
+                "Misconduct",
+                "Other..."
+            ]
         );
 
-    if (!confirmed) {
+
+    if (
+        reason ===
+        null
+    ) {
+
         return;
+
     }
+
+
+    const confirmed =
+        confirm(
+            `Are you sure you want to remove this member?\n\nReason: ${reason}`
+        );
+
+
+    if (!confirmed) {
+
+        return;
+
+    }
+
 
     try {
 
@@ -1030,22 +1778,37 @@ async function removeMember(
                 `/api/admin/members/${memberId}`,
                 {
                     method:
-                        "DELETE"
+                        "DELETE",
+
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body:
+                        JSON.stringify({
+                            reason:
+                                reason
+                        })
                 }
             );
+
 
         alert(
             data.message ||
             "Membership archived and removed successfully."
         );
 
+
         await Promise.all([
             loadMembers(),
             loadArchivedMembers(),
             loadAdminDashboard(),
             loadTransactions(),
-            loadAttendance()
+            loadAttendance(),
+            loadApplications()
         ]);
+
 
     } catch (error) {
 
@@ -1054,12 +1817,20 @@ async function removeMember(
             error
         );
 
+
         alert(
             error.message ||
             "Unable to archive membership."
         );
+
     }
+
 }
+
+
+// =====================================
+// ARCHIVED MEMBERS
+// =====================================
 
 async function loadArchivedMembers() {
 
@@ -1068,9 +1839,13 @@ async function loadArchivedMembers() {
             "archivedMembersTableBody"
         );
 
+
     if (!body) {
+
         return;
+
     }
+
 
     try {
 
@@ -1079,9 +1854,11 @@ async function loadArchivedMembers() {
                 "/api/admin/archived-members"
             );
 
+
         const archivedMembers =
             data.archivedMembers ||
             [];
+
 
         if (
             archivedMembers.length ===
@@ -1099,12 +1876,14 @@ async function loadArchivedMembers() {
             `;
 
             return;
+
         }
+
 
         body.innerHTML =
             archivedMembers
                 .map(
-                    (member) => {
+                    member => {
 
                         const restored =
                             Boolean(
@@ -1115,10 +1894,12 @@ async function loadArchivedMembers() {
                             ) ===
                             "RESTORED";
 
+
                         const displayStatus =
                             restored
                                 ? "RESTORED"
                                 : "ARCHIVED";
+
 
                         const action =
                             restored
@@ -1141,6 +1922,7 @@ async function loadArchivedMembers() {
 
                                     </button>
                                 `;
+
 
                         return `
                             <tr>
@@ -1185,11 +1967,16 @@ async function loadArchivedMembers() {
                                 </td>
 
                                 <td>
-                                    <span class="status ${getStatusClass(
-                                        displayStatus
-                                    )}">
+
+                                    <span
+                                        class="status ${getStatusClass(
+                                            displayStatus
+                                        )}">
+
                                         ${displayStatus}
+
                                     </span>
+
                                 </td>
 
                                 <td>
@@ -1198,9 +1985,11 @@ async function loadArchivedMembers() {
 
                             </tr>
                         `;
+
                     }
                 )
                 .join("");
+
 
     } catch (error) {
 
@@ -1208,6 +1997,7 @@ async function loadArchivedMembers() {
             "Archived members loading error:",
             error
         );
+
 
         body.innerHTML = `
             <tr>
@@ -1218,8 +2008,15 @@ async function loadArchivedMembers() {
                 </td>
             </tr>
         `;
+
     }
+
 }
+
+
+// =====================================
+// RESTORE MEMBER
+// =====================================
 
 async function restoreArchivedMember(
     archiveId
@@ -1230,9 +2027,13 @@ async function restoreArchivedMember(
             "Restore this archived membership?"
         );
 
+
     if (!confirmed) {
+
         return;
+
     }
+
 
     try {
 
@@ -1245,10 +2046,12 @@ async function restoreArchivedMember(
                 }
             );
 
+
         alert(
             data.message ||
             "Membership restored successfully."
         );
+
 
         await Promise.all([
             loadArchivedMembers(),
@@ -1259,6 +2062,7 @@ async function restoreArchivedMember(
             loadAttendance()
         ]);
 
+
     } catch (error) {
 
         console.error(
@@ -1266,12 +2070,20 @@ async function restoreArchivedMember(
             error
         );
 
+
         alert(
             error.message ||
             "Unable to restore membership."
         );
+
     }
+
 }
+
+
+// =====================================
+// DELETE ARCHIVED MEMBER
+// =====================================
 
 async function deleteArchivedMember(
     archiveId
@@ -1282,9 +2094,13 @@ async function deleteArchivedMember(
             "Are you sure you want to permanently delete this restored archive history?"
         );
 
+
     if (!confirmed) {
+
         return;
+
     }
+
 
     try {
 
@@ -1297,12 +2113,15 @@ async function deleteArchivedMember(
                 }
             );
 
+
         alert(
             data.message ||
             "Archived history deleted successfully."
         );
 
+
         await loadArchivedMembers();
+
 
     } catch (error) {
 
@@ -1311,12 +2130,20 @@ async function deleteArchivedMember(
             error
         );
 
+
         alert(
             error.message ||
             "Unable to delete archived member history."
         );
+
     }
+
 }
+
+
+// =====================================
+// TRANSACTIONS
+// =====================================
 
 async function loadTransactions() {
 
@@ -1327,18 +2154,24 @@ async function loadTransactions() {
                 "/api/admin/transactions"
             );
 
+
         const transactions =
             data.transactions ||
             [];
+
 
         const body =
             document.getElementById(
                 "transactionsTableBody"
             );
 
+
         if (!body) {
+
             return;
+
         }
+
 
         if (
             transactions.length ===
@@ -1356,12 +2189,15 @@ async function loadTransactions() {
             `;
 
             return;
+
         }
+
 
         body.innerHTML =
             transactions
                 .map(
-                    (transaction) => `
+                    transaction =>
+                        `
                         <tr>
 
                             <td>
@@ -1409,9 +2245,10 @@ async function loadTransactions() {
                             </td>
 
                         </tr>
-                    `
+                        `
                 )
                 .join("");
+
 
     } catch (error) {
 
@@ -1419,8 +2256,15 @@ async function loadTransactions() {
             "Transactions loading error:",
             error
         );
+
     }
+
 }
+
+
+// =====================================
+// DELETE TRANSACTION
+// =====================================
 
 async function deleteTransaction(
     transactionId
@@ -1431,9 +2275,13 @@ async function deleteTransaction(
             "Delete this transaction history? This does not remove the membership."
         );
 
+
     if (!confirmed) {
+
         return;
+
     }
+
 
     try {
 
@@ -1446,12 +2294,15 @@ async function deleteTransaction(
                 }
             );
 
+
         alert(
             data.message ||
             "Transaction deleted successfully."
         );
 
+
         await loadTransactions();
+
 
     } catch (error) {
 
@@ -1460,12 +2311,20 @@ async function deleteTransaction(
             error
         );
 
+
         alert(
             error.message ||
             "Unable to delete transaction."
         );
+
     }
+
 }
+
+
+// =====================================
+// ATTENDANCE
+// =====================================
 
 async function loadAttendance() {
 
@@ -1476,13 +2335,15 @@ async function loadAttendance() {
                 "/api/admin/attendance"
             );
 
+
         const attendance =
             data.attendance ||
             [];
 
+
         const membersInside =
             attendance.filter(
-                (record) =>
+                record =>
                     String(
                         record.user_type ||
                         ""
@@ -1491,9 +2352,10 @@ async function loadAttendance() {
                     !record.check_out
             ).length;
 
+
         const guestsInside =
             attendance.filter(
-                (record) =>
+                record =>
                     String(
                         record.user_type ||
                         ""
@@ -1502,59 +2364,73 @@ async function loadAttendance() {
                     !record.check_out
             ).length;
 
+
         const occupancy =
             membersInside +
             guestsInside;
+
 
         setText(
             "attendanceOccupancy",
             `${occupancy} / 120`
         );
 
+
         setText(
             "attendanceMembersInside",
             membersInside
         );
+
 
         setText(
             "attendanceGuestsInside",
             guestsInside
         );
 
+
         setText(
             "dashboardOccupancy",
             `${occupancy} / 120`
         );
+
 
         setText(
             "dashboardMembersInside",
             membersInside
         );
 
+
         setText(
             "dashboardGuestsInside",
             guestsInside
         );
+
 
         updateOccupancyBar(
             occupancy,
             120
         );
 
+
         const body =
             document.getElementById(
                 "attendanceTableBody"
             );
 
+
         if (!body) {
+
             return;
+
         }
+
 
         const currentAttendance =
             attendance.filter(
-                (record) =>
+                record =>
                     !record.check_out
             );
+
 
         if (
             currentAttendance.length ===
@@ -1572,12 +2448,15 @@ async function loadAttendance() {
             `;
 
             return;
+
         }
+
 
         body.innerHTML =
             currentAttendance
                 .map(
-                    (record) => `
+                    record =>
+                        `
                         <tr>
 
                             <td>
@@ -1615,9 +2494,10 @@ async function loadAttendance() {
                             </td>
 
                         </tr>
-                    `
+                        `
                 )
                 .join("");
+
 
     } catch (error) {
 
@@ -1625,8 +2505,15 @@ async function loadAttendance() {
             "Attendance loading error:",
             error
         );
+
     }
+
 }
+
+
+// =====================================
+// CHECKOUT ATTENDANCE
+// =====================================
 
 async function checkoutAttendance(
     attendanceId
@@ -1637,9 +2524,13 @@ async function checkoutAttendance(
             "Check out this person?"
         );
 
+
     if (!confirmed) {
+
         return;
+
     }
+
 
     try {
 
@@ -1652,16 +2543,19 @@ async function checkoutAttendance(
                 }
             );
 
+
         alert(
             data.message ||
             "Checked out successfully."
         );
+
 
         await Promise.all([
             loadAttendance(),
             loadAdminDashboard(),
             loadReports()
         ]);
+
 
     } catch (error) {
 
@@ -1670,19 +2564,21 @@ async function checkoutAttendance(
             error
         );
 
+
         alert(
             error.message ||
             "Unable to check out."
         );
+
     }
+
 }
 
-/*
-    GUEST PRICING
-    Guest Visit = ₱30 per hour
-    Maximum = 3 hours
-    Day Pass = ₱100 fixed
-*/
+
+// =====================================
+// GUEST PRICING
+// =====================================
+
 function updateGuestPricing() {
 
     const visitType =
@@ -1690,27 +2586,34 @@ function updateGuestPricing() {
             "guestVisitType"
         )?.value;
 
+
     const hoursGroup =
         document.getElementById(
             "guestHoursGroup"
         );
+
 
     const hoursSelect =
         document.getElementById(
             "guestHours"
         );
 
+
     const amountInput =
         document.getElementById(
             "guestAmount"
         );
 
+
     if (
         !visitType ||
         !amountInput
     ) {
+
         return;
+
     }
+
 
     if (
         visitType ===
@@ -1721,19 +2624,26 @@ function updateGuestPricing() {
 
             hoursGroup.style.display =
                 "none";
+
         }
+
 
         amountInput.value =
             "100";
 
+
         return;
+
     }
+
 
     if (hoursGroup) {
 
         hoursGroup.style.display =
             "block";
+
     }
+
 
     const hours =
         Number(
@@ -1741,14 +2651,23 @@ function updateGuestPricing() {
             1
         );
 
+
     const amount =
-        hours * 30;
+        hours *
+        30;
+
 
     amountInput.value =
         String(
             amount
         );
+
 }
+
+
+// =====================================
+// ADD GUEST
+// =====================================
 
 async function addGuest(
     event
@@ -1757,37 +2676,45 @@ async function addGuest(
     if (event) {
 
         event.preventDefault();
+
     }
+
 
     const fullName =
         document.getElementById(
             "guestName"
         )?.value.trim();
 
+
     const phone =
         document.getElementById(
             "guestPhone"
         )?.value.trim();
+
 
     const visitType =
         document.getElementById(
             "guestVisitType"
         )?.value;
 
+
     const hours =
         document.getElementById(
             "guestHours"
         )?.value;
+
 
     const amountPaid =
         document.getElementById(
             "guestAmount"
         )?.value;
 
+
     const paymentMethod =
         document.getElementById(
             "guestPaymentMethod"
         )?.value;
+
 
     if (!fullName) {
 
@@ -1796,7 +2723,9 @@ async function addGuest(
         );
 
         return;
+
     }
+
 
     if (!visitType) {
 
@@ -1805,7 +2734,9 @@ async function addGuest(
         );
 
         return;
+
     }
+
 
     if (!paymentMethod) {
 
@@ -1814,29 +2745,40 @@ async function addGuest(
         );
 
         return;
+
     }
 
+
     const selectedHours =
-        visitType === "DAY PASS"
+        visitType ===
+        "DAY PASS"
             ? null
             : Number(
                 hours ||
                 1
             );
 
+
     const calculatedAmount =
-        visitType === "DAY PASS"
+        visitType ===
+        "DAY PASS"
             ? 100
-            : selectedHours * 30;
+            : selectedHours *
+              30;
+
 
     const confirmed =
         confirm(
             `Record ${fullName} as ${visitType} for ₱${calculatedAmount.toLocaleString()} using ${paymentMethod}?`
         );
 
+
     if (!confirmed) {
+
         return;
+
     }
+
 
     try {
 
@@ -1875,26 +2817,33 @@ async function addGuest(
 
                             payment_method:
                                 paymentMethod
+
                         })
                 }
             );
+
 
         alert(
             data.message ||
             "Guest recorded and checked in."
         );
 
+
         const form =
             document.getElementById(
                 "guestForm"
             );
 
+
         if (form) {
 
             form.reset();
+
         }
 
+
         updateGuestPricing();
+
 
         await Promise.all([
             loadAttendance(),
@@ -1902,9 +2851,11 @@ async function addGuest(
             loadReports()
         ]);
 
+
         showPageById(
             "attendance"
         );
+
 
     } catch (error) {
 
@@ -1913,12 +2864,20 @@ async function addGuest(
             error
         );
 
+
         alert(
             error.message ||
             "Unable to record guest."
         );
+
     }
+
 }
+
+
+// =====================================
+// QR SCANNER
+// =====================================
 
 async function scanCustomerQr() {
 
@@ -1932,35 +2891,46 @@ async function scanCustomerQr() {
         );
 
         return;
+
     }
 
+
     if (qrScanner) {
+
         return;
+
     }
+
 
     const status =
         document.getElementById(
             "qrScanStatus"
         );
 
+
     if (status) {
 
         status.textContent =
             "Starting camera...";
+
     }
+
 
     qrScanBusy =
         false;
+
 
     qrScanner =
         new Html5Qrcode(
             "qr-reader"
         );
 
+
     try {
 
         const cameras =
             await Html5Qrcode.getCameras();
+
 
         if (
             !cameras ||
@@ -1971,20 +2941,24 @@ async function scanCustomerQr() {
             throw new Error(
                 "No camera was found."
             );
+
         }
+
 
         let cameraId =
             cameras[0].id;
 
+
         const rearCamera =
             cameras.find(
-                (camera) => {
+                camera => {
 
                     const label =
                         String(
                             camera.label ||
                             ""
                         ).toLowerCase();
+
 
                     return (
                         label.includes(
@@ -1997,20 +2971,26 @@ async function scanCustomerQr() {
                             "environment"
                         )
                     );
+
                 }
             );
+
 
         if (rearCamera) {
 
             cameraId =
                 rearCamera.id;
+
         }
+
 
         if (status) {
 
             status.textContent =
                 "Camera ready. Scan the customer's QR code.";
+
         }
+
 
         await qrScanner.start(
             cameraId,
@@ -2035,11 +3015,15 @@ async function scanCustomerQr() {
             ) => {
 
                 if (qrScanBusy) {
+
                     return;
+
                 }
+
 
                 qrScanBusy =
                     true;
+
 
                 try {
 
@@ -2063,17 +3047,21 @@ async function scanCustomerQr() {
                             }
                         );
 
+
                     if (status) {
 
                         status.textContent =
                             data.message ||
                             "Scan successful.";
+
                     }
+
 
                     alert(
                         data.message ||
                         "Scan successful."
                     );
+
 
                     await Promise.all([
                         loadAttendance(),
@@ -2081,11 +3069,14 @@ async function scanCustomerQr() {
                         loadReports()
                     ]);
 
+
                     await stopQrScanner();
+
 
                     showPageById(
                         "attendance"
                     );
+
 
                 } catch (error) {
 
@@ -2094,17 +3085,21 @@ async function scanCustomerQr() {
                         error
                     );
 
+
                     if (status) {
 
                         status.textContent =
                             error.message ||
                             "Unable to process QR code.";
+
                     }
+
 
                     alert(
                         error.message ||
                         "Unable to process QR code."
                     );
+
 
                     setTimeout(
                         () => {
@@ -2116,15 +3111,21 @@ async function scanCustomerQr() {
                         1500
                     );
 
+
                     return;
+
                 }
+
 
                 qrScanBusy =
                     false;
+
             },
 
             () => {}
+
         );
+
 
     } catch (error) {
 
@@ -2133,27 +3134,41 @@ async function scanCustomerQr() {
             error
         );
 
+
         if (status) {
 
             status.textContent =
                 error.message ||
                 "Unable to start camera.";
+
         }
+
 
         alert(
             error.message ||
             "Unable to start camera."
         );
 
+
         await stopQrScanner();
+
     }
+
 }
+
+
+// =====================================
+// STOP QR SCANNER
+// =====================================
 
 async function stopQrScanner() {
 
     if (!qrScanner) {
+
         return;
+
     }
+
 
     try {
 
@@ -2165,7 +3180,9 @@ async function stopQrScanner() {
             "QR scanner stop error:",
             error
         );
+
     }
+
 
     try {
 
@@ -2177,44 +3194,71 @@ async function stopQrScanner() {
             "QR scanner clear error:",
             error
         );
+
     }
+
 
     qrScanner =
         null;
 
+
     qrScanBusy =
         false;
+
 }
+
+
+// =====================================
+// CLOSE QR SCANNER
+// =====================================
 
 async function closeQrScanner() {
 
     await stopQrScanner();
+
 
     const status =
         document.getElementById(
             "qrScanStatus"
         );
 
+
     if (status) {
 
         status.textContent =
             "Scanner closed.";
+
     }
+
 }
+
+
+// =====================================
+// VIEW SCREENSHOT
+// =====================================
 
 function viewScreenshot(
     url
 ) {
 
     if (!url) {
+
         return;
+
     }
+
 
     window.open(
         url,
         "_blank"
     );
+
 }
+
+
+// =====================================
+// REPORTS
+// =====================================
 
 async function loadReports() {
 
@@ -2225,11 +3269,13 @@ async function loadReports() {
                 "/api/admin/reports"
             );
 
+
         const totalVisits =
             Number(
                 data.totalVisits ||
                 0
             );
+
 
         const memberVisits =
             Number(
@@ -2237,42 +3283,51 @@ async function loadReports() {
                 0
             );
 
+
         const guestVisits =
             Number(
                 data.guestVisits ||
                 0
             );
 
+
         setText(
             "reportTotalVisits",
             totalVisits
         );
+
 
         setText(
             "reportMemberVisits",
             memberVisits
         );
 
+
         setText(
             "reportGuestVisits",
             guestVisits
         );
+
 
         updatePeakBars(
             data.hourly ||
             []
         );
 
+
         const reportMessage =
             document.getElementById(
                 "reportMessage"
             );
 
+
         if (reportMessage) {
 
             reportMessage.textContent =
                 `Total recorded visits: ${totalVisits}`;
+
         }
+
 
     } catch (error) {
 
@@ -2280,8 +3335,15 @@ async function loadReports() {
             "Reports loading error:",
             error
         );
+
     }
+
 }
+
+
+// =====================================
+// PEAK BARS
+// =====================================
 
 function updatePeakBars(
     hourly
@@ -2290,8 +3352,9 @@ function updatePeakBars(
     const hourMap =
         {};
 
+
     hourly.forEach(
-        (item) => {
+        item => {
 
             hourMap[
                 Number(
@@ -2302,60 +3365,76 @@ function updatePeakBars(
                     item.visits ||
                     0
                 );
+
         }
     );
 
+
     const ids = [
+
         [
             "bar10",
             10
         ],
+
         [
             "bar12",
             12
         ],
+
         [
             "bar2",
             14
         ],
+
         [
             "bar4",
             16
         ],
+
         [
             "bar6",
             18
         ],
+
         [
             "bar8",
             20
         ]
+
     ];
+
 
     const values =
         ids.map(
             (
                 [id, hour]
             ) => ({
+
                 id,
+
                 value:
                     Number(
-                        hourMap[hour] ||
+                        hourMap[
+                            hour
+                        ] ||
                         0
                     )
+
             })
         );
+
 
     const max =
         Math.max(
             1,
+
             ...values.map(
-                (
-                    item
-                ) =>
+                item =>
                     item.value
             )
         );
+
 
     values.forEach(
         (
@@ -2370,9 +3449,16 @@ function updatePeakBars(
                 value,
                 max
             );
+
         }
     );
+
 }
+
+
+// =====================================
+// EQUIPMENT
+// =====================================
 
 async function loadEquipment() {
 
@@ -2383,18 +3469,24 @@ async function loadEquipment() {
                 "/api/admin/equipment"
             );
 
+
         const equipment =
             data.equipment ||
             [];
+
 
         const body =
             document.getElementById(
                 "equipmentTableBody"
             );
 
+
         if (!body) {
+
             return;
+
         }
+
 
         if (
             equipment.length ===
@@ -2412,12 +3504,15 @@ async function loadEquipment() {
             `;
 
             return;
+
         }
+
 
         body.innerHTML =
             equipment
                 .map(
-                    (item) => `
+                    item =>
+                        `
                         <tr>
 
                             <td>
@@ -2452,9 +3547,10 @@ async function loadEquipment() {
                             </td>
 
                         </tr>
-                    `
+                        `
                 )
                 .join("");
+
 
     } catch (error) {
 
@@ -2462,8 +3558,15 @@ async function loadEquipment() {
             "Equipment loading error:",
             error
         );
+
     }
+
 }
+
+
+// =====================================
+// REFRESH ADMIN DATA
+// =====================================
 
 async function refreshAdminData() {
 
@@ -2473,8 +3576,11 @@ async function refreshAdminData() {
         ) !==
         "true"
     ) {
+
         return;
+
     }
+
 
     try {
 
@@ -2487,14 +3593,22 @@ async function refreshAdminData() {
             loadReports()
         ]);
 
+
     } catch (error) {
 
         console.error(
             "Admin refresh error:",
             error
         );
+
     }
+
 }
+
+
+// =====================================
+// SET TEXT
+// =====================================
 
 function setText(
     id,
@@ -2506,12 +3620,20 @@ function setText(
             id
         );
 
+
     if (element) {
 
         element.textContent =
             value;
+
     }
+
 }
+
+
+// =====================================
+// OCCUPANCY BAR
+// =====================================
 
 function updateOccupancyBar(
     occupancy,
@@ -2519,7 +3641,9 @@ function updateOccupancyBar(
 ) {
 
     const percentage =
-        capacity > 0
+        capacity >
+        0
+
             ? Math.min(
                 100,
                 Math.max(
@@ -2531,23 +3655,31 @@ function updateOccupancyBar(
                     100
                 )
             )
+
             : 0;
+
 
     const elements =
         document.querySelectorAll(
             ".bar i"
         );
 
+
     elements.forEach(
-        (
-            element
-        ) => {
+        element => {
 
             element.style.width =
                 `${percentage}%`;
+
         }
     );
+
 }
+
+
+// =====================================
+// PEAK BAR HEIGHT
+// =====================================
 
 function setBarHeight(
     id,
@@ -2560,12 +3692,18 @@ function setBarHeight(
             id
         );
 
+
     if (!element) {
+
         return;
+
     }
 
+
     const percentage =
-        max > 0
+        max >
+        0
+
             ? Math.min(
                 100,
                 Math.max(
@@ -2577,14 +3715,22 @@ function setBarHeight(
                     100
                 )
             )
+
             : 0;
+
 
     element.style.height =
         `${Math.max(
             5,
             percentage
         )}%`;
+
 }
+
+
+// =====================================
+// STATUS
+// =====================================
 
 function getStatus(
     status
@@ -2596,7 +3742,13 @@ function getStatus(
     )
         .trim()
         .toUpperCase();
+
 }
+
+
+// =====================================
+// STATUS CLASS
+// =====================================
 
 function getStatusClass(
     status
@@ -2607,82 +3759,118 @@ function getStatusClass(
             status
         );
 
+
     if (
         normalized ===
         "ACTIVE"
     ) {
+
         return "active";
+
     }
+
 
     if (
         normalized ===
         "APPROVED"
     ) {
+
         return "approved";
+
     }
+
 
     if (
         normalized ===
         "PENDING"
     ) {
+
         return "pending";
+
     }
+
 
     if (
         normalized ===
         "REJECTED"
     ) {
+
         return "rejected";
+
     }
+
 
     if (
         normalized ===
         "EXPIRED"
     ) {
+
         return "expired";
+
     }
+
 
     if (
         normalized ===
         "SUSPENDED"
     ) {
+
         return "suspended";
+
     }
+
 
     if (
         normalized ===
         "ARCHIVED"
     ) {
+
         return "expired";
+
     }
+
 
     if (
         normalized ===
         "RESTORED"
     ) {
+
         return "approved";
+
     }
 
+
     return "";
+
 }
+
+
+// =====================================
+// FORMAT DATE
+// =====================================
 
 function formatDate(
     value
 ) {
 
     if (!value) {
+
         return "-";
+
     }
+
 
     const stringValue =
         String(
             value
         );
 
+
     const dateOnlyMatch =
         stringValue.match(
             /^(\d{4})-(\d{2})-(\d{2})$/
         );
+
 
     if (dateOnlyMatch) {
 
@@ -2691,15 +3879,18 @@ function formatDate(
                 dateOnlyMatch[1]
             );
 
+
         const month =
             Number(
                 dateOnlyMatch[2]
             ) - 1;
 
+
         const day =
             Number(
                 dateOnlyMatch[3]
             );
+
 
         const localDate =
             new Date(
@@ -2707,6 +3898,7 @@ function formatDate(
                 month,
                 day
             );
+
 
         return localDate.toLocaleDateString(
             "en-US",
@@ -2721,12 +3913,15 @@ function formatDate(
                     "numeric"
             }
         );
+
     }
+
 
     const date =
         new Date(
             value
         );
+
 
     if (
         Number.isNaN(
@@ -2735,7 +3930,9 @@ function formatDate(
     ) {
 
         return "-";
+
     }
+
 
     return date.toLocaleDateString(
         "en-US",
@@ -2750,20 +3947,30 @@ function formatDate(
                 "numeric"
         }
     );
+
 }
+
+
+// =====================================
+// FORMAT DATE TIME
+// =====================================
 
 function formatDateTime(
     value
 ) {
 
     if (!value) {
+
         return "-";
+
     }
+
 
     const date =
         new Date(
             value
         );
+
 
     if (
         Number.isNaN(
@@ -2772,7 +3979,9 @@ function formatDateTime(
     ) {
 
         return "-";
+
     }
+
 
     return date.toLocaleString(
         "en-US",
@@ -2793,7 +4002,13 @@ function formatDateTime(
                 "2-digit"
         }
     );
+
 }
+
+
+// =====================================
+// ESCAPE HTML
+// =====================================
 
 function escapeHtml(
     value
@@ -2823,7 +4038,13 @@ function escapeHtml(
             /'/g,
             "&#039;"
         );
+
 }
+
+
+// =====================================
+// ESCAPE ATTRIBUTE
+// =====================================
 
 function escapeAttribute(
     value
@@ -2845,7 +4066,13 @@ function escapeAttribute(
             /"/g,
             "&quot;"
         );
+
 }
+
+
+// =====================================
+// LOGOUT
+// =====================================
 
 function logout() {
 
@@ -2854,44 +4081,65 @@ function logout() {
             "Are you sure you want to logout?"
         );
 
+
     if (!confirmed) {
+
         return;
+
     }
+
 
     localStorage.removeItem(
         "anchorAdminLoggedIn"
     );
 
+
     localStorage.removeItem(
         "anchorAdminRole"
     );
+
 
     localStorage.removeItem(
         "anchorAdminRemember"
     );
 
+
     window.location.href =
         "admin-login.html";
+
 }
+
+
+// =====================================
+// PAGE LOAD
+// =====================================
 
 document.addEventListener(
     "DOMContentLoaded",
     async () => {
 
-        if (!checkAdminAccess()) {
+        if (
+            !checkAdminAccess()
+        ) {
+
             return;
+
         }
 
+
         updateGuestPricing();
+
 
         showPageById(
             "dashboard"
         );
+
 
         refreshTimer =
             setInterval(
                 refreshAdminData,
                 5000
             );
+
     }
 );
