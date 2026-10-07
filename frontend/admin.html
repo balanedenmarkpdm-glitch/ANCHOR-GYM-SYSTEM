@@ -1,0 +1,1896 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>ANCHOR - Admin Dashboard</title>
+
+    <link rel="stylesheet"
+          href="admin.css">
+
+</head>
+
+
+<body>
+
+
+<div class="layout">
+
+
+    <aside class="sidebar">
+
+
+        <div class="brand">
+
+
+            <div class="logo">
+                A
+            </div>
+
+
+            <div>
+
+                <b>ANCHOR</b>
+
+                <small>
+                    GYM SYSTEM
+                </small>
+
+            </div>
+
+
+        </div>
+
+
+        <nav>
+
+
+            <button
+                class="active"
+                onclick="showPage('dashboard', this)">
+
+                🏠 Dashboard
+
+            </button>
+
+
+            <button
+                onclick="showPage('members', this)">
+
+                👥 Members
+
+            </button>
+
+
+            <button
+                onclick="showPage('archived-members', this)">
+
+                🗄 Archived Members
+
+            </button>
+
+
+            <button
+                onclick="showPage('applications', this)">
+
+                📄 Applications
+
+                <span id="applicationCount">
+                    0
+                </span>
+
+            </button>
+
+
+            <button
+                onclick="showPage('transactions', this)">
+
+                💳 Transactions
+
+            </button>
+
+
+            <button
+                onclick="showPage('attendance', this)">
+
+                📊 Attendance
+
+            </button>
+
+
+            <button
+                onclick="showPage('guests', this)">
+
+                👤 Guests / Walk-ins
+
+            </button>
+
+
+            <button
+                onclick="showPage('reports', this)">
+
+                📈 Reports
+
+            </button>
+
+
+            <button
+                onclick="showPage('equipment', this)">
+
+                🏋 Equipment Demand
+
+            </button>
+
+
+            <button
+                onclick="showPage('settings', this)">
+
+                ⚙ Settings
+
+            </button>
+
+
+        </nav>
+
+
+        <div class="logout">
+
+
+            <button
+                onclick="logout()">
+
+                ⇥ Logout
+
+            </button>
+
+
+        </div>
+
+
+    </aside>
+
+
+
+
+    <main class="main">
+
+
+        <header class="topbar">
+
+
+            🔔
+
+
+            <div class="admin-user">
+
+
+                <div class="avatar">
+                    A
+                </div>
+
+
+                Admin
+
+
+            </div>
+
+
+        </header>
+
+
+
+
+        <section
+            id="dashboard"
+            class="page active">
+
+
+            <div class="content">
+
+
+                <h1>
+                    Dashboard
+                </h1>
+
+
+                <p class="subtitle">
+                    Welcome back, Admin!
+                </p>
+
+
+
+
+                <div class="stats">
+
+
+
+
+                    <div class="card stat">
+
+
+                        <p>
+                            Total Sign-Up
+                        </p>
+
+
+                        <strong
+                            id="dashboardTotalMembers">
+
+                            0
+
+                        </strong>
+
+
+                        <small>
+                            Total customer accounts created
+                        </small>
+
+
+                    </div>
+
+
+
+
+
+                    <div class="card stat">
+
+
+                        <p>
+                            Active Members
+                        </p>
+
+
+                        <strong
+                            id="dashboardActiveMembers">
+
+                            0
+
+                        </strong>
+
+
+                        <small class="green">
+                            Currently active memberships
+                        </small>
+
+
+                    </div>
+
+
+
+
+
+                    <div class="card stat">
+
+
+                        <p>
+                            Pending Applications
+                        </p>
+
+
+                        <strong
+                            id="dashboardPendingCount">
+
+                            0
+
+                        </strong>
+
+
+                        <small class="yellow">
+                            Applications awaiting review
+                        </small>
+
+
+                    </div>
+
+
+
+
+
+                    <div class="card stat">
+
+
+                        <p>
+                            Rejected Applications
+                        </p>
+
+
+                        <strong
+                            id="dashboardRejectedCount">
+
+                            0
+
+                        </strong>
+
+
+                        <small class="red">
+                            Rejected applications
+                        </small>
+
+
+                    </div>
+
+
+                </div>
+
+
+
+
+                <div class="grid">
+
+
+
+
+                    <div class="card">
+
+
+                        <div class="card-header">
+
+
+                            <h3>
+                                📄 Recent Applications
+                            </h3>
+
+
+                            <button
+                                onclick="showPageById('applications')">
+
+                                View All →
+
+                            </button>
+
+
+                        </div>
+
+
+
+
+                        <table>
+
+
+                            <thead>
+
+
+                                <tr>
+
+
+                                    <th>
+                                        Name
+                                    </th>
+
+
+                                    <th>
+                                        Amount
+                                    </th>
+
+
+                                    <th>
+                                        Reference
+                                    </th>
+
+
+                                    <th>
+                                        Status
+                                    </th>
+
+
+                                </tr>
+
+
+                            </thead>
+
+
+
+
+                            <tbody
+                                id="recentApplicationsBody">
+
+
+                                <tr>
+
+
+                                    <td
+                                        colspan="4"
+                                        style="text-align:center;">
+
+                                        Loading applications...
+
+                                    </td>
+
+
+                                </tr>
+
+
+                            </tbody>
+
+
+                        </table>
+
+
+                    </div>
+
+
+
+
+
+                    <div
+                        class="card occupancy">
+
+
+                        <h3>
+                            Current Gym Occupancy
+                        </h3>
+
+
+                        <strong
+                            id="dashboardOccupancy">
+
+                            0 / 120
+
+                        </strong>
+
+
+
+
+                        <div class="bar">
+
+
+                            <i></i>
+
+
+                        </div>
+
+
+
+
+                        <div class="occupancy-info">
+
+
+
+
+                            <span>
+
+
+                                Members Inside
+
+
+                                <b
+                                    id="dashboardMembersInside">
+
+                                    0
+
+                                </b>
+
+
+                            </span>
+
+
+
+
+
+                            <span>
+
+
+                                Guests Inside
+
+
+                                <b
+                                    id="dashboardGuestsInside">
+
+                                    0
+
+                                </b>
+
+
+                            </span>
+
+
+                        </div>
+
+
+
+
+                        <small>
+                            Based on active attendance records.
+                        </small>
+
+
+                    </div>
+
+
+                </div>
+
+
+
+
+                <div class="grid">
+
+
+
+
+                    <div class="card">
+
+
+                        <div class="card-header">
+
+
+                            <h3>
+                                🔴 Pending Applications
+                            </h3>
+
+
+                        </div>
+
+
+
+
+                        <div
+                            id="pendingApplicationsDashboard">
+
+
+                            <p>
+                                Loading applications...
+                            </p>
+
+
+                        </div>
+
+
+                    </div>
+
+
+
+
+
+                    <div class="card">
+
+
+                        <div class="card-header">
+
+
+                            <h3>
+                                Membership Status
+                            </h3>
+
+
+                        </div>
+
+
+
+
+                        <div
+                            class="donut"
+                            id="dashboardMembershipTotal">
+
+                            0
+
+                        </div>
+
+
+
+
+                        <div class="legend">
+
+
+
+
+                            <div>
+
+
+                                🟢 Active
+
+
+                                <b
+                                    id="dashboardActiveLegend">
+
+                                    0
+
+                                </b>
+
+
+                            </div>
+
+
+
+
+                            <div>
+
+
+                                🟡 Expired
+
+
+                                <b
+                                    id="dashboardExpiredLegend">
+
+                                    0
+
+                                </b>
+
+
+                            </div>
+
+
+
+
+                            <div>
+
+
+                                🔴 Suspended
+
+
+                                <b
+                                    id="dashboardSuspendedLegend">
+
+                                    0
+
+                                </b>
+
+
+                            </div>
+
+
+
+
+                            <div>
+
+
+                                ⚪ Pending
+
+
+                                <b
+                                    id="dashboardPendingLegend">
+
+                                    0
+
+                                </b>
+
+
+                            </div>
+
+
+                        </div>
+
+
+                    </div>
+
+
+                </div>
+
+
+            </div>
+
+
+        </section>
+
+
+
+
+        <section
+            id="applications"
+            class="page">
+
+
+            <div class="content">
+
+
+                <h1>
+                    Applications
+                </h1>
+
+
+                <p class="subtitle">
+
+                    Review the customer's
+                    ₱800 payment proof.
+
+                </p>
+
+
+                <div class="card">
+
+
+                    <table>
+
+
+                        <thead>
+
+
+                            <tr>
+
+
+                                <th>
+                                    Customer
+                                </th>
+
+
+                                <th>
+                                    Amount
+                                </th>
+
+
+                                <th>
+                                    Reference
+                                </th>
+
+
+                                <th>
+                                    Payment Date
+                                </th>
+
+
+                                <th>
+                                    Screenshot
+                                </th>
+
+
+                                <th>
+                                    Status
+                                </th>
+
+
+                                <th>
+                                    Action
+                                </th>
+
+
+                            </tr>
+
+
+                        </thead>
+
+
+
+
+                        <tbody
+                            id="applicationsTableBody">
+
+
+                            <tr>
+
+
+                                <td
+                                    colspan="7"
+                                    style="text-align:center;">
+
+                                    Loading applications...
+
+                                </td>
+
+
+                            </tr>
+
+
+                        </tbody>
+
+
+                    </table>
+
+
+                </div>
+
+
+            </div>
+
+
+        </section>
+
+
+
+
+        <section
+            id="members"
+            class="page">
+
+
+            <div class="content">
+
+
+                <h1>
+                    Members
+                </h1>
+
+
+                <p class="subtitle">
+
+                    Online and walk-in members use
+                    the same member database.
+
+                </p>
+
+
+                <div class="card">
+
+
+                    <table>
+
+
+                        <thead>
+
+
+                            <tr>
+
+
+                                <th>
+                                    Member ID
+                                </th>
+
+
+                                <th>
+                                    Name
+                                </th>
+
+
+                                <th>
+                                    Registration
+                                </th>
+
+
+                                <th>
+                                    Plan
+                                </th>
+
+
+                                <th>
+                                    Expiration
+                                </th>
+
+
+                                <th>
+                                    Status
+                                </th>
+
+
+                                <th>
+                                    Action
+                                </th>
+
+
+                            </tr>
+
+
+                        </thead>
+
+
+
+
+                        <tbody
+                            id="membersTableBody">
+
+
+                            <tr>
+
+
+                                <td
+                                    colspan="7"
+                                    style="text-align:center;">
+
+                                    No member data available yet.
+
+                                </td>
+
+
+                            </tr>
+
+
+                        </tbody>
+
+
+                    </table>
+
+
+                </div>
+
+
+            </div>
+
+
+        </section>
+
+
+
+
+        <section
+            id="archived-members"
+            class="page">
+
+
+            <div class="content">
+
+
+                <h1>
+                    Archived Members
+                </h1>
+
+
+                <p class="subtitle">
+
+                    Previously removed gym memberships.
+
+                </p>
+
+
+                <div class="card">
+
+
+                    <table>
+
+
+                        <thead>
+
+
+                            <tr>
+
+
+                                <th>
+                                    Member ID
+                                </th>
+
+
+                                <th>
+                                    Name
+                                </th>
+
+
+                                <th>
+                                    Plan
+                                </th>
+
+
+                                <th>
+                                    Start Date
+                                </th>
+
+
+                                <th>
+                                    Expiration
+                                </th>
+
+
+                                <th>
+                                    Archived Date
+                                </th>
+
+
+                                <th>
+                                    Status
+                                </th>
+
+
+                                <th>
+                                    Action
+                                </th>
+
+
+                            </tr>
+
+
+                        </thead>
+
+
+
+
+                        <tbody
+                            id="archivedMembersTableBody">
+
+
+                            <tr>
+
+
+                                <td
+                                    colspan="8"
+                                    style="text-align:center;">
+
+                                    No archived memberships.
+
+                                </td>
+
+
+                            </tr>
+
+
+                        </tbody>
+
+
+                    </table>
+
+
+                </div>
+
+
+            </div>
+
+
+        </section>
+
+
+
+
+        <section
+            id="transactions"
+            class="page">
+
+
+            <div class="content">
+
+
+                <h1>
+                    Transactions
+                </h1>
+
+
+                <p class="subtitle">
+
+                    Verified payment transactions.
+
+                </p>
+
+
+                <div class="card">
+
+
+                    <table>
+
+
+                        <thead>
+
+
+                            <tr>
+
+
+                                <th>
+                                    Transaction ID
+                                </th>
+
+
+                                <th>
+                                    Customer
+                                </th>
+
+
+                                <th>
+                                    Amount
+                                </th>
+
+
+                                <th>
+                                    Reference
+                                </th>
+
+
+                                <th>
+                                    Status
+                                </th>
+
+
+                                <th>
+                                    Action
+                                </th>
+
+
+                            </tr>
+
+
+                        </thead>
+
+
+
+
+                        <tbody
+                            id="transactionsTableBody">
+
+
+                            <tr>
+
+
+                                <td
+                                    colspan="6"
+                                    style="text-align:center;">
+
+                                    No transaction data available yet.
+
+                                </td>
+
+
+                            </tr>
+
+
+                        </tbody>
+
+
+                    </table>
+
+
+                </div>
+
+
+            </div>
+
+
+        </section>
+
+
+
+
+        <section
+            id="attendance"
+            class="page">
+
+
+            <div class="content">
+
+
+                <h1>
+                    Attendance
+                </h1>
+
+
+                <p class="subtitle">
+
+                    Track members and guests
+                    currently inside.
+
+                </p>
+
+
+
+
+                <div
+                    class="attendance-stats">
+
+
+
+
+                    <div class="card">
+
+
+                        <p>
+                            Current Occupancy
+                        </p>
+
+
+                        <strong
+                            id="attendanceOccupancy">
+
+                            0 / 120
+
+                        </strong>
+
+
+                    </div>
+
+
+
+
+
+                    <div class="card">
+
+
+                        <p>
+                            Members Inside
+                        </p>
+
+
+                        <strong
+                            id="attendanceMembersInside">
+
+                            0
+
+                        </strong>
+
+
+                    </div>
+
+
+
+
+
+                    <div class="card">
+
+
+                        <p>
+                            Guests Inside
+                        </p>
+
+
+                        <strong
+                            id="attendanceGuestsInside">
+
+                            0
+
+                        </strong>
+
+
+                    </div>
+
+
+                </div>
+
+
+
+
+
+                <div class="card">
+
+
+                    <h3>
+                        📷 Member QR Scanner
+                    </h3>
+
+
+                    <p
+                        id="qrScanStatus">
+
+                        Scan a customer's QR code
+                        to check them in or out.
+
+                    </p>
+
+
+                    <button
+                        class="red-button"
+                        type="button"
+                        onclick="scanCustomerQr()">
+
+                        📷 Scan QR
+
+                    </button>
+
+
+                    <button
+                        class="red-button"
+                        type="button"
+                        onclick="closeQrScanner()">
+
+                        Stop Scanner
+
+                    </button>
+
+
+                    <div
+                        id="qr-reader">
+
+                    </div>
+
+
+                </div>
+
+
+
+
+
+                <div class="card">
+
+
+                    <table>
+
+
+                        <thead>
+
+
+                            <tr>
+
+
+                                <th>
+                                    Name
+                                </th>
+
+
+                                <th>
+                                    Type
+                                </th>
+
+
+                                <th>
+                                    Check-In
+                                </th>
+
+
+                                <th>
+                                    Action
+                                </th>
+
+
+                            </tr>
+
+
+                        </thead>
+
+
+
+
+                        <tbody
+                            id="attendanceTableBody">
+
+
+                            <tr>
+
+
+                                <td
+                                    colspan="4"
+                                    style="text-align:center;">
+
+                                    No attendance data available yet.
+
+                                </td>
+
+
+                            </tr>
+
+
+                        </tbody>
+
+
+                    </table>
+
+
+                </div>
+
+
+            </div>
+
+
+        </section>
+
+
+
+
+        <section
+            id="guests"
+            class="page">
+
+
+            <div class="content">
+
+
+                <h1>
+                    Guests / Walk-ins
+                </h1>
+
+
+                <p class="subtitle">
+
+                    Guest records are used for
+                    attendance and occupancy tracking.
+
+                </p>
+
+
+                <div class="card form">
+
+
+                    <label for="guestName">
+                        Full Name
+                    </label>
+
+
+                    <input
+                        id="guestName"
+                        type="text"
+                        placeholder="Enter guest name">
+
+
+
+
+                    <label for="guestPhone">
+                        Contact Number
+                    </label>
+
+
+                    <input
+                        id="guestPhone"
+                        type="text"
+                        placeholder="09XX XXX XXXX">
+
+
+
+
+                    <label for="guestVisitType">
+                        Visit Type
+                    </label>
+
+
+                    <select
+                        id="guestVisitType">
+
+
+                        <option value="GUEST">
+                            Guest Visit
+                        </option>
+
+
+                        <option value="DAY PASS">
+                            Day Pass
+                        </option>
+
+
+                    </select>
+
+
+
+
+                    <label for="guestAmount">
+                        Amount Paid
+                    </label>
+
+
+                    <input
+                        id="guestAmount"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="0">
+
+
+
+
+                    <label for="guestPaymentMethod">
+                        Payment Method
+                    </label>
+
+
+                    <select
+                        id="guestPaymentMethod">
+
+
+                        <option value="">
+                            Select Payment Method
+                        </option>
+
+
+                        <option value="CASH">
+                            Cash
+                        </option>
+
+
+                        <option value="GCASH">
+                            GCash
+                        </option>
+
+
+                    </select>
+
+
+
+
+                    <button
+                        class="red-button"
+                        onclick="addGuest()">
+
+                        Record Guest & Check In
+
+                    </button>
+
+
+
+
+                    <div class="warning">
+
+
+                        Guest records do NOT create
+                        an active membership.
+
+
+                        <br><br>
+
+
+                        The guest is recorded in the
+                        existing guest and attendance
+                        system.
+
+
+                    </div>
+
+
+                </div>
+
+
+            </div>
+
+
+        </section>
+
+
+
+
+        <section
+            id="reports"
+            class="page">
+
+
+            <div class="content">
+
+
+                <h1>
+                    Reports
+                </h1>
+
+
+                <p class="subtitle">
+
+                    Attendance reports based on
+                    actual recorded data.
+
+                </p>
+
+
+
+
+                <div class="attendance-stats">
+
+
+
+
+                    <div class="card">
+
+
+                        <p>
+                            Total Visits
+                        </p>
+
+
+                        <strong
+                            id="reportTotalVisits">
+
+                            0
+
+                        </strong>
+
+
+                    </div>
+
+
+
+
+
+                    <div class="card">
+
+
+                        <p>
+                            Member Visits
+                        </p>
+
+
+                        <strong
+                            id="reportMemberVisits">
+
+                            0
+
+                        </strong>
+
+
+                    </div>
+
+
+
+
+
+                    <div class="card">
+
+
+                        <p>
+                            Guest Visits
+                        </p>
+
+
+                        <strong
+                            id="reportGuestVisits">
+
+                            0
+
+                        </strong>
+
+
+                    </div>
+
+
+                </div>
+
+
+
+
+
+                <div class="card report">
+
+
+                    <h3>
+                        Peak Attendance
+                    </h3>
+
+
+                    <div class="bars">
+
+
+                        <div
+                            style="height:0%"
+                            id="bar10">
+
+                            <span>
+                                10 AM
+                            </span>
+
+
+                        </div>
+
+
+                        <div
+                            style="height:0%"
+                            id="bar12">
+
+                            <span>
+                                12 PM
+                            </span>
+
+
+                        </div>
+
+
+                        <div
+                            style="height:0%"
+                            id="bar2">
+
+                            <span>
+                                2 PM
+                            </span>
+
+
+                        </div>
+
+
+                        <div
+                            style="height:0%"
+                            id="bar4">
+
+                            <span>
+                                4 PM
+                            </span>
+
+
+                        </div>
+
+
+                        <div
+                            style="height:0%"
+                            id="bar6">
+
+                            <span>
+                                6 PM
+                            </span>
+
+
+                        </div>
+
+
+                        <div
+                            style="height:0%"
+                            id="bar8">
+
+                            <span>
+                                8 PM
+                            </span>
+
+
+                        </div>
+
+
+                    </div>
+
+
+                    <p
+                        id="reportMessage">
+
+                        No attendance data available yet.
+
+                    </p>
+
+
+                </div>
+
+
+            </div>
+
+
+        </section>
+
+
+
+
+        <section
+            id="equipment"
+            class="page">
+
+
+            <div class="content">
+
+
+                <h1>
+                    Equipment Demand
+                </h1>
+
+
+                <p class="subtitle">
+
+                    Based on actual attendance
+                    and guest-demand patterns.
+
+                </p>
+
+
+                <div class="card">
+
+
+                    <table>
+
+
+                        <thead>
+
+
+                            <tr>
+
+
+                                <th>
+                                    Equipment
+                                </th>
+
+
+                                <th>
+                                    Demand
+                                </th>
+
+
+                                <th>
+                                    Peak Time
+                                </th>
+
+
+                                <th>
+                                    Recommendation
+                                </th>
+
+
+                            </tr>
+
+
+                        </thead>
+
+
+
+
+                        <tbody
+                            id="equipmentTableBody">
+
+
+                            <tr>
+
+
+                                <td
+                                    colspan="4"
+                                    style="text-align:center;">
+
+                                    No equipment demand data available yet.
+
+                                </td>
+
+
+                            </tr>
+
+
+                        </tbody>
+
+
+                    </table>
+
+
+                </div>
+
+
+
+
+                <div class="warning">
+
+                    Equipment demand will be calculated
+                    from actual attendance records.
+
+                </div>
+
+
+            </div>
+
+
+        </section>
+
+
+
+
+        <section
+            id="settings"
+            class="page">
+
+
+            <div class="content">
+
+
+                <h1>
+                    Settings
+                </h1>
+
+
+                <div class="card form">
+
+
+                    <label>
+                        Fixed Monthly Membership Fee
+                    </label>
+
+
+                    <input
+                        value="₱800"
+                        readonly>
+
+
+
+
+                    <label>
+                        Gym Capacity
+                    </label>
+
+
+                    <input
+                        value="120"
+                        readonly>
+
+
+
+
+                    <div class="warning">
+
+                        Online membership is fixed
+                        at ₱800.
+
+
+                        <br><br>
+
+
+                        Customer submits GCash
+                        reference number and
+                        payment screenshot.
+
+
+                        <br><br>
+
+
+                        Admin verifies the payment
+                        before membership activation.
+
+                    </div>
+
+
+                </div>
+
+
+            </div>
+
+
+        </section>
+
+
+    </main>
+
+
+</div>
+
+
+<script
+    src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"
+    type="text/javascript">
+</script>
+
+<script src="admin.js"></script>
+
+
+</body>
+
+</html>

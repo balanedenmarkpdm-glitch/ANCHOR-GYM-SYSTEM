@@ -1,0 +1,1203 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>ANCHOR - Customer Dashboard</title>
+
+    <link rel="stylesheet"
+          href="customer.css">
+
+</head>
+
+
+<body>
+
+
+<div class="layout">
+
+
+    <!-- =====================================
+         SIDEBAR
+    ===================================== -->
+
+    <aside class="sidebar">
+
+
+        <div class="brand">
+
+            <div class="logo">
+                A
+            </div>
+
+            <div>
+
+                <b>ANCHOR</b>
+
+                <small>
+                    GYM SYSTEM
+                </small>
+
+            </div>
+
+        </div>
+
+
+        <nav>
+
+
+            <button
+                class="active"
+                onclick="showPage('dashboard', this)">
+
+                🏠 Dashboard
+
+            </button>
+
+
+            <button
+                onclick="showPage('membership', this)">
+
+                ◆ My Membership
+
+            </button>
+
+
+            <button
+                onclick="showPage('apply', this)">
+
+                ▣ Apply / Renew
+
+            </button>
+
+
+            <button
+                onclick="showPage('transactions', this)">
+
+                ▤ Transactions
+
+            </button>
+
+
+            <button
+                onclick="showPage('qr', this)">
+
+                ▦ My QR Code
+
+            </button>
+
+
+            <button
+                onclick="showPage('notifications', this)">
+
+                ● Notifications
+
+                <span id="notificationCount">
+                    0
+                </span>
+
+            </button>
+
+
+            <button
+                onclick="showPage('profile', this)">
+
+                👤 My Profile
+
+            </button>
+
+
+        </nav>
+
+
+        <div class="logout">
+
+            <button
+                onclick="logout()">
+
+                ⇥ Logout
+
+            </button>
+
+        </div>
+
+
+    </aside>
+
+
+
+    <!-- =====================================
+         MAIN
+    ===================================== -->
+
+    <main class="main">
+
+
+        <!-- =====================================
+             TOPBAR
+        ===================================== -->
+
+        <header class="topbar">
+
+            🔔
+
+
+            <div class="user">
+
+                <div class="avatar">
+                    C
+                </div>
+
+                <span id="topbarCustomerName">
+                    Customer
+                </span>
+
+            </div>
+
+        </header>
+
+
+
+        <!-- =====================================
+             DASHBOARD
+        ===================================== -->
+
+        <section
+            id="dashboard"
+            class="page active">
+
+
+            <div class="content">
+
+
+                <div class="title">
+
+
+                    <div>
+
+                        <h1>
+                            Dashboard
+                        </h1>
+
+                        <p
+                            id="dashboardWelcome">
+
+                            Welcome back!
+
+                        </p>
+
+                    </div>
+
+
+                    <div>
+
+
+                        <button
+                            class="button"
+                            onclick="showPageById('qr')">
+
+                            Show My QR
+
+                        </button>
+
+
+                        <button
+                            class="button red"
+                            onclick="showPageById('apply')">
+
+                            Apply / Renew
+
+                        </button>
+
+
+                    </div>
+
+
+                </div>
+
+
+
+                <!-- =================================
+                     STATS
+                ================================= -->
+
+                <div class="stats">
+
+
+                    <!-- MEMBERSHIP STATUS -->
+
+                    <div class="card stat">
+
+                        <h3>
+                            Membership Status
+                        </h3>
+
+
+                        <strong
+                            id="dashboardMembershipStatus">
+
+                            NOT A MEMBER
+
+                        </strong>
+
+
+                        <p
+                            id="dashboardMembershipDescription">
+
+                            You do not have an active
+                            membership yet.
+
+                        </p>
+
+                    </div>
+
+
+
+                    <!-- CURRENT PLAN -->
+
+                    <div class="card stat">
+
+                        <h3>
+                            Current Plan
+                        </h3>
+
+
+                        <strong
+                            id="dashboardPlan">
+
+                            —
+
+                        </strong>
+
+
+                        <p
+                            id="dashboardPlanDescription">
+
+                            Apply for membership
+                            to get started.
+
+                        </p>
+
+                    </div>
+
+
+
+                    <!-- DAYS REMAINING -->
+
+                    <div class="card stat">
+
+                        <h3>
+                            Days Remaining
+                        </h3>
+
+
+                        <strong
+                            id="dashboardDaysRemaining">
+
+                            —
+
+                        </strong>
+
+
+                        <p
+                            id="dashboardExpiration">
+
+                            No membership expiration.
+
+                        </p>
+
+                    </div>
+
+
+
+                    <!-- MEMBER ID -->
+
+                    <div class="card stat">
+
+                        <h3>
+                            Member ID
+                        </h3>
+
+
+                        <strong
+                            id="dashboardMemberId">
+
+                            —
+
+                        </strong>
+
+
+                        <p>
+                            Your gym membership ID.
+                        </p>
+
+                    </div>
+
+
+                </div>
+
+
+
+                <!-- =================================
+                     MEMBERSHIP + PROGRESS
+                ================================= -->
+
+                <div class="grid">
+
+
+                    <!-- MEMBERSHIP CARD -->
+
+                    <div
+                        class="card member-card">
+
+
+                        <span
+                            class="status"
+                            id="dashboardMembershipBadge">
+
+                            ● NOT A MEMBER
+
+                        </span>
+
+
+                        <p>
+                            MEMBERSHIP
+                        </p>
+
+
+                        <h2
+                            id="dashboardMembershipTitle">
+
+                            Not Registered
+
+                        </h2>
+
+
+                        <small
+                            id="dashboardMembershipDetails">
+
+                            You have a customer account,
+                            but you have not activated a
+                            gym membership yet.
+
+                        </small>
+
+
+                        <div class="actions">
+
+
+                            <button
+                                class="button red"
+                                onclick="showPageById('apply')">
+
+                                Apply for Membership
+
+                            </button>
+
+
+                        </div>
+
+
+                    </div>
+
+
+
+                    <!-- MEMBERSHIP PROGRESS -->
+
+                    <div
+                        class="card progress-card">
+
+
+                        <h3>
+                            Membership Status
+                        </h3>
+
+
+                        <div
+                            class="success-box"
+                            id="membershipProgressBox">
+
+                            You do not have an active
+                            membership.
+
+                            <br><br>
+
+                            Apply for membership and submit
+                            your ₱800 GCash payment proof
+                            for admin review.
+
+                        </div>
+
+
+                    </div>
+
+
+                </div>
+
+
+
+                <!-- =================================
+                     APPLICATION STATUS
+                ================================= -->
+
+                <div
+                    class="card"
+                    id="applicationStatusCard">
+
+
+                    <div class="card-header">
+
+                        <h3>
+                            Latest Application
+                        </h3>
+
+                        <button
+                            onclick="showPageById('apply')">
+
+                            Apply / Renew
+
+                        </button>
+
+                    </div>
+
+
+                    <div
+                        id="customerApplicationStatus">
+
+                        No application submitted yet.
+
+                    </div>
+
+
+                    <p
+                        id="customerApplicationMessage">
+
+                        You may submit an application
+                        when you are ready.
+
+                    </p>
+
+                </div>
+
+
+
+                <!-- =================================
+                     RECENT TRANSACTIONS + NOTIFICATIONS
+                ================================= -->
+
+                <div class="grid">
+
+
+                    <!-- RECENT TRANSACTIONS -->
+
+                    <div class="card">
+
+
+                        <div class="card-header">
+
+                            <h3>
+                                Recent Transactions
+                            </h3>
+
+
+                            <button
+                                onclick="showPageById('transactions')">
+
+                                View All →
+
+                            </button>
+
+                        </div>
+
+
+                        <table>
+
+
+                            <thead>
+
+                                <tr>
+
+                                    <th>
+                                        Date
+                                    </th>
+
+                                    <th>
+                                        Transaction
+                                    </th>
+
+                                    <th>
+                                        Amount
+                                    </th>
+
+                                    <th>
+                                        Status
+                                    </th>
+
+                                </tr>
+
+                            </thead>
+
+
+                            <tbody
+                                id="recentTransactionsBody">
+
+
+                                <tr>
+
+                                    <td
+                                        colspan="4"
+                                        style="text-align:center;">
+
+                                        No transactions yet.
+
+                                    </td>
+
+                                </tr>
+
+
+                            </tbody>
+
+
+                        </table>
+
+
+                    </div>
+
+
+
+                    <!-- NOTIFICATIONS -->
+
+                    <div class="card">
+
+
+                        <div class="card-header">
+
+                            <h3>
+                                Notifications
+                            </h3>
+
+                        </div>
+
+
+                        <div
+                            id="dashboardNotifications">
+
+
+                            <div class="notification">
+
+                                <b>
+                                    Welcome to ANCHOR
+                                </b>
+
+                                <p>
+
+                                    Your customer account
+                                    is ready.
+
+                                </p>
+
+                            </div>
+
+
+                            <div class="notification">
+
+                                <b>
+                                    Membership
+                                </b>
+
+                                <p>
+
+                                    Your membership becomes
+                                    active after payment
+                                    verification and admin
+                                    approval.
+
+                                </p>
+
+                            </div>
+
+
+                        </div>
+
+
+                    </div>
+
+
+                </div>
+
+
+            </div>
+
+
+        </section>
+
+
+
+        <!-- =====================================
+             MY MEMBERSHIP
+        ===================================== -->
+
+        <section
+            id="membership"
+            class="page">
+
+
+            <div class="content">
+
+
+                <h1>
+                    My Membership
+                </h1>
+
+
+                <p class="subtitle">
+
+                    Your current membership information.
+
+                </p>
+
+
+                <div
+                    class="card detail-card">
+
+
+                    <span
+                        class="status"
+                        id="membershipPageStatus">
+
+                        ● NOT A MEMBER
+
+                    </span>
+
+
+                    <h2
+                        id="membershipPageTitle">
+
+                        No Active Membership
+
+                    </h2>
+
+
+                    <p
+                        id="membershipPageDescription">
+
+                        You have a customer account,
+                        but you have not activated a
+                        gym membership yet.
+
+                    </p>
+
+
+                    <hr>
+
+
+                    <div
+                        class="membership-details"
+                        id="membershipPageDetails">
+
+                        <p>
+                            <b>Member ID:</b>
+                            <span id="membershipMemberId">—</span>
+                        </p>
+
+                        <p>
+                            <b>Plan:</b>
+                            <span id="membershipPlan">—</span>
+                        </p>
+
+                        <p>
+                            <b>Start Date:</b>
+                            <span id="membershipStartDate">—</span>
+                        </p>
+
+                        <p>
+                            <b>Expiration:</b>
+                            <span id="membershipExpiration">—</span>
+                        </p>
+
+                        <p>
+                            <b>Days Remaining:</b>
+                            <span id="membershipDaysRemaining">—</span>
+                        </p>
+
+                    </div>
+
+
+                    <div class="actions">
+
+
+                        <button
+                            class="button red"
+                            onclick="showPageById('apply')">
+
+                            Apply / Renew
+
+                        </button>
+
+
+                    </div>
+
+
+                </div>
+
+
+            </div>
+
+
+        </section>
+
+
+
+        <!-- =====================================
+             APPLY / RENEW
+        ===================================== -->
+
+        <section
+            id="apply"
+            class="page">
+
+
+            <div class="content">
+
+
+                <h1>
+                    Apply / Renew Membership
+                </h1>
+
+
+                <p class="subtitle">
+
+                    Pay the fixed ₱800 fee
+                    and submit your GCash proof.
+
+                </p>
+
+
+                <div class="card form">
+
+
+                    <!-- FEE -->
+
+                    <label>
+                        Membership Fee
+                    </label>
+
+
+                    <div class="fee">
+
+
+                        <span>
+                            Fixed Monthly Fee
+                        </span>
+
+
+                        <strong>
+                            ₱800
+                        </strong>
+
+
+                    </div>
+
+
+
+                    <!-- REFERENCE -->
+
+                    <label>
+                        GCash Reference Number
+                    </label>
+
+
+                    <input
+                        type="text"
+                        id="reference"
+                        placeholder="Enter reference number">
+
+
+
+                    <!-- PAYMENT DATE -->
+
+                    <label>
+                        Payment Date
+                    </label>
+
+
+                    <input
+                        type="date"
+                        id="paymentDate">
+
+
+
+                    <!-- SCREENSHOT -->
+
+                    <label>
+                        Payment Screenshot
+                    </label>
+
+
+                    <div class="upload">
+
+                        Upload your GCash
+                        payment screenshot.
+
+                        <br><br>
+
+
+                        <input
+                            type="file"
+                            id="paymentScreenshot"
+                            accept="image/*">
+
+                    </div>
+
+
+
+                    <!-- WARNING -->
+
+                    <div class="warning">
+
+                        Send exactly ₱800 to the
+                        gym's GCash account.
+
+                        <br><br>
+
+                        Your application will remain
+                        <strong>PENDING</strong> until
+                        an admin verifies your payment.
+
+                    </div>
+
+
+
+                    <!-- SUBMIT -->
+
+                    <button
+                        class="red-button"
+                        onclick="submitApplication()">
+
+                        Submit Application
+
+                    </button>
+
+
+                </div>
+
+
+            </div>
+
+
+        </section>
+
+
+
+        <!-- =====================================
+             TRANSACTIONS
+        ===================================== -->
+
+        <section
+            id="transactions"
+            class="page">
+
+
+            <div class="content">
+
+
+                <h1>
+                    Transaction History
+                </h1>
+
+
+                <p class="subtitle">
+
+                    Your payment history.
+
+                </p>
+
+
+                <div class="card">
+
+
+                    <table>
+
+
+                        <thead>
+
+                            <tr>
+
+                                <th>
+                                    Transaction ID
+                                </th>
+
+                                <th>
+                                    Date
+                                </th>
+
+                                <th>
+                                    Amount
+                                </th>
+
+                                <th>
+                                    Reference
+                                </th>
+
+                                <th>
+                                    Status
+                                </th>
+
+                            </tr>
+
+                        </thead>
+
+
+                        <tbody
+                            id="customerTransactionsBody">
+
+
+                            <tr>
+
+                                <td
+                                    colspan="5"
+                                    style="text-align:center;">
+
+                                    No transactions yet.
+
+                                </td>
+
+                            </tr>
+
+
+                        </tbody>
+
+
+                    </table>
+
+
+                </div>
+
+
+            </div>
+
+
+        </section>
+
+
+
+        <!-- =====================================
+             QR CODE
+        ===================================== -->
+
+        <section
+            id="qr"
+            class="page">
+
+
+            <div class="content">
+
+
+                <h1>
+                    My QR Code
+                </h1>
+
+
+                <p class="subtitle">
+
+                    Your QR code becomes available
+                    after your membership is approved.
+
+                </p>
+
+
+                <div
+                    class="card qr-page">
+
+
+                    <span
+                        class="status"
+                        id="qrStatus">
+
+                        ● NOT AVAILABLE
+
+                    </span>
+
+
+                    <div
+                        class="qr"
+                        id="qrCodeContainer">
+
+
+                        —
+
+                    </div>
+
+
+                    <h2
+                        id="qrTitle">
+
+                        No QR Code Yet
+
+                    </h2>
+
+
+                    <p
+                        id="qrDescription">
+
+                        Your QR code will be generated
+                        after your membership application
+                        is approved.
+
+                    </p>
+
+
+                </div>
+
+
+            </div>
+
+
+        </section>
+
+
+
+        <!-- =====================================
+             NOTIFICATIONS
+        ===================================== -->
+
+        <section
+            id="notifications"
+            class="page">
+
+
+            <div class="content">
+
+
+                <h1>
+                    Notifications
+                </h1>
+
+
+                <div
+                    class="card"
+                    id="notificationsContainer">
+
+
+                    <div class="notification">
+
+                        <b>
+                            Welcome to ANCHOR
+                        </b>
+
+                        <p>
+
+                            Your customer account has
+                            been created successfully.
+
+                        </p>
+
+                    </div>
+
+
+                    <div class="notification">
+
+                        <b>
+                            Membership
+                        </b>
+
+                        <p>
+
+                            Apply for membership and
+                            submit your ₱800 payment proof.
+
+                        </p>
+
+                    </div>
+
+
+                </div>
+
+
+            </div>
+
+
+        </section>
+
+
+
+        <!-- =====================================
+             PROFILE
+        ===================================== -->
+
+        <section
+            id="profile"
+            class="page">
+
+
+            <div class="content">
+
+
+                <h1>
+                    My Profile
+                </h1>
+
+
+                <div class="card form">
+
+
+                    <label for="profileFullName">
+                        Full Name
+                    </label>
+
+
+                    <input
+                        id="profileFullName"
+                        value=""
+                        readonly>
+
+
+
+                    <label for="profileEmail">
+                        Email
+                    </label>
+
+
+                    <input
+                        id="profileEmail"
+                        value=""
+                        readonly>
+
+
+
+                    <label for="profilePhone">
+                        Contact Number
+                    </label>
+
+
+                    <input
+                        id="profilePhone"
+                        value=""
+                        readonly>
+
+
+                </div>
+
+
+            </div>
+
+
+        </section>
+
+
+</main>
+
+</div>
+
+
+<script src="customer.js"></script>
+
+
+</body>
+
+</html>

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>ANCHOR - Admin Login</title>
+
+    <link rel="stylesheet"
+          href="auth.css">
+
+</head>
+
+<body>
+
+<div class="center-page">
+
+    <div class="auth-card">
+
+        <div class="logo">
+            A
+        </div>
+
+
+        <span class="restricted">
+            ADMIN / STAFF ONLY
+        </span>
+
+
+        <h2>
+            Restricted Access
+        </h2>
+
+
+        <p class="subtitle">
+
+            Authorized ANCHOR administrators
+            and staff only.
+
+        </p>
+
+
+        <div class="warning">
+
+            This area is restricted.
+
+            <br><br>
+
+            There is no public administrator
+            registration.
+
+        </div>
+
+
+        <form id="adminLoginForm">
+
+
+            <!-- EMAIL -->
+
+            <label for="adminEmail">
+                ADMIN / STAFF EMAIL
+            </label>
+
+            <input
+                type="email"
+                id="adminEmail"
+                placeholder="admin@gmail.com"
+                autocomplete="username"
+                required
+            >
+
+
+            <!-- PASSWORD -->
+
+            <label for="adminPassword">
+                PASSWORD
+            </label>
+
+
+            <div class="password-box">
+
+                <input
+                    type="password"
+                    id="adminPassword"
+                    placeholder="Enter password"
+                    autocomplete="current-password"
+                    required
+                >
+
+
+                <button
+                    type="button"
+                    id="toggleAdminPassword">
+
+                    Show
+
+                </button>
+
+            </div>
+
+
+            <!-- REMEMBER -->
+
+            <div class="options">
+
+                <label class="remember">
+
+                    <input
+                        type="checkbox"
+                        id="adminRememberMe">
+
+                    Keep me signed in
+
+                </label>
+
+            </div>
+
+
+            <!-- LOGIN -->
+
+            <button
+                type="submit"
+                class="main-btn">
+
+                Admin / Staff Sign In
+
+            </button>
+
+
+        </form>
+
+
+        <p
+            id="adminLoginError"
+            style="color:red; margin-top:12px;">
+        </p>
+
+
+        <p class="bottom-text">
+
+            <a href="login.html">
+
+                ← Customer Login
+
+            </a>
+
+        </p>
+
+    </div>
+
+</div>
+
+
+<script src="auth.js"></script>
+
+</body>
+
+</html>
