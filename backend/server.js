@@ -848,6 +848,83 @@ app.post(
 // CUSTOMER DASHBOARD
 // =====================================
 
+app.delete(
+    "/api/customer/:userId/notifications/:notificationId",
+    async (req, res) => {
+
+        try {
+
+            const userId =
+                Number(req.params.userId);
+
+            const notificationId =
+                Number(req.params.notificationId);
+
+            if (
+                !Number.isSafeInteger(userId) ||
+                userId <= 0 ||
+                !Number.isSafeInteger(notificationId) ||
+                notificationId <= 0
+            ) {
+
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid customer or notification ID."
+                });
+
+            }
+
+            const result =
+                await pool.query(
+                    `
+                    DELETE FROM notifications n
+                    USING users u
+                    WHERE n.id = $1
+                      AND n.user_id = $2
+                      AND u.id = n.user_id
+                      AND LOWER(u.role) = 'customer'
+                    RETURNING n.id
+                    `,
+                    [
+                        notificationId,
+                        userId
+                    ]
+                );
+
+            if (result.rows.length === 0) {
+
+                return res.status(404).json({
+                    success: false,
+                    message: "Customer notification not found."
+                });
+
+            }
+
+            res.json({
+                success: true,
+                message: "Notification deleted successfully.",
+                notification: result.rows[0]
+            });
+
+        } catch (error) {
+
+            console.error(
+                "Delete customer notification error:",
+                error
+            );
+
+            res.status(500).json({
+                success: false,
+                message: "Unable to delete customer notification.",
+                error: error.message,
+                code: error.code || null
+            });
+
+        }
+
+    }
+);
+
 app.get(
     "/api/customer/:userId",
     async (req, res) => {
@@ -2372,6 +2449,32 @@ app.get(
                     `
                 );
 
+            const timedOutGuestsResult =
+                await pool.query(
+                    `
+                    SELECT
+                        COUNT(*)::int AS timed_out_guests
+                    FROM attendance a
+                    JOIN guests g
+                        ON g.id = a.guest_id
+                    WHERE UPPER(a.user_type) = 'GUEST'
+                      AND a.check_out IS NOT NULL
+                      AND
+                      (
+                          CASE
+                              WHEN UPPER(g.visit_type) = 'DAY PASS'
+                              THEN ${GUEST_CLOSING_SQL}
+                              WHEN g.hours IS NOT NULL
+                              THEN LEAST(
+                                  a.check_in + (g.hours * INTERVAL '1 hour'),
+                                  ${GUEST_CLOSING_SQL}
+                              )
+                              ELSE ${GUEST_CLOSING_SQL}
+                          END
+                      ) <= ${GUEST_NOW_SQL}
+                    `
+                );
+
             const totalRegistered =
                 Number(
                     registeredResult.rows[0]
@@ -2435,6 +2538,13 @@ app.get(
                     0
                 );
 
+            const timedOutGuests =
+                Number(
+                    timedOutGuestsResult.rows[0]
+                        .timed_out_guests ||
+                    0
+                );
+
             const occupancy =
                 membersInside +
                 guestsInside;
@@ -2461,6 +2571,8 @@ app.get(
                 membersInside,
 
                 guestsInside,
+
+                timedOutGuests,
 
                 occupancy,
 

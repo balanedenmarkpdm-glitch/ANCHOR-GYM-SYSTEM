@@ -350,6 +350,69 @@ nav button span {
     cursor: pointer;
 }
 
+.table-toolbar {
+    display: flex;
+
+    flex-wrap: wrap;
+
+    align-items: center;
+
+    gap: 10px;
+
+    margin: 12px 0;
+
+    color: #aeb7c0;
+
+    font-size: 11px;
+}
+
+.table-toolbar label {
+    font-weight: 700;
+}
+
+.table-toolbar input[type="search"] {
+    flex: 1 1 240px;
+
+    min-width: 180px;
+
+    padding: 10px 12px;
+
+    border: 1px solid #29323c;
+
+    border-radius: 6px;
+
+    background: #080c10;
+
+    color: white;
+}
+
+.table-toolbar input[type="search"]:focus {
+    outline: 2px solid #ef1d2d;
+
+    outline-offset: 1px;
+}
+
+.table-toolbar input[type="checkbox"],
+table input[type="checkbox"] {
+    width: 18px;
+
+    height: 18px;
+
+    margin: 0;
+
+    accent-color: #ef1d2d;
+
+    cursor: pointer;
+
+    vertical-align: middle;
+}
+
+.table-toolbar button:disabled {
+    cursor: not-allowed;
+
+    opacity: .45;
+}
+
 
 table {
     width: 100%;
@@ -499,37 +562,61 @@ th {
 /* PENDING */
 
 .pending-row {
-    padding: 14px 17px;
+    padding: 14px;
 
     display: grid;
 
     grid-template-columns:
-        1fr .4fr auto;
+        minmax(0, 1fr) minmax(70px, .4fr) auto;
 
-    gap: 15px;
+    gap: 10px;
 
     align-items: center;
 
     border-bottom: 1px solid #20262e;
 }
 
+.pending-row > div {
+    min-width: 0;
+}
 
-.pending-row b {
+
+.pending-row strong {
     display: block;
 
     font-size: 11px;
+
+    overflow-wrap: anywhere;
+}
+
+.pending-row > div:nth-child(2) {
+    text-align: right;
 }
 
 
 .pending-row small {
+    display: block;
+
     color: #7c8792;
 
     font-size: 9px;
+
+    overflow-wrap: anywhere;
+}
+
+.pending-row > div:last-child {
+    display: flex;
+
+    flex-wrap: wrap;
+
+    justify-content: flex-end;
+
+    gap: 6px;
 }
 
 
 .pending-row button {
-    padding: 8px 11px;
+    padding: 8px;
 
     border: 0;
 
@@ -542,6 +629,8 @@ th {
     font-size: 9px;
 
     cursor: pointer;
+
+    white-space: nowrap;
 }
 
 
@@ -550,6 +639,8 @@ th {
 .donut {
     width: 150px;
     height: 150px;
+
+    flex: 0 0 150px;
 
     margin: 22px auto;
 
@@ -635,7 +726,7 @@ button {
     display: grid;
 
     grid-template-columns:
-        repeat(3, 1fr);
+        repeat(4, 1fr);
 
     gap: 15px;
 
@@ -745,6 +836,7 @@ button {
 
 .bars {
     height: 270px;
+    min-height: 270px;
 
     display: flex;
 
@@ -758,10 +850,18 @@ button {
 
 .bars div {
     width: 45px;
+    flex: 0 0 45px;
+    transition: height .35s ease;
 
     background: #ef1d2d;
 
     position: relative;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .bars div {
+        transition: none;
+    }
 }
 
 
@@ -1152,6 +1252,26 @@ button {
         grid-template-columns: 1fr;
     }
 
+    .table-toolbar {
+        align-items: stretch;
+
+        flex-direction: column;
+    }
+
+    .table-toolbar input[type="search"] {
+        flex-basis: auto;
+
+        width: 100%;
+
+        min-height: 42px;
+    }
+
+    .table-toolbar button {
+        width: 100%;
+
+        min-height: 40px;
+    }
+
     .stats {
         gap: 10px;
 
@@ -1188,6 +1308,29 @@ button {
 
     .card-header h3 {
         font-size: 12px;
+    }
+
+    .pending-row {
+        grid-template-columns:
+            minmax(0, 1fr) minmax(65px, auto);
+
+        gap: 8px;
+
+        padding: 12px;
+    }
+
+    .pending-row > div:nth-child(2) {
+        text-align: right;
+    }
+
+    .pending-row > div:last-child {
+        grid-column: 1 / -1;
+
+        justify-content: stretch;
+    }
+
+    .pending-row > div:last-child button {
+        flex: 1 1 90px;
     }
 
     /* Tables remain readable on phones.

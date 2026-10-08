@@ -386,10 +386,9 @@ async function loadAdminDashboard() {
             0
         );
 
-
         setText(
-            "dashboardMembershipTotal",
-            data.totalMembers ??
+            "attendanceTimedOutGuests",
+            data.timedOutGuests ??
             0
         );
 
@@ -421,6 +420,13 @@ async function loadAdminDashboard() {
             0
         );
 
+        updateMembershipPie({
+            active: data.activeMembers,
+            expired: data.expiredMembers,
+            suspended: data.suspendedMembers,
+            pending: data.pendingApplications
+        });
+
 
         updateOccupancyBar(
             data.occupancy ??
@@ -440,6 +446,77 @@ async function loadAdminDashboard() {
 
     }
 
+}
+
+function updateMembershipPie(
+    counts
+) {
+
+    const chart =
+        document.getElementById(
+            "dashboardMembershipTotal"
+        );
+
+    if (!chart) {
+        return;
+    }
+
+    const segments = [
+        {
+            value: Number(counts.active) || 0,
+            color: "#19d87d"
+        },
+        {
+            value: Number(counts.expired) || 0,
+            color: "#f3ad29"
+        },
+        {
+            value: Number(counts.suspended) || 0,
+            color: "#ef3645"
+        },
+        {
+            value: Number(counts.pending) || 0,
+            color: "#7f8993"
+        }
+    ];
+
+    const total =
+        segments.reduce(
+            (sum, segment) =>
+                sum + Math.max(0, segment.value),
+            0
+        );
+
+    setText(
+        "dashboardMembershipTotal",
+        total
+    );
+
+    if (total === 0) {
+        chart.style.background =
+            "conic-gradient(#252c34 0 100%)";
+        return;
+    }
+
+    let currentPercent = 0;
+
+    const gradientStops =
+        segments
+            .filter(segment => segment.value > 0)
+            .map(segment => {
+
+                const startPercent =
+                    currentPercent;
+
+                currentPercent +=
+                    (segment.value / total) * 100;
+
+                return `${segment.color} ${startPercent}% ${currentPercent}%`;
+
+            });
+
+    chart.style.background =
+        `conic-gradient(${gradientStops.join(", ")})`;
 }
 
 
@@ -1647,12 +1724,19 @@ async function loadMembers() {
             body.innerHTML = `
                 <tr>
                     <td
-                        colspan="7"
+                        colspan="8"
                         style="text-align:center;">
                         No member data available yet.
                     </td>
                 </tr>
             `;
+
+            updateBulkSelection(
+                "membersTableBody",
+                "selectAllMembers",
+                "archiveSelectedMembersButton",
+                "membersSelectedCount"
+            );
 
             return;
 
@@ -1665,6 +1749,20 @@ async function loadMembers() {
                     member =>
                         `
                         <tr>
+
+                            <td>
+                                <input
+                                    class="row-select"
+                                    type="checkbox"
+                                    data-selectable="member"
+                                    data-record-id="${Number(member.id)}"
+                                    aria-label="Select ${escapeAttribute(
+                                        member.full_name ||
+                                        member.member_id ||
+                                        "member"
+                                    )}"
+                                    onchange="updateBulkSelection('membersTableBody', 'selectAllMembers', 'archiveSelectedMembersButton', 'membersSelectedCount')">
+                            </td>
 
                             <td>
                                 ${escapeHtml(
@@ -1735,6 +1833,17 @@ async function loadMembers() {
                 )
                 .join("");
 
+        filterTableRows(
+            "membersSearch",
+            "membersTableBody"
+        );
+
+        updateBulkSelection(
+            "membersTableBody",
+            "selectAllMembers",
+            "archiveSelectedMembersButton",
+            "membersSelectedCount"
+        );
 
     } catch (error) {
 
@@ -1851,6 +1960,443 @@ async function removeMember(
 
 }
 
+async function archiveSelectedMembers() {
+
+    const selectedIds =
+        getSelectedRecordIds(
+            "membersTableBody"
+        );
+
+    if (!selectedIds.length) {
+        return;
+    }
+
+    const reason =
+        await askForReason(
+            "Reason for Removing Members",
+            [
+                "Membership violation",
+                "Expired membership",
+                "Customer requested removal",
+                "False or invalid information",
+                "Repeated rule violation",
+                "Payment issue",
+                "Misconduct",
+                "Other..."
+            ]
+        );
+
+    if (reason === null) {
+        return;
+    }
+
+    const confirmed =
+        confirm(
+            `Archive ${selectedIds.length} selected member(s)?\n\nReason: ${reason}`
+        );
+
+    if (!confirmed) {
+        return;
+    }
+
+    const failedIds = [];
+
+    for (const memberId of selectedIds) {
+
+        try {
+
+            await apiRequest(
+                `/api/admin/members/${memberId}`,
+                {
+                    method: "DELETE",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        reason
+                    })
+                }
+            );
+
+        } catch (error) {
+
+            console.error(
+                `Unable to archive selected member ${memberId}:`,
+                error
+            );
+
+            failedIds.push(memberId);
+
+        }
+    }
+
+    await Promise.all([
+        loadMembers(),
+        loadArchivedMembers(),
+        loadAdminDashboard(),
+        loadTransactions(),
+        loadAttendance(),
+        loadApplications()
+    ]);
+
+    if (failedIds.length) {
+
+        alert(
+            `${selectedIds.length - failedIds.length} member(s) archived. ` +
+            `Unable to archive member ID(s): ${failedIds.join(", ")}. ` +
+            "A member currently inside the gym cannot be removed until checked out."
+        );
+
+        return;
+    }
+
+    alert(
+        `${selectedIds.length} member(s) archived successfully.`
+    );
+}
+
+
+function filterTableRows(
+    inputId,
+    tableBodyId
+) {
+
+    const input =
+        document.getElementById(inputId);
+
+    const body =
+        document.getElementById(tableBodyId);
+
+    if (!input || !body) {
+        return;
+    }
+
+    const searchText =
+        input.value.trim().toLowerCase();
+
+    body.querySelectorAll("tr").forEach(
+        row => {
+
+            const rowText =
+                row.textContent.toLowerCase();
+
+            row.hidden =
+                Boolean(searchText) &&
+                !rowText.includes(searchText);
+
+        }
+    );
+
+    if (tableBodyId === "membersTableBody") {
+        updateBulkSelection(
+            "membersTableBody",
+            "selectAllMembers",
+            "archiveSelectedMembersButton",
+            "membersSelectedCount"
+        );
+    }
+
+    if (tableBodyId === "archivedMembersTableBody") {
+        updateArchiveMemberSelection();
+    }
+}
+
+
+function getSelectedRecordIds(
+    tableBodyId,
+    selectableType = null
+) {
+
+    const body =
+        document.getElementById(tableBodyId);
+
+    if (!body) {
+        return [];
+    }
+
+    return Array.from(
+        body.querySelectorAll(
+            "input.row-select:checked"
+        )
+    )
+        .filter(
+            checkbox =>
+                !checkbox.closest("tr").hidden &&
+                (
+                    !selectableType ||
+                    checkbox.dataset.selectable === selectableType
+                )
+        )
+        .map(
+            checkbox =>
+                Number(checkbox.dataset.recordId)
+        )
+        .filter(Number.isInteger);
+}
+
+
+function updateBulkSelection(
+    tableBodyId,
+    selectAllId,
+    buttonId,
+    countId,
+    selectableType = null
+) {
+
+    const body =
+        document.getElementById(tableBodyId);
+
+    const selectAll =
+        document.getElementById(selectAllId);
+
+    const button =
+        document.getElementById(buttonId);
+
+    const count =
+        document.getElementById(countId);
+
+    if (!body) {
+        return;
+    }
+
+    const eligibleCheckboxes =
+        Array.from(
+            body.querySelectorAll("input.row-select")
+        )
+            .filter(
+                checkbox =>
+                    !checkbox.closest("tr").hidden &&
+                    (
+                        !selectableType ||
+                        checkbox.dataset.selectable === selectableType
+                    )
+            );
+
+    const checkedCount =
+        eligibleCheckboxes.filter(
+            checkbox => checkbox.checked
+        ).length;
+
+    if (count) {
+        count.textContent =
+            `${checkedCount} selected`;
+    }
+
+    if (button) {
+        button.disabled =
+            checkedCount === 0;
+    }
+
+    if (selectAll) {
+        selectAll.checked =
+            eligibleCheckboxes.length > 0 &&
+            checkedCount === eligibleCheckboxes.length;
+
+        selectAll.indeterminate =
+            checkedCount > 0 &&
+            checkedCount < eligibleCheckboxes.length;
+
+        selectAll.disabled =
+            eligibleCheckboxes.length === 0;
+    }
+}
+
+
+function toggleSelectAllRows(
+    tableBodyId,
+    selectAllId,
+    buttonId,
+    countId,
+    selectableType = null
+) {
+
+    const body =
+        document.getElementById(tableBodyId);
+
+    const selectAll =
+        document.getElementById(selectAllId);
+
+    if (!body || !selectAll) {
+        return;
+    }
+
+    body.querySelectorAll("input.row-select").forEach(
+        checkbox => {
+
+            const row =
+                checkbox.closest("tr");
+
+            const eligible =
+                !row.hidden &&
+                (
+                    !selectableType ||
+                    checkbox.dataset.selectable === selectableType
+                );
+
+            if (eligible) {
+                checkbox.checked =
+                    selectAll.checked;
+            }
+
+        }
+    );
+
+    updateBulkSelection(
+        tableBodyId,
+        selectAllId,
+        buttonId,
+        countId,
+        selectableType
+    );
+}
+
+function getSelectedArchiveIds(
+    selectableType
+) {
+
+    const body =
+        document.getElementById(
+            "archivedMembersTableBody"
+        );
+
+    if (!body) {
+        return [];
+    }
+
+    return Array.from(
+        body.querySelectorAll(
+            "input.archive-row-select:checked"
+        )
+    )
+        .filter(
+            checkbox =>
+                !checkbox.closest("tr").hidden &&
+                checkbox.dataset.selectable === selectableType
+        )
+        .map(
+            checkbox =>
+                Number(checkbox.dataset.recordId)
+        )
+        .filter(Number.isInteger);
+}
+
+
+function updateArchiveMemberSelection() {
+
+    const body =
+        document.getElementById(
+            "archivedMembersTableBody"
+        );
+
+    const selectAll =
+        document.getElementById(
+            "selectAllArchivedMembers"
+        );
+
+    const restoreButton =
+        document.getElementById(
+            "restoreSelectedArchivedMembersButton"
+        );
+
+    const deleteButton =
+        document.getElementById(
+            "deleteSelectedArchivedMembersButton"
+        );
+
+    const count =
+        document.getElementById(
+            "archivedMembersSelectedCount"
+        );
+
+    if (!body) {
+        return;
+    }
+
+    const visibleCheckboxes =
+        Array.from(
+            body.querySelectorAll(
+                "input.archive-row-select"
+            )
+        )
+            .filter(
+                checkbox =>
+                    !checkbox.closest("tr").hidden
+            );
+
+    const selectedCheckboxes =
+        visibleCheckboxes.filter(
+            checkbox =>
+                checkbox.checked
+        );
+
+    const selectedCount =
+        selectedCheckboxes.length;
+
+    if (count) {
+        count.textContent =
+            `${selectedCount} selected`;
+    }
+
+    if (restoreButton) {
+        restoreButton.disabled =
+            !selectedCheckboxes.some(
+                checkbox =>
+                    checkbox.dataset.selectable === "archived"
+            );
+    }
+
+    if (deleteButton) {
+        deleteButton.disabled =
+            !selectedCheckboxes.some(
+                checkbox =>
+                    checkbox.dataset.selectable === "restored"
+            );
+    }
+
+    if (selectAll) {
+        selectAll.checked =
+            visibleCheckboxes.length > 0 &&
+            selectedCount === visibleCheckboxes.length;
+
+        selectAll.indeterminate =
+            selectedCount > 0 &&
+            selectedCount < visibleCheckboxes.length;
+
+        selectAll.disabled =
+            visibleCheckboxes.length === 0;
+    }
+}
+
+
+function toggleSelectAllArchivedMembers(
+    selected
+) {
+
+    const body =
+        document.getElementById(
+            "archivedMembersTableBody"
+        );
+
+    if (!body) {
+        return;
+    }
+
+    body.querySelectorAll(
+        "input.archive-row-select"
+    ).forEach(
+        checkbox => {
+
+            if (!checkbox.closest("tr").hidden) {
+                checkbox.checked =
+                    selected;
+            }
+
+        }
+    );
+
+    updateArchiveMemberSelection();
+}
+
 
 // =====================================
 // ARCHIVED MEMBERS
@@ -1892,12 +2438,14 @@ async function loadArchivedMembers() {
             body.innerHTML = `
                 <tr>
                     <td
-                        colspan="8"
+                        colspan="9"
                         style="text-align:center;">
                         No archived memberships.
                     </td>
                 </tr>
             `;
+
+            updateArchiveMemberSelection();
 
             return;
 
@@ -1951,6 +2499,20 @@ async function loadArchivedMembers() {
 
                         return `
                             <tr>
+
+                                <td>
+                                    <input
+                                        class="archive-row-select"
+                                        type="checkbox"
+                                        data-selectable="${restored ? "restored" : "archived"}"
+                                        data-record-id="${Number(member.archive_id)}"
+                                        aria-label="Select ${restored ? "restored" : "archived"} member ${escapeAttribute(
+                                            member.full_name ||
+                                            member.member_id ||
+                                            "record"
+                                        )}"
+                                        onchange="updateArchiveMemberSelection()">
+                                </td>
 
                                 <td>
                                     ${escapeHtml(
@@ -2015,6 +2577,12 @@ async function loadArchivedMembers() {
                 )
                 .join("");
 
+        filterTableRows(
+            "archivedMembersSearch",
+            "archivedMembersTableBody"
+        );
+
+        updateArchiveMemberSelection();
 
     } catch (error) {
 
@@ -2027,7 +2595,7 @@ async function loadArchivedMembers() {
         body.innerHTML = `
             <tr>
                 <td
-                    colspan="8"
+                    colspan="9"
                     style="text-align:center;">
                     Unable to load archived memberships.
                 </td>
@@ -2165,6 +2733,132 @@ async function deleteArchivedMember(
 
 }
 
+async function restoreSelectedArchivedMembers() {
+
+    const archiveIds =
+        getSelectedArchiveIds("archived");
+
+    if (!archiveIds.length) {
+        return;
+    }
+
+    const confirmed =
+        confirm(
+            `Restore ${archiveIds.length} selected archived membership(s)?`
+        );
+
+    if (!confirmed) {
+        return;
+    }
+
+    const failedIds = [];
+
+    for (const archiveId of archiveIds) {
+
+        try {
+
+            await apiRequest(
+                `/api/admin/archived-members/${archiveId}/restore`,
+                {
+                    method: "POST"
+                }
+            );
+
+        } catch (error) {
+
+            console.error(
+                `Unable to restore archived member record ${archiveId}:`,
+                error
+            );
+
+            failedIds.push(archiveId);
+
+        }
+    }
+
+    await Promise.all([
+        loadArchivedMembers(),
+        loadMembers(),
+        loadAdminDashboard(),
+        loadTransactions(),
+        loadApplications(),
+        loadAttendance()
+    ]);
+
+    if (failedIds.length) {
+        alert(
+            `${archiveIds.length - failedIds.length} membership(s) restored. ` +
+            `Unable to restore archive ID(s): ${failedIds.join(", ")}.`
+        );
+
+        return;
+    }
+
+    alert(
+        `${archiveIds.length} membership(s) restored successfully.`
+    );
+}
+
+
+async function deleteSelectedArchivedMembers() {
+
+    const archiveIds =
+        getSelectedArchiveIds("restored");
+
+    if (!archiveIds.length) {
+        return;
+    }
+
+    const confirmed =
+        confirm(
+            `Permanently delete the history for ${archiveIds.length} selected restored membership(s)?`
+        );
+
+    if (!confirmed) {
+        return;
+    }
+
+    const failedIds = [];
+
+    for (const archiveId of archiveIds) {
+
+        try {
+
+            await apiRequest(
+                `/api/admin/archived-members/${archiveId}`,
+                {
+                    method: "DELETE"
+                }
+            );
+
+        } catch (error) {
+
+            console.error(
+                `Unable to delete restored archive record ${archiveId}:`,
+                error
+            );
+
+            failedIds.push(archiveId);
+
+        }
+    }
+
+    await loadArchivedMembers();
+
+    if (failedIds.length) {
+        alert(
+            `${archiveIds.length - failedIds.length} archive history record(s) deleted. ` +
+            `Unable to delete archive ID(s): ${failedIds.join(", ")}.`
+        );
+
+        return;
+    }
+
+    alert(
+        `${archiveIds.length} archive history record(s) deleted successfully.`
+    );
+}
+
 
 // =====================================
 // TRANSACTIONS
@@ -2206,12 +2900,19 @@ async function loadTransactions() {
             body.innerHTML = `
                 <tr>
                     <td
-                        colspan="6"
+                        colspan="7"
                         style="text-align:center;">
                         No transaction data available yet.
                     </td>
                 </tr>
             `;
+
+            updateBulkSelection(
+                "transactionsTableBody",
+                "selectAllTransactions",
+                "deleteSelectedTransactionsButton",
+                "transactionsSelectedCount"
+            );
 
             return;
 
@@ -2226,7 +2927,17 @@ async function loadTransactions() {
                         <tr>
 
                             <td>
-                                ${transaction.id}
+                                <input
+                                    class="row-select"
+                                    type="checkbox"
+                                    data-selectable="transaction"
+                                    data-record-id="${Number(transaction.id)}"
+                                    aria-label="Select transaction ${Number(transaction.id)}"
+                                    onchange="updateBulkSelection('transactionsTableBody', 'selectAllTransactions', 'deleteSelectedTransactionsButton', 'transactionsSelectedCount')">
+                            </td>
+
+                            <td>
+                                ${Number(transaction.id)}
                             </td>
 
                             <td>
@@ -2275,6 +2986,12 @@ async function loadTransactions() {
                 )
                 .join("");
 
+        updateBulkSelection(
+            "transactionsTableBody",
+            "selectAllTransactions",
+            "deleteSelectedTransactionsButton",
+            "transactionsSelectedCount"
+        );
 
     } catch (error) {
 
@@ -2285,6 +3002,68 @@ async function loadTransactions() {
 
     }
 
+}
+
+async function deleteSelectedTransactions() {
+
+    const selectedIds =
+        getSelectedRecordIds(
+            "transactionsTableBody"
+        );
+
+    if (!selectedIds.length) {
+        return;
+    }
+
+    const confirmed =
+        confirm(
+            `Permanently delete ${selectedIds.length} selected transaction record(s)? This does not remove memberships.`
+        );
+
+    if (!confirmed) {
+        return;
+    }
+
+    const failedIds = [];
+
+    for (const transactionId of selectedIds) {
+
+        try {
+
+            await apiRequest(
+                `/api/admin/transactions/${transactionId}`,
+                {
+                    method: "DELETE"
+                }
+            );
+
+        } catch (error) {
+
+            console.error(
+                `Unable to delete selected transaction ${transactionId}:`,
+                error
+            );
+
+            failedIds.push(transactionId);
+
+        }
+    }
+
+    await loadTransactions();
+
+    if (failedIds.length) {
+
+        alert(
+            `${selectedIds.length - failedIds.length} transaction(s) deleted. ` +
+            `Unable to delete transaction ID(s): ${failedIds.join(", ")}.`
+        );
+
+        return;
+    }
+
+    alert(
+        `${selectedIds.length} transaction(s) deleted successfully.`
+    );
 }
 
 
@@ -2440,7 +3219,7 @@ async function loadAttendance() {
             body.innerHTML = `
                 <tr>
                     <td
-                        colspan="5"
+                        colspan="6"
                         style="text-align:center;"
                     >
                         No attendance records found.
@@ -2448,7 +3227,16 @@ async function loadAttendance() {
                 </tr>
             `;
 
+            updateBulkSelection(
+                "attendanceTableBody",
+                "selectAllAttendance",
+                "deleteSelectedAttendanceButton",
+                "attendanceSelectedCount",
+                "guest"
+            );
+
             return;
+
         }
 
         body.innerHTML =
@@ -2599,6 +3387,22 @@ async function loadAttendance() {
                             <tr>
 
                                 <td>
+                                    ${
+                                        isGuest
+                                            ? `
+                                                <input
+                                                    class="row-select"
+                                                    type="checkbox"
+                                                    data-selectable="guest"
+                                                    data-record-id="${Number(record.id)}"
+                                                    aria-label="Select guest attendance record ${Number(record.id)}"
+                                                    onchange="updateBulkSelection('attendanceTableBody', 'selectAllAttendance', 'deleteSelectedAttendanceButton', 'attendanceSelectedCount', 'guest')">
+                                              `
+                                            : ""
+                                    }
+                                </td>
+
+                                <td>
                                     ${escapeHtml(
                                         record.full_name ||
                                         "-"
@@ -2634,6 +3438,14 @@ async function loadAttendance() {
                 )
                 .join("");
 
+        updateBulkSelection(
+            "attendanceTableBody",
+            "selectAllAttendance",
+            "deleteSelectedAttendanceButton",
+            "attendanceSelectedCount",
+            "guest"
+        );
+
         updateGuestCountdowns();
 
     } catch (error) {
@@ -2644,6 +3456,77 @@ async function loadAttendance() {
         );
 
     }
+}
+
+async function deleteSelectedGuestAttendance() {
+
+    const selectedIds =
+        getSelectedRecordIds(
+            "attendanceTableBody",
+            "guest"
+        );
+
+    if (!selectedIds.length) {
+        return;
+    }
+
+    const confirmed =
+        confirm(
+            `Permanently delete ${selectedIds.length} selected guest attendance record(s)? Member attendance records cannot be deleted here.`
+        );
+
+    if (!confirmed) {
+        return;
+    }
+
+    const failedIds = [];
+
+    for (const attendanceId of selectedIds) {
+
+        try {
+
+            await apiRequest(
+                `/api/admin/attendance/${attendanceId}/remove`,
+                {
+                    method: "DELETE"
+                }
+            );
+
+            autoCheckoutInProgress.delete(
+                Number(attendanceId)
+            );
+
+        } catch (error) {
+
+            console.error(
+                `Unable to delete selected guest attendance ${attendanceId}:`,
+                error
+            );
+
+            failedIds.push(attendanceId);
+
+        }
+    }
+
+    await Promise.all([
+        loadAttendance(),
+        loadAdminDashboard(),
+        loadReports()
+    ]);
+
+    if (failedIds.length) {
+
+        alert(
+            `${selectedIds.length - failedIds.length} guest attendance record(s) deleted. ` +
+            `Unable to delete record ID(s): ${failedIds.join(", ")}.`
+        );
+
+        return;
+    }
+
+    alert(
+        `${selectedIds.length} guest attendance record(s) deleted successfully.`
+    );
 }
 
 
@@ -4097,8 +4980,6 @@ async function refreshAdminData() {
         await Promise.all([
             loadAdminDashboard(),
             loadApplications(),
-            loadMembers(),
-            loadTransactions(),
             loadReports()
         ]);
 

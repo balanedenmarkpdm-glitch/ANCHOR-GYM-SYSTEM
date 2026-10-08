@@ -4,6 +4,7 @@
 
 let customerData = null;
 let customerRefreshTimer = null;
+let selectedNotificationIds = new Set();
 
 
 // =====================================
@@ -1297,6 +1298,19 @@ function displayNotifications(
             "notificationsContainer"
         );
 
+    const availableNotificationIds =
+        new Set(
+            safeNotifications
+                .map(notification => Number(notification.id))
+                .filter(Number.isInteger)
+        );
+
+    selectedNotificationIds =
+        new Set(
+            Array.from(selectedNotificationIds)
+                .filter(id => availableNotificationIds.has(id))
+        );
+
 
     if (
         safeNotifications.length ===
@@ -1352,6 +1366,7 @@ function displayNotifications(
 
         }
 
+        updateNotificationSelection();
 
         return;
 
@@ -1367,7 +1382,8 @@ function displayNotifications(
             .map(
                 notification =>
                     createNotificationHtml(
-                        notification
+                        notification,
+                        false
                     )
             )
             .join("");
@@ -1378,7 +1394,8 @@ function displayNotifications(
             .map(
                 notification =>
                     createNotificationHtml(
-                        notification
+                        notification,
+                        true
                     )
             )
             .join("");
@@ -1399,6 +1416,8 @@ function displayNotifications(
 
     }
 
+    updateNotificationSelection();
+
 }
 
 
@@ -1407,7 +1426,8 @@ function displayNotifications(
 // =====================================
 
 function createNotificationHtml(
-    notification
+    notification,
+    selectable = false
 ) {
 
     const title =
@@ -1439,12 +1459,33 @@ function createNotificationHtml(
             ? ""
             : "border-left:4px solid #dc2626;";
 
+    const notificationId =
+        Number(notification.id);
+
+    const selectionControl =
+        selectable &&
+        Number.isInteger(notificationId)
+            ? `
+                <label class="notification-select">
+                    <input
+                        class="notification-checkbox"
+                        type="checkbox"
+                        data-notification-id="${notificationId}"
+                        ${selectedNotificationIds.has(notificationId) ? "checked" : ""}
+                        onchange="setNotificationSelected(${notificationId}, this.checked)">
+                    Select
+                </label>
+              `
+            : "";
+
 
     return `
 
         <div
             class="notification"
             style="${unreadStyle}">
+
+            ${selectionControl}
 
             <b>
                 ${escapeHtml(title)}
@@ -1472,6 +1513,195 @@ function createNotificationHtml(
 
     `;
 
+}
+
+function setNotificationSelected(
+    notificationId,
+    selected
+) {
+
+    if (selected) {
+        selectedNotificationIds.add(
+            Number(notificationId)
+        );
+    } else {
+        selectedNotificationIds.delete(
+            Number(notificationId)
+        );
+    }
+
+    updateNotificationSelection();
+}
+
+
+function toggleAllNotifications(
+    selected
+) {
+
+    document
+        .querySelectorAll(
+            "#notificationsContainer .notification-checkbox"
+        )
+        .forEach(
+            checkbox => {
+
+                checkbox.checked =
+                    selected;
+
+                const notificationId =
+                    Number(checkbox.dataset.notificationId);
+
+                if (selected) {
+                    selectedNotificationIds.add(notificationId);
+                } else {
+                    selectedNotificationIds.delete(notificationId);
+                }
+
+            }
+        );
+
+    updateNotificationSelection();
+}
+
+
+function updateNotificationSelection() {
+
+    const count =
+        selectedNotificationIds.size;
+
+    const countElement =
+        document.getElementById(
+            "selectedNotificationsCount"
+        );
+
+    const deleteButton =
+        document.getElementById(
+            "deleteSelectedNotificationsButton"
+        );
+
+    const selectAll =
+        document.getElementById(
+            "selectAllNotifications"
+        );
+
+    const notificationCheckboxes =
+        Array.from(
+            document.querySelectorAll(
+                "#notificationsContainer .notification-checkbox"
+            )
+        );
+
+    if (countElement) {
+        countElement.textContent =
+            `${count} selected`;
+    }
+
+    if (deleteButton) {
+        deleteButton.disabled =
+            count === 0;
+    }
+
+    if (selectAll) {
+        const checkedCount =
+            notificationCheckboxes.filter(
+                checkbox => checkbox.checked
+            ).length;
+
+        selectAll.checked =
+            notificationCheckboxes.length > 0 &&
+            checkedCount === notificationCheckboxes.length;
+
+        selectAll.indeterminate =
+            checkedCount > 0 &&
+            checkedCount < notificationCheckboxes.length;
+
+        selectAll.disabled =
+            notificationCheckboxes.length === 0;
+    }
+}
+
+
+async function deleteSelectedNotifications() {
+
+    if (
+        !customerData ||
+        !Number.isInteger(Number(customerData.id))
+    ) {
+        alert("Unable to identify the customer account.");
+        return;
+    }
+
+    const notificationIds =
+        Array.from(selectedNotificationIds);
+
+    if (!notificationIds.length) {
+        return;
+    }
+
+    const confirmed =
+        confirm(
+            `Permanently delete ${notificationIds.length} selected notification(s)?`
+        );
+
+    if (!confirmed) {
+        return;
+    }
+
+    const failedIds = [];
+
+    for (const notificationId of notificationIds) {
+
+        try {
+
+            const response =
+                await fetch(
+                    `/api/customer/${Number(customerData.id)}/notifications/${notificationId}`,
+                    {
+                        method: "DELETE",
+                        cache: "no-store"
+                    }
+                );
+
+            const data =
+                await response.json();
+
+            if (!response.ok || data.success === false) {
+                throw new Error(
+                    data.message ||
+                    `Unable to delete notification ${notificationId}.`
+                );
+            }
+
+            selectedNotificationIds.delete(
+                notificationId
+            );
+
+        } catch (error) {
+
+            console.error(
+                `Notification deletion failed for ${notificationId}:`,
+                error
+            );
+
+            failedIds.push(notificationId);
+
+        }
+    }
+
+    await refreshCustomerData(false);
+
+    if (failedIds.length) {
+        alert(
+            `${notificationIds.length - failedIds.length} notification(s) deleted. ` +
+            `Unable to delete notification ID(s): ${failedIds.join(", ")}.`
+        );
+
+        return;
+    }
+
+    alert(
+        `${notificationIds.length} notification(s) deleted successfully.`
+    );
 }
 
 

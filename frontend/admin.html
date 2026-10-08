@@ -300,7 +300,7 @@
                                 <tr>
 
                                     <td
-                                        colspan="5"
+                                        colspan="4"
                                         style="text-align:center;">
 
                                         Loading applications...
@@ -587,6 +587,33 @@
 
                 </p>
 
+                <div class="table-toolbar">
+
+                    <label for="membersSearch">
+                        Search members
+                    </label>
+
+                    <input
+                        id="membersSearch"
+                        type="search"
+                        placeholder="Search name, member ID, plan, or status"
+                        oninput="filterTableRows('membersSearch', 'membersTableBody')">
+
+                    <span id="membersSelectedCount">
+                        0 selected
+                    </span>
+
+                    <button
+                        id="archiveSelectedMembersButton"
+                        class="remove-button"
+                        type="button"
+                        disabled
+                        onclick="archiveSelectedMembers()">
+                        Archive selected
+                    </button>
+
+                </div>
+
                 <div class="card">
 
                     <table>
@@ -594,6 +621,15 @@
                         <thead>
 
                             <tr>
+
+                                <th>
+                                    <input
+                                        id="selectAllMembers"
+                                        type="checkbox"
+                                        disabled
+                                        aria-label="Select all visible members"
+                                        onchange="toggleSelectAllRows('membersTableBody', 'selectAllMembers', 'archiveSelectedMembersButton', 'membersSelectedCount')">
+                                </th>
 
                                 <th>
                                     Member ID
@@ -633,7 +669,7 @@
                             <tr>
 
                                 <td
-                                    colspan="7"
+                                    colspan="8"
                                     style="text-align:center;">
 
                                     No member data available yet.
@@ -673,6 +709,42 @@
 
                 </p>
 
+                <div class="table-toolbar">
+
+                    <label for="archivedMembersSearch">
+                        Search archived members
+                    </label>
+
+                    <input
+                        id="archivedMembersSearch"
+                        type="search"
+                        placeholder="Search name, member ID, plan, or status"
+                        oninput="filterTableRows('archivedMembersSearch', 'archivedMembersTableBody')">
+
+                    <span id="archivedMembersSelectedCount">
+                        0 selected
+                    </span>
+
+                    <button
+                        id="restoreSelectedArchivedMembersButton"
+                        class="restore-button"
+                        type="button"
+                        disabled
+                        onclick="restoreSelectedArchivedMembers()">
+                        Restore selected
+                    </button>
+
+                    <button
+                        id="deleteSelectedArchivedMembersButton"
+                        class="remove-button"
+                        type="button"
+                        disabled
+                        onclick="deleteSelectedArchivedMembers()">
+                        Delete restored history
+                    </button>
+
+                </div>
+
                 <div class="card">
 
                     <table>
@@ -680,6 +752,15 @@
                         <thead>
 
                             <tr>
+
+                                <th>
+                                    <input
+                                        id="selectAllArchivedMembers"
+                                        type="checkbox"
+                                        disabled
+                                        aria-label="Select all visible archived members"
+                                        onchange="toggleSelectAllArchivedMembers(this.checked)">
+                                </th>
 
                                 <th>
                                     Member ID
@@ -723,7 +804,7 @@
                             <tr>
 
                                 <td
-                                    colspan="8"
+                                    colspan="9"
                                     style="text-align:center;">
 
                                     No archived memberships.
@@ -763,6 +844,23 @@
 
                 </p>
 
+                <div class="table-toolbar">
+
+                    <span id="transactionsSelectedCount">
+                        0 selected
+                    </span>
+
+                    <button
+                        id="deleteSelectedTransactionsButton"
+                        class="remove-button"
+                        type="button"
+                        disabled
+                        onclick="deleteSelectedTransactions()">
+                        Delete selected
+                    </button>
+
+                </div>
+
                 <div class="card">
 
                     <table>
@@ -770,6 +868,15 @@
                         <thead>
 
                             <tr>
+
+                                <th>
+                                    <input
+                                        id="selectAllTransactions"
+                                        type="checkbox"
+                                        disabled
+                                        aria-label="Select all transactions"
+                                        onchange="toggleSelectAllRows('transactionsTableBody', 'selectAllTransactions', 'deleteSelectedTransactionsButton', 'transactionsSelectedCount')">
+                                </th>
 
                                 <th>
                                     Transaction ID
@@ -805,7 +912,7 @@
                             <tr>
 
                                 <td
-                                    colspan="6"
+                                    colspan="7"
                                     style="text-align:center;">
 
                                     No transaction data available yet.
@@ -894,6 +1001,21 @@
 
                     </div>
 
+                    <div class="card">
+
+                        <p>
+                            Guests Timed Out
+                        </p>
+
+                        <strong
+                            id="attendanceTimedOutGuests">
+
+                            0
+
+                        </strong>
+
+                    </div>
+
                 </div>
 
                 <div class="card">
@@ -936,11 +1058,37 @@
 
                 <div class="card">
 
+                    <div class="table-toolbar">
+
+                        <span id="attendanceSelectedCount">
+                            0 selected
+                        </span>
+
+                        <button
+                            id="deleteSelectedAttendanceButton"
+                            class="remove-button"
+                            type="button"
+                            disabled
+                            onclick="deleteSelectedGuestAttendance()">
+                            Delete selected guests
+                        </button>
+
+                    </div>
+
                     <table>
 
                         <thead>
 
                             <tr>
+
+                                <th>
+                                    <input
+                                        id="selectAllAttendance"
+                                        type="checkbox"
+                                        disabled
+                                        aria-label="Select all guest attendance records"
+                                        onchange="toggleSelectAllRows('attendanceTableBody', 'selectAllAttendance', 'deleteSelectedAttendanceButton', 'attendanceSelectedCount', 'guest')">
+                                </th>
 
                                 <th>
                                     Name
@@ -972,7 +1120,7 @@
                             <tr>
 
                                 <td
-                                    colspan="5"
+                                    colspan="6"
                                     style="text-align:center;">
 
                                     No attendance data available yet.

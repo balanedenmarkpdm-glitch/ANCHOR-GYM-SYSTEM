@@ -1073,6 +1073,31 @@
                     Notifications
                 </h1>
 
+                <div class="notification-toolbar">
+
+                    <label>
+                        <input
+                            id="selectAllNotifications"
+                            type="checkbox"
+                            aria-label="Select all notifications"
+                            onchange="toggleAllNotifications(this.checked)">
+                        Select all
+                    </label>
+
+                    <span id="selectedNotificationsCount">
+                        0 selected
+                    </span>
+
+                    <button
+                        id="deleteSelectedNotificationsButton"
+                        class="button red"
+                        type="button"
+                        disabled
+                        onclick="deleteSelectedNotifications()">
+                        Delete selected
+                    </button>
+
+                </div>
 
                 <div
                     class="card"
