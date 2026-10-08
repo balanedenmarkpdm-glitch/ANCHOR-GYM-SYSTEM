@@ -3,8 +3,10 @@
 // =====================================
 
 let refreshTimer = null;
+let countdownTimer = null;
 let qrScanner = null;
 let qrScanBusy = false;
+let autoCheckoutInProgress = new Set();
 
 
 // =====================================
@@ -1697,6 +1699,7 @@ async function loadMembers() {
                             <td>
 
                                 <button
+                                    class="remove-button"
                                     type="button"
                                     onclick="removeMember(${member.id})">
 
@@ -1905,6 +1908,7 @@ async function loadArchivedMembers() {
                             restored
                                 ? `
                                     <button
+                                        class="remove-button"
                                         type="button"
                                         onclick="deleteArchivedMember(${member.archive_id})">
 
@@ -1914,7 +1918,7 @@ async function loadArchivedMembers() {
                                 `
                                 : `
                                     <button
-                                        class="red-button"
+                                        class="restore-button"
                                         type="button"
                                         onclick="restoreArchivedMember(${member.archive_id})">
 
@@ -2235,6 +2239,7 @@ async function loadTransactions() {
                             <td>
 
                                 <button
+                                    class="remove-button"
                                     type="button"
                                     onclick="deleteTransaction(${transaction.id})">
 
@@ -2335,11 +2340,9 @@ async function loadAttendance() {
                 "/api/admin/attendance"
             );
 
-
         const attendance =
             data.attendance ||
             [];
-
 
         const membersInside =
             attendance.filter(
@@ -2352,7 +2355,6 @@ async function loadAttendance() {
                     !record.check_out
             ).length;
 
-
         const guestsInside =
             attendance.filter(
                 record =>
@@ -2364,140 +2366,254 @@ async function loadAttendance() {
                     !record.check_out
             ).length;
 
-
         const occupancy =
             membersInside +
             guestsInside;
-
 
         setText(
             "attendanceOccupancy",
             `${occupancy} / 120`
         );
 
-
         setText(
             "attendanceMembersInside",
             membersInside
         );
-
 
         setText(
             "attendanceGuestsInside",
             guestsInside
         );
 
-
         setText(
             "dashboardOccupancy",
             `${occupancy} / 120`
         );
-
 
         setText(
             "dashboardMembersInside",
             membersInside
         );
 
-
         setText(
             "dashboardGuestsInside",
             guestsInside
         );
-
 
         updateOccupancyBar(
             occupancy,
             120
         );
 
-
         const body =
             document.getElementById(
                 "attendanceTableBody"
             );
 
-
         if (!body) {
-
             return;
-
         }
 
-
-        const currentAttendance =
-            attendance.filter(
-                record =>
-                    !record.check_out
-            );
-
-
-        if (
-            currentAttendance.length ===
-            0
-        ) {
+        if (attendance.length === 0) {
 
             body.innerHTML = `
                 <tr>
                     <td
-                        colspan="4"
-                        style="text-align:center;">
-                        Nobody is currently inside the gym.
+                        colspan="5"
+                        style="text-align:center;"
+                    >
+                        No attendance records found.
                     </td>
                 </tr>
             `;
 
             return;
-
         }
 
-
         body.innerHTML =
-            currentAttendance
+            attendance
                 .map(
-                    record =>
-                        `
-                        <tr>
+                    record => {
 
-                            <td>
-                                ${escapeHtml(
-                                    record.full_name ||
-                                    "-"
-                                )}
-                            </td>
+                        const userType =
+                            String(
+                                record.user_type ||
+                                ""
+                            ).toUpperCase();
 
-                            <td>
-                                ${escapeHtml(
-                                    String(
-                                        record.user_type ||
+                        const isGuest =
+                            userType === "GUEST";
+
+                        const isCheckedOut =
+                            Boolean(
+                                record.check_out
+                            );
+
+                        let remainingHtml =
+                            "<span>-</span>";
+
+                        let actionHtml =
+                            "";
+
+                        if (isGuest) {
+
+                            if (isCheckedOut) {
+
+                                remainingHtml =
+                                    record.timed_out === true
+                                        ? `
+                                            <span class="timed-out-label">
+                                                TIMED OUT
+                                            </span>
+                                          `
+                                        : `
+                                            <span class="guest">
+                                                CHECKED OUT
+                                            </span>
+                                          `;
+
+                            } else {
+
+                                const remainingSeconds =
+                                    Number(
+                                        record.remaining_seconds
+                                    );
+
+                                if (
+                                    Number.isFinite(
+                                        remainingSeconds
+                                    ) &&
+                                    remainingSeconds >= 0
+                                ) {
+
+                                    remainingHtml = `
+                                        <span
+                                            class="countdown countdown-active"
+                                            data-guest-countdown="true"
+                                            data-attendance-id="${escapeAttribute(
+                                                record.id
+                                            )}"
+                                            data-remaining-seconds="${escapeAttribute(
+                                                remainingSeconds
+                                            )}"
+                                            data-countdown-last-update=""
+                                        >
+                                            ${formatCountdown(
+                                                remainingSeconds
+                                            )}
+                                        </span>
+
+                                        <small class="countdown-note">
+                                            Ends ${escapeHtml(
+                                                formatGuestEndLabel(
+                                                    record.guest_end_time_epoch ||
+                                                    record.guest_end_time
+                                                )
+                                            )}
+                                        </small>
+                                    `;
+
+                                } else {
+
+                                    remainingHtml = `
+                                        <span class="countdown countdown-warning">
+                                            Timer unavailable
+                                        </span>
+                                    `;
+                                }
+                            }
+
+                            actionHtml = `
+                                <div class="attendance-actions">
+
+                                    ${
+                                        !isCheckedOut
+                                            ? `
+                                                <button
+                                                    type="button"
+                                                    class="small-btn"
+                                                    onclick="checkoutAttendance(${Number(record.id)})"
+                                                >
+                                                    Check Out
+                                                </button>
+                                              `
+                                            : ""
+                                    }
+
+                                    <button
+                                        type="button"
+                                        class="remove-button"
+                                        onclick="removeGuestAttendance(${Number(record.id)})"
+                                    >
+                                        Remove
+                                    </button>
+
+                                </div>
+                            `;
+
+                        } else {
+
+                            remainingHtml =
+                                "<span>-</span>";
+
+                            actionHtml =
+                                isCheckedOut
+                                    ? `
+                                        <span class="guest">
+                                            CHECKED OUT
+                                        </span>
+                                      `
+                                    : `
+                                        <button
+                                            type="button"
+                                            class="small-btn"
+                                            onclick="checkoutAttendance(${Number(record.id)})"
+                                        >
+                                            Check Out
+                                        </button>
+                                      `;
+                        }
+
+                        return `
+                            <tr>
+
+                                <td>
+                                    ${escapeHtml(
+                                        record.full_name ||
                                         "-"
-                                    )
-                                )}
-                            </td>
+                                    )}
+                                </td>
 
-                            <td>
-                                ${formatDateTime(
-                                    record.check_in
-                                )}
-                            </td>
+                                <td>
+                                    ${escapeHtml(
+                                        String(
+                                            record.user_type ||
+                                            "-"
+                                        )
+                                    )}
+                                </td>
 
-                            <td>
+                                <td>
+                                    ${formatDateTime(
+                                        record.check_in
+                                    )}
+                                </td>
 
-                                <button
-                                    type="button"
-                                    onclick="checkoutAttendance(${record.id})">
+                                <td class="countdown-cell">
+                                    ${remainingHtml}
+                                </td>
 
-                                    Check Out
+                                <td>
+                                    ${actionHtml}
+                                </td>
 
-                                </button>
-
-                            </td>
-
-                        </tr>
-                        `
+                            </tr>
+                        `;
+                    }
                 )
                 .join("");
 
+        updateGuestCountdowns();
 
     } catch (error) {
 
@@ -2507,7 +2623,286 @@ async function loadAttendance() {
         );
 
     }
+}
 
+
+// =====================================
+// GUEST COUNTDOWN HELPERS
+// =====================================
+
+function formatGuestEndLabel(value) {
+
+    if (
+        value === undefined ||
+        value === null ||
+        value === ""
+    ) {
+
+        return "10:00 PM";
+
+    }
+
+    let date;
+
+    const numericValue =
+        Number(value);
+
+    if (
+        Number.isFinite(numericValue) &&
+        numericValue > 0
+    ) {
+
+        date =
+            new Date(
+                numericValue > 100000000000
+                    ? numericValue
+                    : numericValue * 1000
+            );
+
+    } else {
+
+        date =
+            new Date(value);
+
+    }
+
+    if (
+        Number.isNaN(
+            date.getTime()
+        )
+    ) {
+
+        return "10:00 PM";
+
+    }
+
+    return date.toLocaleTimeString(
+        "en-PH",
+        {
+            timeZone:
+                "Asia/Manila",
+
+            hour:
+                "numeric",
+
+            minute:
+                "2-digit"
+        }
+    );
+}
+
+
+function formatCountdown(totalSeconds) {
+
+    const seconds =
+        Math.max(
+            0,
+            Math.floor(
+                Number(totalSeconds) ||
+                0
+            )
+        );
+
+    const hours =
+        Math.floor(
+            seconds / 3600
+        );
+
+    const minutes =
+        Math.floor(
+            (seconds % 3600) / 60
+        );
+
+    const remainingSeconds =
+        seconds % 60;
+
+    return [
+        String(hours).padStart(2, "0"),
+        String(minutes).padStart(2, "0"),
+        String(remainingSeconds).padStart(2, "0")
+    ].join(":");
+}
+
+
+async function updateGuestCountdowns() {
+
+    const elements =
+        document.querySelectorAll(
+            '[data-guest-countdown="true"]'
+        );
+
+    if (!elements.length) {
+        return;
+    }
+
+    const now = Date.now();
+
+    for (const element of elements) {
+
+        const attendanceId =
+            Number(
+                element.dataset.attendanceId
+            );
+
+        let remainingSeconds =
+            Number(
+                element.dataset.remainingSeconds
+            );
+
+        if (
+            !Number.isFinite(attendanceId) ||
+            !Number.isFinite(remainingSeconds)
+        ) {
+            continue;
+        }
+
+        const rawLastUpdate =
+            element.dataset.countdownLastUpdate;
+
+        let lastUpdate =
+            rawLastUpdate
+                ? Number(rawLastUpdate)
+                : NaN;
+
+        if (!Number.isFinite(lastUpdate)) {
+
+            element.dataset.countdownLastUpdate =
+                String(now);
+
+            element.textContent =
+                formatCountdown(remainingSeconds);
+
+        } else {
+
+            const elapsedSeconds =
+                Math.floor(
+                    (now - lastUpdate) / 1000
+                );
+
+            if (elapsedSeconds > 0) {
+
+                remainingSeconds =
+                    Math.max(
+                        0,
+                        remainingSeconds - elapsedSeconds
+                    );
+
+                element.dataset.remainingSeconds =
+                    String(remainingSeconds);
+
+                element.dataset.countdownLastUpdate =
+                    String(
+                        lastUpdate +
+                        elapsedSeconds * 1000
+                    );
+
+                element.textContent =
+                    formatCountdown(remainingSeconds);
+            }
+        }
+
+        element.classList.remove(
+            "countdown-active",
+            "countdown-warning",
+            "countdown-danger",
+            "countdown-complete"
+        );
+
+        if (remainingSeconds <= 0) {
+
+            element.classList.add(
+                "countdown-complete"
+            );
+
+            element.textContent =
+                "00:00:00";
+
+            const row =
+                element.closest("tr");
+
+            const endLabel =
+                row
+                    ? row.querySelector(
+                        ".countdown-note"
+                    )
+                    : null;
+
+            if (endLabel) {
+                endLabel.textContent =
+                    "Timed out";
+            }
+
+            if (
+                !autoCheckoutInProgress.has(
+                    attendanceId
+                )
+            ) {
+
+                autoCheckoutInProgress.add(
+                    attendanceId
+                );
+
+                try {
+
+                    await checkoutAttendance(
+                        attendanceId,
+                        true
+                    );
+
+                } catch (error) {
+
+                    console.error(
+                        "Automatic guest checkout error:",
+                        error
+                    );
+
+                    autoCheckoutInProgress.delete(
+                        attendanceId
+                    );
+                }
+            }
+
+            continue;
+        }
+
+        if (remainingSeconds <= 60) {
+
+            element.classList.add(
+                "countdown-danger"
+            );
+
+        } else if (remainingSeconds <= 300) {
+
+            element.classList.add(
+                "countdown-warning"
+            );
+
+        } else {
+
+            element.classList.add(
+                "countdown-active"
+            );
+        }
+    }
+}
+
+
+function startCountdownTimer() {
+
+    if (countdownTimer) {
+
+        clearInterval(
+            countdownTimer
+        );
+    }
+
+    updateGuestCountdowns();
+
+    countdownTimer =
+        setInterval(
+            updateGuestCountdowns,
+            1000
+        );
 }
 
 
@@ -2516,21 +2911,21 @@ async function loadAttendance() {
 // =====================================
 
 async function checkoutAttendance(
-    attendanceId
+    attendanceId,
+    skipConfirmation = false
 ) {
 
-    const confirmed =
-        confirm(
-            "Check out this person?"
-        );
+    if (!skipConfirmation) {
 
+        const confirmed =
+            confirm(
+                "Check out this person?"
+            );
 
-    if (!confirmed) {
-
-        return;
-
+        if (!confirmed) {
+            return;
+        }
     }
-
 
     try {
 
@@ -2538,24 +2933,37 @@ async function checkoutAttendance(
             await apiRequest(
                 `/api/admin/attendance/${attendanceId}/checkout`,
                 {
-                    method:
-                        "PATCH"
+                    method: "PATCH",
+
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body: JSON.stringify({
+                        automatic:
+                            skipConfirmation
+                    })
                 }
             );
 
-
-        alert(
-            data.message ||
-            "Checked out successfully."
+        autoCheckoutInProgress.delete(
+            Number(attendanceId)
         );
 
+        if (!skipConfirmation) {
+
+            alert(
+                data.message ||
+                "Checked out successfully."
+            );
+        }
 
         await Promise.all([
             loadAttendance(),
             loadAdminDashboard(),
             loadReports()
         ]);
-
 
     } catch (error) {
 
@@ -2564,14 +2972,85 @@ async function checkoutAttendance(
             error
         );
 
+        if (skipConfirmation) {
+
+            autoCheckoutInProgress.delete(
+                Number(attendanceId)
+            );
+
+            try {
+
+                await loadAttendance();
+
+            } catch (refreshError) {
+
+                console.error(
+                    "Attendance refresh after automatic checkout error:",
+                    refreshError
+                );
+            }
+
+            return;
+        }
 
         alert(
             error.message ||
             "Unable to check out."
         );
+    }
+}
 
+
+async function removeGuestAttendance(
+    attendanceId
+) {
+
+    const confirmed =
+        confirm(
+            "Remove this guest attendance record? This is intended for correcting an incorrect guest entry."
+        );
+
+    if (!confirmed) {
+        return;
     }
 
+    try {
+
+        const data =
+            await apiRequest(
+                `/api/admin/attendance/${attendanceId}/remove`,
+                {
+                    method: "DELETE"
+                }
+            );
+
+        autoCheckoutInProgress.delete(
+            Number(attendanceId)
+        );
+
+        alert(
+            data.message ||
+            "Guest attendance record removed successfully."
+        );
+
+        await Promise.all([
+            loadAttendance(),
+            loadAdminDashboard(),
+            loadReports()
+        ]);
+
+    } catch (error) {
+
+        console.error(
+            "Remove guest attendance error:",
+            error
+        );
+
+        alert(
+            error.message ||
+            "Unable to remove guest attendance record."
+        );
+    }
 }
 
 
@@ -3589,7 +4068,6 @@ async function refreshAdminData() {
             loadApplications(),
             loadMembers(),
             loadTransactions(),
-            loadAttendance(),
             loadReports()
         ]);
 
@@ -4140,6 +4618,8 @@ document.addEventListener(
                 refreshAdminData,
                 5000
             );
+
+        startCountdownTimer();
 
     }
 );
