@@ -3876,6 +3876,29 @@ async function checkoutAttendance(
             error
         );
 
+        if (
+            error.message ===
+            "Active attendance record not found."
+        ) {
+
+            autoCheckoutInProgress.delete(
+                Number(attendanceId)
+            );
+
+            await loadAttendance();
+
+            if (!skipConfirmation) {
+
+                alert(
+                    "This attendance record is no longer active. The attendance list has been refreshed."
+                );
+
+            }
+
+            return;
+
+        }
+
         if (skipConfirmation) {
 
             autoCheckoutInProgress.delete(
