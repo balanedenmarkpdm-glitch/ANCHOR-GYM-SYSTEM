@@ -1034,8 +1034,15 @@
 
                     <input
                         id="guestPhone"
-                        type="text"
-                        placeholder="09XX XXX XXXX">
+                        type="tel"
+                        inputmode="numeric"
+                        autocomplete="tel"
+                        placeholder="09XXXXXXXXX"
+                        pattern="09[0-9]{9}"
+                        minlength="11"
+                        maxlength="11"
+                        title="Enter an 11-digit Philippine mobile number starting with 09."
+                        required>
 
                     <label for="guestVisitType">
                         Visit Type

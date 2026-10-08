@@ -4452,6 +4452,28 @@ app.post(
 
             }
 
+            const finalPhone =
+                String(
+                    phone ||
+                    ""
+                ).trim();
+
+            if (!/^09\d{9}$/.test(finalPhone)) {
+
+                return res.status(
+                    400
+                ).json({
+
+                    success:
+                        false,
+
+                    message:
+                        "Enter an 11-digit Philippine mobile number starting with 09."
+
+                });
+
+            }
+
             if (
                 finalVisitType !==
                 "GUEST" &&
@@ -4631,10 +4653,7 @@ app.post(
                     `,
                     [
                         finalName,
-                        String(
-                            phone ||
-                            ""
-                        ).trim(),
+                        finalPhone,
                         finalVisitType,
                         finalHours,
                         finalAmount,

@@ -418,6 +418,49 @@ if (forgotForm) {
    ADMIN / STAFF LOGIN
 ========================= */
 
+const toggleAdminPassword =
+    document.getElementById(
+        "toggleAdminPassword"
+    );
+
+if (toggleAdminPassword) {
+
+    toggleAdminPassword.addEventListener(
+        "click",
+        function() {
+
+            const password =
+                document.getElementById(
+                    "adminPassword"
+                );
+
+            if (!password) {
+                return;
+            }
+
+            const isPasswordHidden =
+                password.type === "password";
+
+            password.type =
+                isPasswordHidden
+                    ? "text"
+                    : "password";
+
+            toggleAdminPassword.textContent =
+                isPasswordHidden
+                    ? "Hide"
+                    : "Show";
+
+            toggleAdminPassword.setAttribute(
+                "aria-pressed",
+                String(isPasswordHidden)
+            );
+
+        }
+    );
+
+}
+
 const adminLoginForm =
     document.getElementById(
         "adminLoginForm"

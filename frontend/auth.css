@@ -659,6 +659,20 @@ a:hover {
 
     }
 
+    .password-box input {
+
+        min-width: 0;
+
+        font-size: 16px;
+
+    }
+
+    .password-box button {
+
+        min-height: 44px;
+
+    }
+
     .two-column {
 
         grid-template-columns: 1fr;
@@ -666,4 +680,3 @@ a:hover {
     }
 
 }
-

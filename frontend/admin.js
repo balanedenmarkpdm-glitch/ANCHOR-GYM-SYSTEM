@@ -8,6 +8,27 @@ let qrScanner = null;
 let qrScanBusy = false;
 let autoCheckoutInProgress = new Set();
 
+const guestPhoneInput =
+    document.getElementById(
+        "guestPhone"
+    );
+
+if (guestPhoneInput) {
+
+    guestPhoneInput.addEventListener(
+        "input",
+        () => {
+
+            guestPhoneInput.value =
+                guestPhoneInput.value
+                    .replace(/\D/g, "")
+                    .slice(0, 11);
+
+        }
+    );
+
+}
+
 
 // =====================================
 // CHECK ADMIN ACCESS
@@ -3199,6 +3220,16 @@ async function addGuest(
 
         alert(
             "Guest name is required."
+        );
+
+        return;
+
+    }
+
+    if (!/^09\d{9}$/.test(phone || "")) {
+
+        alert(
+            "Enter an 11-digit Philippine mobile number starting with 09."
         );
 
         return;
