@@ -8,6 +8,38 @@ window.anchorApiUrl = function(path) {
     ).toString();
 };
 
+window.anchorPasswordStrength = function(password) {
+    if (!password) {
+        return {
+            score: 0,
+            label: "Enter a password",
+            state: "empty"
+        };
+    }
+
+    let score = 0;
+
+    if (password.length >= 6) score++;
+    if (password.length >= 10) score++;
+    if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score++;
+    if (/\d/.test(password)) score++;
+    if (/[^A-Za-z0-9]/.test(password)) score++;
+
+    if (password.length < 6 || score <= 1) {
+        return { score: 1, label: "Weak", state: "weak" };
+    }
+
+    if (score <= 2) {
+        return { score: 2, label: "Medium", state: "medium" };
+    }
+
+    if (score <= 3) {
+        return { score: 3, label: "Strong", state: "strong" };
+    }
+
+    return { score: 4, label: "Very strong", state: "very-strong" };
+};
+
 window.anchorSession = {
     get: function(key) {
         const temporaryValue =

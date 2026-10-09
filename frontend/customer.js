@@ -910,6 +910,38 @@ function initializeChangePasswordForm() {
         document.getElementById("changePasswordMessage");
     const submitButton =
         document.getElementById("changePasswordButton");
+    const newPasswordInput =
+        document.getElementById("changePasswordNew");
+    const passwordStrength =
+        document.getElementById("changePasswordStrength");
+    const passwordStrengthLabel =
+        document.getElementById("changePasswordStrengthLabel");
+    const passwordStrengthMeter =
+        passwordStrength.querySelector('[role="meter"]');
+
+    const updatePasswordStrength = function() {
+        const strength =
+            window.anchorPasswordStrength(newPasswordInput.value);
+
+        passwordStrength.dataset.strength = strength.state;
+        passwordStrengthLabel.textContent = strength.label;
+        passwordStrengthMeter.setAttribute(
+            "aria-valuenow",
+            String(strength.score)
+        );
+        passwordStrengthMeter.setAttribute(
+            "aria-valuetext",
+            strength.label
+        );
+        passwordStrengthMeter.firstElementChild.style.width =
+            `${strength.score * 25}%`;
+    };
+
+    newPasswordInput.addEventListener(
+        "input",
+        updatePasswordStrength
+    );
+    updatePasswordStrength();
 
     form.addEventListener(
         "submit",
