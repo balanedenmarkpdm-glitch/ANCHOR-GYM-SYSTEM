@@ -112,6 +112,8 @@
                     type="password"
                     id="signupPassword"
                     placeholder="Create password"
+                    minlength="6"
+                    autocomplete="new-password"
                     required
                 >
 
@@ -121,6 +123,29 @@
                     Show
                 </button>
 
+            </div>
+
+            <div
+                id="signupPasswordStrength"
+                class="password-strength"
+                data-strength="empty"
+                aria-live="polite">
+                <div class="password-strength-heading">
+                    Password strength:
+                    <strong id="signupPasswordStrengthLabel">Enter a password</strong>
+                </div>
+                <div
+                    class="password-strength-track"
+                    role="meter"
+                    aria-label="Password strength"
+                    aria-valuemin="0"
+                    aria-valuemax="4"
+                    aria-valuenow="0">
+                    <span></span>
+                </div>
+                <p id="signupPasswordGuidance">
+                    Use at least 6 characters with a mix of letters, numbers, or symbols.
+                </p>
             </div>
 
 

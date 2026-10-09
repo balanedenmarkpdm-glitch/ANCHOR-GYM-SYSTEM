@@ -520,6 +520,74 @@ const signupForm =
 const signupMessage =
     document.getElementById("signupMessage");
 
+function getSignupPasswordStrength(password) {
+    if (!password) {
+        return {
+            score: 0,
+            label: "Enter a password",
+            state: "empty"
+        };
+    }
+
+    let score = 0;
+
+    if (password.length >= 6) score++;
+    if (password.length >= 10) score++;
+    if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score++;
+    if (/\d/.test(password)) score++;
+    if (/[^A-Za-z0-9]/.test(password)) score++;
+
+    if (password.length < 6 || score <= 1) {
+        return { score: 1, label: "Weak", state: "weak" };
+    }
+
+    if (score <= 2) {
+        return { score: 2, label: "Medium", state: "medium" };
+    }
+
+    if (score <= 3) {
+        return { score: 3, label: "Strong", state: "strong" };
+    }
+
+    return { score: 4, label: "Very strong", state: "very-strong" };
+}
+
+const signupPasswordInput =
+    document.getElementById("signupPassword");
+const signupPasswordStrength =
+    document.getElementById("signupPasswordStrength");
+
+if (signupPasswordInput && signupPasswordStrength) {
+    const updateSignupPasswordStrength = function() {
+        const strength =
+            getSignupPasswordStrength(signupPasswordInput.value);
+        const label =
+            document.getElementById("signupPasswordStrengthLabel");
+        const meter =
+            signupPasswordStrength.querySelector('[role="meter"]');
+
+        signupPasswordStrength.dataset.strength =
+            strength.state;
+        label.textContent = strength.label;
+        meter.setAttribute(
+            "aria-valuenow",
+            String(strength.score)
+        );
+        meter.setAttribute(
+            "aria-valuetext",
+            strength.label
+        );
+        meter.firstElementChild.style.width =
+            `${strength.score * 25}%`;
+    };
+
+    signupPasswordInput.addEventListener(
+        "input",
+        updateSignupPasswordStrength
+    );
+    updateSignupPasswordStrength();
+}
+
 function isValidSignupGmailAddress(value) {
     const match =
         /^([a-z0-9.]+)(?:\+([a-z0-9._-]+))?@gmail\.com$/i.exec(
