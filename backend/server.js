@@ -4293,6 +4293,54 @@ app.post(
 
             }
 
+            const recentScanResult =
+                await client.query(
+                    `
+                    SELECT id
+                    FROM attendance
+                    WHERE member_id = $1
+                      AND UPPER(user_type) = 'MEMBER'
+                      AND GREATEST(
+                            check_in,
+                            COALESCE(check_out, check_in)
+                          ) >=
+                          ${GUEST_NOW_SQL} - INTERVAL '5 minutes'
+                    ORDER BY
+                        check_in DESC,
+                        id DESC
+                    LIMIT 1
+                    `,
+                    [
+                        member.id
+                    ]
+                );
+
+            if (
+                recentScanResult.rows.length >
+                0
+            ) {
+
+                await client.query(
+                    "ROLLBACK"
+                );
+
+                transactionStarted =
+                    false;
+
+                return res.status(
+                    429
+                ).json({
+
+                    success:
+                        false,
+
+                    message:
+                        "This member was scanned recently. Please wait 5 minutes before scanning again."
+
+                });
+
+            }
+
             const openAttendanceResult =
                 await client.query(
                     `
