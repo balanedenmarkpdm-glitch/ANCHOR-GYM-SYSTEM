@@ -144,10 +144,24 @@
 
         <header class="topbar">
 
-            🔔
+            <button
+                class="topbar-notifications"
+                type="button"
+                aria-label="Open notifications"
+                onclick="showPageById('notifications')">
+                🔔
+                <span
+                    id="topbarNotificationCount"
+                    hidden>
+                </span>
+            </button>
 
-
-            <div class="user">
+            <button
+                class="user topbar-profile"
+                id="topbarProfileButton"
+                type="button"
+                aria-label="Open your profile"
+                onclick="showPageById('profile')">
 
                 <div class="avatar">
                     C
@@ -157,7 +171,7 @@
                     Customer
                 </span>
 
-            </div>
+            </button>
 
         </header>
 
@@ -1165,7 +1179,27 @@
                 </h1>
 
 
-                <div class="card form">
+                <form
+                    id="customerProfileForm"
+                    class="card form">
+
+                    <div class="profile-photo-field">
+                        <div
+                            class="avatar profile-avatar"
+                            id="profilePhotoPreview">
+                            C
+                        </div>
+
+                        <label for="profilePhoto">
+                            Profile Photo
+                        </label>
+
+                        <input
+                            id="profilePhoto"
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp"
+                            hidden>
+                    </div>
 
 
                     <label for="profileFullName">
@@ -1175,8 +1209,10 @@
 
                     <input
                         id="profileFullName"
+                        maxlength="100"
                         value=""
-                        readonly>
+                        readonly
+                        required>
 
 
 
@@ -1200,10 +1236,59 @@
                     <input
                         id="profilePhone"
                         value=""
-                        readonly>
+                        readonly
+                        inputmode="numeric"
+                        minlength="11"
+                        maxlength="11"
+                        pattern="09[0-9]{9}"
+                        required>
+
+                    <div>
+                        <label for="profileCurrentPassword">
+                            Current Password
+                        </label>
+
+                        <input
+                            id="profileCurrentPassword"
+                            type="password"
+                            autocomplete="current-password"
+                            disabled
+                            required>
+                    </div>
+
+                    <div class="profile-actions">
+                        <button
+                            id="editProfileButton"
+                            class="button"
+                            type="button">
+                            Edit Profile
+                        </button>
+
+                        <button
+                            id="saveProfileButton"
+                            class="button red"
+                            type="submit"
+                            hidden>
+                            Save Changes
+                        </button>
+
+                        <button
+                            id="cancelProfileButton"
+                            class="button"
+                            type="button"
+                            hidden>
+                            Cancel
+                        </button>
+                    </div>
+
+                    <p
+                        id="profileMessage"
+                        role="status"
+                        aria-live="polite">
+                    </p>
 
 
-                </div>
+                </form>
 
 
             </div>

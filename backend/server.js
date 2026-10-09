@@ -37,6 +37,76 @@ const pool = new Pool({
     statement_timeout: 15000
 });
 
+let customerProfilePhotoColumnReady = false;
+
+async function ensureCustomerProfilePhotoColumn() {
+    if (customerProfilePhotoColumnReady) {
+        return;
+    }
+
+    await pool.query(
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo TEXT"
+    );
+    customerProfilePhotoColumnReady = true;
+}
+
+function decodeProfilePhoto(value) {
+    const matches =
+        String(value || "").match(
+            /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/i
+        );
+
+    if (!matches) {
+        return null;
+    }
+
+    const imageData =
+        Buffer.from(matches[2], "base64");
+
+    if (imageData.length > 5 * 1024 * 1024) {
+        return null;
+    }
+
+    const mimeType =
+        matches[1].toLowerCase();
+    const isPng =
+        imageData.subarray(0, 8).equals(
+            Buffer.from("89504e470d0a1a0a", "hex")
+        );
+    const isJpeg =
+        imageData[0] === 0xff &&
+        imageData[1] === 0xd8 &&
+        imageData[2] === 0xff;
+    const isWebp =
+        imageData.toString("ascii", 0, 4) === "RIFF" &&
+        imageData.toString("ascii", 8, 12) === "WEBP";
+    const isValidImage =
+        (
+            mimeType === "png" &&
+            isPng
+        ) ||
+        (
+            mimeType === "jpeg" &&
+            isJpeg
+        ) ||
+        (
+            mimeType === "webp" &&
+            isWebp
+        );
+
+    if (!isValidImage) {
+        return null;
+    }
+
+    return {
+        mimeType:
+            mimeType === "jpeg"
+                ? "image/jpeg"
+                : `image/${mimeType}`,
+        imageData: imageData
+    };
+}
+
 const googleOAuthClient =
     new OAuth2Client();
 
@@ -1253,6 +1323,220 @@ app.post(
 // CUSTOMER DASHBOARD
 // =====================================
 
+app.get(
+    "/api/customer/:userId/profile-photo",
+    async (req, res) => {
+        const userId =
+            Number(req.params.userId);
+
+        if (!Number.isSafeInteger(userId) || userId <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid customer ID."
+            });
+        }
+
+        try {
+            await ensureCustomerProfilePhotoColumn();
+
+            const result =
+                await pool.query(
+                    `
+                    SELECT profile_photo
+                    FROM users
+                    WHERE id = $1
+                      AND LOWER(role) = 'customer'
+                    `,
+                    [userId]
+                );
+
+            if (
+                result.rows.length === 0 ||
+                !result.rows[0].profile_photo
+            ) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Customer profile photo not found."
+                });
+            }
+
+            const photo =
+                decodeProfilePhoto(
+                    result.rows[0].profile_photo
+                );
+
+            if (!photo) {
+                console.error(
+                    `Stored profile photo is invalid for customer ${userId}.`
+                );
+                return res.status(500).json({
+                    success: false,
+                    message: "Unable to load the profile photo."
+                });
+            }
+
+            res.setHeader(
+                "Cache-Control",
+                "private, max-age=31536000, immutable"
+            );
+            return res.type(photo.mimeType).send(photo.imageData);
+        } catch (error) {
+            console.error(
+                "Load customer profile photo error:",
+                error
+            );
+            return res.status(500).json({
+                success: false,
+                message: "Unable to load the profile photo."
+            });
+        }
+    }
+);
+
+app.put(
+    "/api/customer/:userId/profile",
+    async (req, res) => {
+        const userId =
+            Number(req.params.userId);
+        const fullName =
+            String(req.body.full_name || "").trim();
+        const phone =
+            normalizePhilippinePhone(req.body.phone);
+        const currentPassword =
+            String(req.body.current_password || "");
+
+        if (!Number.isSafeInteger(userId) || userId <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid customer ID."
+            });
+        }
+
+        if (!fullName || fullName.length > 100) {
+            return res.status(400).json({
+                success: false,
+                message: "Enter a name up to 100 characters."
+            });
+        }
+
+        if (!/^09\d{9}$/.test(phone)) {
+            return res.status(400).json({
+                success: false,
+                message: "Enter an 11-digit Philippine mobile number starting with 09."
+            });
+        }
+
+        if (!currentPassword) {
+            return res.status(400).json({
+                success: false,
+                message: "Enter your current password to save profile changes."
+            });
+        }
+
+        try {
+            await ensureCustomerProfilePhotoColumn();
+
+            const customerResult =
+                await pool.query(
+                    `
+                    SELECT password
+                    FROM users
+                    WHERE id = $1
+                      AND LOWER(role) = 'customer'
+                    `,
+                    [userId]
+                );
+
+            if (customerResult.rows.length === 0) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Customer account not found."
+                });
+            }
+
+            const passwordMatches =
+                await bcrypt.compare(
+                    currentPassword,
+                    customerResult.rows[0].password
+                );
+
+            if (!passwordMatches) {
+                return res.status(401).json({
+                    success: false,
+                    message: "Your current password is incorrect."
+                });
+            }
+
+            if (req.body.profile_photo !== undefined) {
+                if (!decodeProfilePhoto(req.body.profile_photo)) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Choose a valid JPG, PNG, or WEBP profile photo."
+                    });
+                }
+            }
+
+            const profilePhoto =
+                req.body.profile_photo === undefined
+                    ? null
+                    : req.body.profile_photo;
+            const result =
+                await pool.query(
+                    `
+                    UPDATE users
+                    SET
+                        full_name = $2,
+                        phone = $3,
+                        profile_photo = COALESCE($4, profile_photo)
+                    WHERE id = $1
+                      AND LOWER(role) = 'customer'
+                    RETURNING
+                        id,
+                        full_name,
+                        email,
+                        phone,
+                        role,
+                        created_at,
+                        CASE
+                            WHEN profile_photo IS NULL THEN NULL
+                            ELSE '/api/customer/' || id ||
+                                '/profile-photo?v=' || MD5(profile_photo)
+                        END AS profile_photo
+                    `,
+                    [
+                        userId,
+                        fullName,
+                        phone,
+                        profilePhoto
+                    ]
+                );
+
+            if (result.rows.length === 0) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Customer account not found."
+                });
+            }
+
+            return res.json({
+                success: true,
+                message: "Profile updated.",
+                user: result.rows[0]
+            });
+        } catch (error) {
+            console.error(
+                "Update customer profile error:",
+                error
+            );
+
+            return res.status(500).json({
+                success: false,
+                message: "Unable to update your profile."
+            });
+        }
+    }
+);
+
 app.delete(
     "/api/customer/:userId/notifications/:notificationId",
     async (req, res) => {
@@ -1361,6 +1645,8 @@ app.get(
 
             }
 
+            await ensureCustomerProfilePhotoColumn();
+
             const userResult =
                 await pool.query(
                     `
@@ -1370,7 +1656,12 @@ app.get(
                         email,
                         phone,
                         role,
-                        created_at
+                        created_at,
+                        CASE
+                            WHEN profile_photo IS NULL THEN NULL
+                            ELSE '/api/customer/' || id ||
+                                '/profile-photo?v=' || MD5(profile_photo)
+                        END AS profile_photo
                     FROM users
                     WHERE id = $1
                       AND LOWER(role) = 'customer'

@@ -5,6 +5,8 @@
 let customerData = null;
 let customerRefreshTimer = null;
 let selectedNotificationIds = new Set();
+let profileEditMode = false;
+let selectedProfilePhotoData = null;
 
 
 // =====================================
@@ -418,8 +420,8 @@ function displayCustomer(user) {
 
 
     const topbarUser =
-        document.querySelector(
-            ".topbar .user"
+        document.getElementById(
+            "topbarProfileButton"
         );
 
 
@@ -436,9 +438,11 @@ function displayCustomer(user) {
 
 
         if (avatar) {
-
-            avatar.textContent =
-                initials;
+            renderCustomerAvatar(
+                avatar,
+                initials,
+                user.profile_photo
+            );
 
         }
 
@@ -508,7 +512,7 @@ function displayCustomer(user) {
         );
 
 
-    if (profileName) {
+    if (profileName && !profileEditMode) {
 
         profileName.value =
             user.full_name || "";
@@ -524,14 +528,281 @@ function displayCustomer(user) {
     }
 
 
-    if (profilePhone) {
+    if (profilePhone && !profileEditMode) {
 
         profilePhone.value =
             user.phone || "";
 
     }
 
+    const profilePhotoPreview =
+        document.getElementById(
+            "profilePhotoPreview"
+        );
+
+    if (profilePhotoPreview && !profileEditMode) {
+        renderCustomerAvatar(
+            profilePhotoPreview,
+            getInitials(fullName),
+            user.profile_photo
+        );
+    }
+
 }
+
+function renderCustomerAvatar(
+    element,
+    initials,
+    photoPath
+) {
+    if (photoPath) {
+        const imageSource =
+            photoPath.startsWith("data:image/")
+                ? photoPath
+                : window.anchorApiUrl(photoPath);
+        const currentImage =
+            element.querySelector("img");
+
+        if (
+            currentImage &&
+            currentImage.dataset.source === imageSource
+        ) {
+            return;
+        }
+
+        const image =
+            document.createElement("img");
+
+        image.src = imageSource;
+        image.alt = "Customer profile photo";
+        image.dataset.source = imageSource;
+        element.replaceChildren(image);
+        return;
+    }
+
+    element.replaceChildren();
+    element.textContent =
+        initials || "C";
+}
+
+function setProfileEditMode(enabled) {
+    profileEditMode = enabled;
+
+    const fullName =
+        document.getElementById("profileFullName");
+    const phone =
+        document.getElementById("profilePhone");
+    const currentPassword =
+        document.getElementById("profileCurrentPassword");
+    const photoInput =
+        document.getElementById("profilePhoto");
+
+    fullName.readOnly = !enabled;
+    phone.readOnly = !enabled;
+    currentPassword.disabled = !enabled;
+    currentPassword.value = "";
+    photoInput.hidden = !enabled;
+
+    document.getElementById("editProfileButton").hidden =
+        enabled;
+    document.getElementById("saveProfileButton").hidden =
+        !enabled;
+    document.getElementById("cancelProfileButton").hidden =
+        !enabled;
+
+    if (enabled) {
+        fullName.focus();
+    }
+}
+
+function readProfilePhoto(file) {
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+        return Promise.reject(
+            new Error("Choose a JPG, PNG, or WEBP image.")
+        );
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+        return Promise.reject(
+            new Error("Profile photos must be 5MB or smaller.")
+        );
+    }
+
+    return new Promise(
+        (resolve, reject) => {
+            const reader =
+                new FileReader();
+
+            reader.onload = () =>
+                resolve(String(reader.result));
+            reader.onerror = () =>
+                reject(new Error("Unable to read the selected photo."));
+            reader.readAsDataURL(file);
+        }
+    );
+}
+
+function initializeProfileEditor() {
+    const profileForm =
+        document.getElementById("customerProfileForm");
+    const editButton =
+        document.getElementById("editProfileButton");
+    const cancelButton =
+        document.getElementById("cancelProfileButton");
+    const photoInput =
+        document.getElementById("profilePhoto");
+    const profileMessage =
+        document.getElementById("profileMessage");
+
+    editButton.addEventListener(
+        "click",
+        function() {
+            profileMessage.textContent = "";
+            selectedProfilePhotoData = null;
+            document.getElementById("profileCurrentPassword").value = "";
+            photoInput.value = "";
+            setProfileEditMode(true);
+        }
+    );
+
+    cancelButton.addEventListener(
+        "click",
+        function() {
+            selectedProfilePhotoData = null;
+            photoInput.value = "";
+            setProfileEditMode(false);
+            displayCustomer(customerData);
+            profileMessage.textContent = "";
+        }
+    );
+
+    document.getElementById("profilePhone").addEventListener(
+        "input",
+        function(event) {
+            event.currentTarget.value =
+                event.currentTarget.value
+                    .replace(/\D/g, "")
+                    .slice(0, 11);
+        }
+    );
+
+    photoInput.addEventListener(
+        "change",
+        async function() {
+            const file = photoInput.files[0];
+
+            if (!file) {
+                selectedProfilePhotoData = null;
+                return;
+            }
+
+            try {
+                selectedProfilePhotoData =
+                    await readProfilePhoto(file);
+                renderCustomerAvatar(
+                    document.getElementById("profilePhotoPreview"),
+                    getInitials(customerData.full_name),
+                    selectedProfilePhotoData
+                );
+                profileMessage.textContent = "";
+            } catch (error) {
+                photoInput.value = "";
+                selectedProfilePhotoData = null;
+                profileMessage.textContent = error.message;
+            }
+        }
+    );
+
+    profileForm.addEventListener(
+        "submit",
+        async function(event) {
+            event.preventDefault();
+
+            const fullName =
+                document.getElementById("profileFullName").value.trim();
+            const phone =
+                document.getElementById("profilePhone").value.replace(/\D/g, "");
+
+            if (!fullName) {
+                profileMessage.textContent = "Enter your full name.";
+                return;
+            }
+
+            if (!/^09\d{9}$/.test(phone)) {
+                profileMessage.textContent =
+                    "Enter an 11-digit Philippine mobile number starting with 09.";
+                return;
+            }
+
+            const saveButton =
+                document.getElementById("saveProfileButton");
+
+            saveButton.disabled = true;
+            profileMessage.textContent = "Saving your profile...";
+
+            try {
+                const body = {
+                    full_name: fullName,
+                    phone: phone,
+                    current_password:
+                        document.getElementById("profileCurrentPassword").value
+                };
+
+                if (selectedProfilePhotoData) {
+                    body.profile_photo =
+                        selectedProfilePhotoData;
+                }
+
+                const response =
+                    await fetch(
+                        window.anchorApiUrl(
+                            `/api/customer/${customerData.id}/profile`
+                        ),
+                        {
+                            method: "PUT",
+                            headers: {
+                                "Content-Type": "application/json"
+                            },
+                            body: JSON.stringify(body)
+                        }
+                    );
+
+                const data =
+                    await response.json();
+
+                if (!response.ok || !data.success) {
+                    throw new Error(
+                        data.message || "Unable to save profile changes."
+                    );
+                }
+
+                customerData = {
+                    ...customerData,
+                    ...data.user
+                };
+
+                window.anchorSession.set(
+                    "anchorUser",
+                    JSON.stringify(customerData),
+                    Boolean(window.localStorage.getItem("anchorUser"))
+                );
+
+                selectedProfilePhotoData = null;
+                photoInput.value = "";
+                setProfileEditMode(false);
+                displayCustomer(customerData);
+                profileMessage.textContent = "Profile updated.";
+            } catch (error) {
+                console.error("Profile update error:", error);
+                profileMessage.textContent = error.message;
+            } finally {
+                saveButton.disabled = false;
+            }
+        }
+    );
+}
+
+initializeProfileEditor();
 
 
 // =====================================
@@ -1287,6 +1558,20 @@ function displayNotifications(
         "notificationCount",
         unreadCount
     );
+
+    const topbarNotificationCount =
+        document.getElementById(
+            "topbarNotificationCount"
+        );
+
+    if (topbarNotificationCount) {
+        topbarNotificationCount.textContent =
+            unreadCount > 99
+                ? "99+"
+                : String(unreadCount);
+        topbarNotificationCount.hidden =
+            unreadCount === 0;
+    }
 
 
     const dashboardContainer =
