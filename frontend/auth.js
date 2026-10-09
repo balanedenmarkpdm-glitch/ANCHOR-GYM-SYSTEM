@@ -447,16 +447,8 @@ if (toggleLoginPassword) {
 const signupForm =
     document.getElementById("signupForm");
 
-const signupVerificationForm =
-    document.getElementById("signupVerificationForm");
-
-const signupVerificationMessage =
-    document.getElementById("signupVerificationMessage");
-
 const signupMessage =
     document.getElementById("signupMessage");
-
-let signupVerificationEmail = "";
 
 function isValidSignupGmailAddress(value) {
     const match =
@@ -497,16 +489,39 @@ const signupEmailInput =
 
 if (signupEmailInput) {
     signupEmailInput.addEventListener(
+        "invalid",
+        function() {
+            if (
+                signupEmailInput.value &&
+                signupMessage &&
+                !isValidSignupGmailAddress(
+                    signupEmailInput.value
+                )
+            ) {
+                signupMessage.textContent =
+                    "Enter a Gmail address in the format name@gmail.com. We cannot check whether the mailbox exists because verification emails are disabled.";
+            }
+        }
+    );
+
+    signupEmailInput.addEventListener(
         "input",
         function() {
-            signupEmailInput.setCustomValidity(
+            const validGmail =
                 !signupEmailInput.value ||
                 isValidSignupGmailAddress(
                     signupEmailInput.value
-                )
+                );
+
+            signupEmailInput.setCustomValidity(
+                validGmail
                     ? ""
                     : "Enter a valid Gmail address, such as name@gmail.com."
             );
+
+            if (signupMessage && validGmail) {
+                signupMessage.textContent = "";
+            }
         }
     );
 
@@ -596,9 +611,12 @@ if (signupForm) {
 
             if (!isValidSignupGmailAddress(email)) {
 
-                alert(
-                    "Please enter a valid Gmail address that can receive the verification code."
-                );
+                const message =
+                    "Enter a Gmail address in the format name@gmail.com. We cannot check whether the mailbox exists because verification emails are disabled.";
+
+                if (signupMessage) {
+                    signupMessage.textContent = message;
+                }
 
                 return;
             }
@@ -662,12 +680,12 @@ if (signupForm) {
 
             if (submitButton) {
                 submitButton.disabled = true;
-                submitButton.textContent = "Sending verification code...";
+                submitButton.textContent = "Creating account...";
             }
 
             if (signupMessage) {
                 signupMessage.textContent =
-                    "Sending verification code. This may take a few seconds.";
+                    "Creating your account...";
             }
 
             try {
@@ -715,31 +733,14 @@ if (signupForm) {
                     return;
                 }
 
-                signupVerificationEmail =
-                    email.toLowerCase();
+                window.anchorSession.set(
+                    "anchorUser",
+                    JSON.stringify(data.user),
+                    false
+                );
 
-                document.getElementById(
-                    "verificationEmail"
-                ).textContent =
-                    signupVerificationEmail;
-
-                signupForm.hidden = true;
-                if (signupMessage) {
-                    signupMessage.textContent = "";
-                }
-
-                if (signupVerificationForm) {
-                    signupVerificationForm.hidden = false;
-                    document.getElementById(
-                        "signupVerificationCode"
-                    ).focus();
-                }
-
-                if (signupVerificationMessage) {
-                    signupVerificationMessage.textContent =
-                        data.message ||
-                        "Check your email for the verification code.";
-                }
+                window.location.href =
+                    "customer.html";
 
 
             } catch (error) {
@@ -751,7 +752,7 @@ if (signupForm) {
 
                 const message =
                     error.name === "AbortError"
-                        ? "Signup took too long. Check the backend email settings and Render logs, then try again."
+                        ? "Signup took too long. Please try again."
                         : "Unable to connect to the server.";
 
                 if (signupMessage) {
@@ -774,121 +775,6 @@ if (signupForm) {
         }
     );
 
-}
-
-if (signupVerificationForm) {
-    signupVerificationForm.addEventListener(
-        "submit",
-        async function(event) {
-            event.preventDefault();
-
-            const code =
-                document.getElementById(
-                    "signupVerificationCode"
-                ).value.trim();
-
-            try {
-                const response =
-                    await fetch(
-                        window.anchorApiUrl("/api/signup/verify"),
-                        {
-                            method: "POST",
-                            headers: {
-                                "Content-Type": "application/json"
-                            },
-                            body: JSON.stringify({
-                                email: signupVerificationEmail,
-                                code: code
-                            })
-                        }
-                    );
-
-                const data =
-                    await response.json();
-
-                if (!response.ok) {
-                    throw new Error(
-                        data.message ||
-                        "Unable to verify your email."
-                    );
-                }
-
-                window.anchorSession.set(
-                    "anchorUser",
-                    JSON.stringify(data.user),
-                    false
-                );
-
-                window.location.href =
-                    "customer.html";
-            } catch (error) {
-                console.error(
-                    "Email verification error:",
-                    error
-                );
-
-                if (signupVerificationMessage) {
-                    signupVerificationMessage.textContent =
-                        error.message;
-                }
-            }
-        }
-    );
-}
-
-const resendSignupCode =
-    document.getElementById("resendSignupCode");
-
-if (resendSignupCode) {
-    resendSignupCode.addEventListener(
-        "click",
-        async function() {
-            if (!signupVerificationEmail) {
-                return;
-            }
-
-            try {
-                const response =
-                    await fetch(
-                        window.anchorApiUrl("/api/signup/resend"),
-                        {
-                            method: "POST",
-                            headers: {
-                                "Content-Type": "application/json"
-                            },
-                            body: JSON.stringify({
-                                email: signupVerificationEmail
-                            })
-                        }
-                    );
-
-                const data =
-                    await response.json();
-
-                if (!response.ok) {
-                    throw new Error(
-                        data.message ||
-                        "Unable to resend the verification code."
-                    );
-                }
-
-                if (signupVerificationMessage) {
-                    signupVerificationMessage.textContent =
-                        data.message;
-                }
-            } catch (error) {
-                console.error(
-                    "Resend verification code error:",
-                    error
-                );
-
-                if (signupVerificationMessage) {
-                    signupVerificationMessage.textContent =
-                        error.message;
-                }
-            }
-        }
-    );
 }
 
 function bindPasswordToggle(

@@ -40,92 +40,6 @@ const pool = new Pool({
 const googleOAuthClient =
     new OAuth2Client();
 
-let emailVerificationTableReady = false;
-
-async function ensureEmailVerificationTable() {
-    if (emailVerificationTableReady) {
-        return;
-    }
-
-    await pool.query(`
-        CREATE TABLE IF NOT EXISTS signup_email_verifications (
-            email TEXT PRIMARY KEY,
-            full_name TEXT NOT NULL,
-            phone TEXT NOT NULL,
-            password_hash TEXT NOT NULL,
-            code_hash TEXT NOT NULL,
-            expires_at TIMESTAMPTZ NOT NULL,
-            attempts INTEGER NOT NULL DEFAULT 0,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-    `);
-
-    emailVerificationTableReady = true;
-}
-
-async function sendSignupVerificationCode(
-    email,
-    code
-) {
-    const apiKey =
-        process.env.BREVO_API_KEY;
-    const senderEmail =
-        process.env.EMAIL_FROM;
-
-    if (!apiKey || !senderEmail) {
-        const error =
-            new Error(
-                "Email verification is not configured. Set BREVO_API_KEY and EMAIL_FROM on the backend."
-            );
-        error.statusCode = 503;
-        throw error;
-    }
-
-    const response =
-        await fetch(
-            "https://api.brevo.com/v3/smtp/email",
-            {
-                method: "POST",
-                headers: {
-                    accept: "application/json",
-                    "api-key": apiKey,
-                    "content-type": "application/json"
-                },
-                body: JSON.stringify({
-                    sender: {
-                        name:
-                            process.env.EMAIL_FROM_NAME ||
-                            "ANCHOR GYM",
-                        email: senderEmail
-                    },
-                    to: [
-                        {
-                            email: email
-                        }
-                    ],
-                    subject: "Verify your ANCHOR GYM account",
-                    textContent:
-                        `Your ANCHOR GYM verification code is ${code}. ` +
-                        "It expires in 10 minutes. If you did not request this, ignore this email.",
-                    htmlContent:
-                        `<p>Your ANCHOR GYM verification code is:</p>` +
-                        `<p style="font-size:24px;font-weight:bold;letter-spacing:5px">${code}</p>` +
-                        "<p>This code expires in 10 minutes. If you did not request this, ignore this email.</p>"
-                }),
-                signal: AbortSignal.timeout(15000)
-            }
-        );
-
-    if (!response.ok) {
-        const details =
-            await response.text();
-
-        throw new Error(
-            `Brevo email API returned ${response.status}: ${details}`
-        );
-    }
-}
-
 function normalizeSignupEmail(value) {
     return String(value || "")
         .trim()
@@ -699,349 +613,51 @@ app.delete(
 // SIGN UP
 // =====================================
 
-async function createSignupVerification(
-    req,
-    res,
-    resendOnly
-) {
-    try {
-        await ensureEmailVerificationTable();
-
+app.post(
+    "/api/signup",
+    async (req, res) => {
         const email =
-            normalizeSignupEmail(
-                req.body.email
-            );
+            normalizeSignupEmail(req.body.email);
+        const fullName =
+            String(req.body.full_name || req.body.fullName || "").trim();
+        const phone =
+            normalizePhilippinePhone(req.body.phone);
+        const password =
+            String(req.body.password || "");
 
         if (!isValidGmailAddress(email)) {
             return res.status(400).json({
                 success: false,
-                message: "Please enter a valid Gmail address that can receive the verification code."
+                message: "Please enter a Gmail address in the format name@gmail.com. This checks the format only; it cannot confirm that the mailbox exists."
             });
         }
 
-        const existingUser =
-            await pool.query(
-                `
-                SELECT id
-                FROM users
-                WHERE LOWER(email) = $1
-                `,
-                [email]
-            );
-
-        if (existingUser.rows.length > 0) {
-            return res.status(409).json({
-                success: false,
-                message: "An account with this email already exists."
-            });
-        }
-
-        const pendingResult =
-            await pool.query(
-                `
-                SELECT
-                    email,
-                    full_name,
-                    phone,
-                    password_hash
-                FROM signup_email_verifications
-                WHERE email = $1
-                `,
-                [email]
-            );
-
-        let signup;
-
-        if (resendOnly) {
-            if (pendingResult.rows.length === 0) {
-                return res.status(404).json({
-                    success: false,
-                    message: "No pending signup was found. Please create your account again."
-                });
-            }
-
-            signup =
-                pendingResult.rows[0];
-        } else {
-            const {
-                fullName,
-                full_name,
-                password,
-                phone
-            } = req.body;
-
-            const finalFullName =
-                String(fullName || full_name || "").trim();
-
-            const normalizedPhone =
-                normalizePhilippinePhone(phone);
-
-            if (
-                !finalFullName ||
-                !password ||
-                !normalizedPhone
-            ) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Please complete all required fields."
-                });
-            }
-
-            if (!/^09\d{9}$/.test(normalizedPhone)) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Please enter a valid 11-digit Philippine mobile number starting with 09."
-                });
-            }
-
-            if (String(password).length < 6) {
-                return res.status(400).json({
-                    success: false,
-                    message: "Password must be at least 6 characters."
-                });
-            }
-
-            signup = {
-                email: email,
-                full_name: finalFullName,
-                phone: normalizedPhone,
-                password_hash: await bcrypt.hash(
-                    String(password),
-                    10
-                )
-            };
-        }
-
-        const code =
-            String(
-                crypto.randomInt(0, 1000000)
-            ).padStart(6, "0");
-
-        const codeHash =
-            await bcrypt.hash(code, 10);
-
-        await pool.query(
-            `
-            INSERT INTO signup_email_verifications
-            (
-                email,
-                full_name,
-                phone,
-                password_hash,
-                code_hash,
-                expires_at,
-                attempts,
-                created_at
-            )
-            VALUES
-            (
-                $1,
-                $2,
-                $3,
-                $4,
-                $5,
-                CURRENT_TIMESTAMP + INTERVAL '10 minutes',
-                0,
-                CURRENT_TIMESTAMP
-            )
-            ON CONFLICT (email)
-            DO UPDATE SET
-                full_name = EXCLUDED.full_name,
-                phone = EXCLUDED.phone,
-                password_hash = EXCLUDED.password_hash,
-                code_hash = EXCLUDED.code_hash,
-                expires_at = EXCLUDED.expires_at,
-                attempts = 0,
-                created_at = CURRENT_TIMESTAMP
-            `,
-            [
-                signup.email || email,
-                signup.full_name,
-                signup.phone,
-                signup.password_hash,
-                codeHash
-            ]
-        );
-
-        await sendSignupVerificationCode(
-            email,
-            code
-        );
-
-        return res.status(200).json({
-            success: true,
-            message: `A verification code was sent to ${email}.`
-        });
-    } catch (error) {
-        console.error(
-            "Signup email verification error:",
-            error
-        );
-
-        return res.status(
-            error.statusCode || 500
-        ).json({
-            success: false,
-            message:
-                error.statusCode === 503
-                    ? error.message
-                    : "Unable to complete signup or send the verification code. Check the backend logs and email settings, then try again."
-        });
-    }
-}
-
-app.post(
-    "/api/signup",
-    async (req, res) => {
-        await createSignupVerification(
-            req,
-            res,
-            false
-        );
-    }
-);
-
-app.post(
-    "/api/signup/resend",
-    async (req, res) => {
-        await createSignupVerification(
-            req,
-            res,
-            true
-        );
-    }
-);
-
-app.post(
-    "/api/signup/verify",
-    async (req, res) => {
-        const email =
-            normalizeSignupEmail(
-                req.body.email
-            );
-
-        const code =
-            String(req.body.code || "").trim();
-
-        if (
-            !isValidGmailAddress(email) ||
-            !/^\d{6}$/.test(code)
-        ) {
+        if (!fullName || !phone || !password) {
             return res.status(400).json({
                 success: false,
-                message: "Enter the six-digit code sent to your Gmail address."
+                message: "Please complete all required fields."
             });
         }
 
-        let client;
+        if (!/^09\d{9}$/.test(phone)) {
+            return res.status(400).json({
+                success: false,
+                message: "Please enter a valid 11-digit Philippine mobile number starting with 09."
+            });
+        }
+
+        if (password.length < 6) {
+            return res.status(400).json({
+                success: false,
+                message: "Password must be at least 6 characters."
+            });
+        }
 
         try {
-            await ensureEmailVerificationTable();
-
-            client =
-                await pool.connect();
-
-            await client.query("BEGIN");
-
-            const pendingResult =
-                await client.query(
-                    `
-                    SELECT
-                        email,
-                        full_name,
-                        phone,
-                        password_hash,
-                        code_hash,
-                        expires_at,
-                        attempts
-                    FROM signup_email_verifications
-                    WHERE email = $1
-                    FOR UPDATE
-                    `,
-                    [email]
-                );
-
-            if (pendingResult.rows.length === 0) {
-                await client.query("ROLLBACK");
-                return res.status(404).json({
-                    success: false,
-                    message: "No pending signup was found. Please request a new verification code."
-                });
-            }
-
-            const pending =
-                pendingResult.rows[0];
-
-            if (
-                new Date(pending.expires_at).getTime() <=
-                Date.now()
-            ) {
-                await client.query(
-                    "DELETE FROM signup_email_verifications WHERE email = $1",
-                    [email]
-                );
-                await client.query("COMMIT");
-
-                return res.status(410).json({
-                    success: false,
-                    message: "The verification code expired. Please create your account again."
-                });
-            }
-
-            if (Number(pending.attempts) >= 5) {
-                await client.query("ROLLBACK");
-
-                return res.status(429).json({
-                    success: false,
-                    message: "Too many incorrect codes. Request a new verification code to try again."
-                });
-            }
-
-            const codeMatches =
-                await bcrypt.compare(
-                    code,
-                    pending.code_hash
-                );
-
-            if (!codeMatches) {
-                const nextAttempts =
-                    Number(pending.attempts) + 1;
-
-                if (nextAttempts >= 5) {
-                    await client.query(
-                        `
-                        UPDATE signup_email_verifications
-                        SET attempts = $2
-                        WHERE email = $1
-                        `,
-                        [email, nextAttempts]
-                    );
-                    await client.query("COMMIT");
-
-                    return res.status(429).json({
-                        success: false,
-                        message: "Too many incorrect codes. Request a new verification code to try again."
-                    });
-                }
-
-                await client.query(
-                    `
-                    UPDATE signup_email_verifications
-                    SET attempts = $2
-                    WHERE email = $1
-                    `,
-                    [email, nextAttempts]
-                );
-                await client.query("COMMIT");
-
-                return res.status(400).json({
-                    success: false,
-                    message: "That verification code is incorrect."
-                });
-            }
-
+            const passwordHash =
+                await bcrypt.hash(password, 10);
             const userResult =
-                await client.query(
+                await pool.query(
                     `
                     INSERT INTO users
                     (
@@ -1051,14 +667,7 @@ app.post(
                         phone,
                         role
                     )
-                    VALUES
-                    (
-                        $1,
-                        $2,
-                        $3,
-                        $4,
-                        'customer'
-                    )
+                    VALUES ($1, $2, $3, $4, 'customer')
                     RETURNING
                         id,
                         full_name,
@@ -1067,52 +676,48 @@ app.post(
                         role,
                         created_at
                     `,
-                    [
-                        pending.full_name,
-                        email,
-                        pending.password_hash,
-                        pending.phone
-                    ]
+                    [fullName, email, passwordHash, phone]
                 );
-
-            await client.query(
-                "DELETE FROM signup_email_verifications WHERE email = $1",
-                [email]
-            );
-
-            await client.query("COMMIT");
 
             return res.status(201).json({
                 success: true,
-                message: "Email verified and account created.",
+                message: "Account created. The email address was not verified.",
                 user: userResult.rows[0]
             });
         } catch (error) {
-            if (client) {
-                try {
-                    await client.query("ROLLBACK");
-                } catch (rollbackError) {
-                    console.error(
-                        "Signup verification rollback error:",
-                        rollbackError
-                    );
-                }
+            if (error.code === "23505") {
+                return res.status(409).json({
+                    success: false,
+                    message: "An account with this email already exists."
+                });
             }
 
-            console.error(
-                "Signup email verification confirmation error:",
-                error
-            );
-
+            console.error("Signup account creation error:", error);
             return res.status(500).json({
                 success: false,
-                message: "Unable to verify your email and create the account."
+                message: "Unable to create the account. Please try again."
             });
-        } finally {
-            if (client) {
-                client.release();
-            }
         }
+    }
+);
+
+app.post(
+    "/api/signup/resend",
+    (req, res) => {
+        return res.status(410).json({
+            success: false,
+            message: "Email verification is not used for signup."
+        });
+    }
+);
+
+app.post(
+    "/api/signup/verify",
+    (req, res) => {
+        return res.status(410).json({
+            success: false,
+            message: "Email verification is not used for signup."
+        });
     }
 );
 
