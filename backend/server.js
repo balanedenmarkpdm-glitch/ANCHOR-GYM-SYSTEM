@@ -175,10 +175,18 @@ app.use(
         const origin =
             req.get("Origin");
 
-        if (origin === frontendOrigin) {
+        const isVercelPreviewOrigin =
+            /^https:\/\/anchor-gym-system-[a-z0-9]+-brunheart\.vercel\.app$/.test(
+                origin || ""
+            );
+
+        if (
+            origin === frontendOrigin ||
+            isVercelPreviewOrigin
+        ) {
             res.setHeader(
                 "Access-Control-Allow-Origin",
-                frontendOrigin
+                origin
             );
             res.setHeader(
                 "Vary",
