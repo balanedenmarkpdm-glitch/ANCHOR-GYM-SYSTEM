@@ -2,6 +2,56 @@
    CUSTOMER LOGIN
 ========================= */
 
+const rememberedCustomerEmailKey =
+    "anchorRememberedCustomerEmail";
+
+const customerEmailInput =
+    document.getElementById("email");
+
+const customerRememberMe =
+    document.getElementById("rememberMe");
+
+if (
+    customerEmailInput &&
+    customerRememberMe
+) {
+    const rememberedCustomerEmail =
+        window.localStorage.getItem(
+            rememberedCustomerEmailKey
+        );
+
+    if (rememberedCustomerEmail) {
+        customerEmailInput.value =
+            rememberedCustomerEmail;
+        customerRememberMe.checked = true;
+    }
+
+    customerRememberMe.addEventListener(
+        "change",
+        function() {
+            if (!customerRememberMe.checked) {
+                window.localStorage.removeItem(
+                    rememberedCustomerEmailKey
+                );
+            }
+        }
+    );
+}
+
+function saveRememberedCustomerEmail(email, remember) {
+    if (remember) {
+        window.localStorage.setItem(
+            rememberedCustomerEmailKey,
+            email
+        );
+        return;
+    }
+
+    window.localStorage.removeItem(
+        rememberedCustomerEmailKey
+    );
+}
+
 const loginForm =
     document.getElementById("loginForm");
 
@@ -81,6 +131,10 @@ if (loginForm) {
                     )
                 );
 
+                saveRememberedCustomerEmail(
+                    email,
+                    Boolean(rememberMe && rememberMe.checked)
+                );
 
                 window.location.href =
                     "customer.html";
@@ -175,6 +229,15 @@ async function submitGoogleCredential(
         JSON.stringify(data.user),
         Boolean(
             document.getElementById("rememberMe")?.checked
+        )
+    );
+
+    saveRememberedCustomerEmail(
+        data.user.email,
+        Boolean(
+            document.getElementById(
+                "rememberMe"
+            )?.checked
         )
     );
 
@@ -293,6 +356,13 @@ async function initializeGoogleLogin() {
                                 document.getElementById(
                                     "rememberMe"
                                 )?.checked
+                            )
+                        );
+
+                        saveRememberedCustomerEmail(
+                            data.user.email,
+                            Boolean(
+                                document.getElementById("rememberMe")?.checked
                             )
                         );
 
