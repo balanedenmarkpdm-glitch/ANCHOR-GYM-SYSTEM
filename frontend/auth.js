@@ -1047,6 +1047,37 @@ const adminLoginForm =
         "adminLoginForm"
     );
 
+const rememberedAdminEmailKey =
+    "anchorRememberedAdminEmail";
+const adminEmailInput =
+    document.getElementById("adminEmail");
+const adminRememberMe =
+    document.getElementById("adminRememberMe");
+
+if (adminEmailInput && adminRememberMe) {
+    const rememberedAdminEmail =
+        window.localStorage.getItem(
+            rememberedAdminEmailKey
+        );
+
+    if (rememberedAdminEmail) {
+        adminEmailInput.value =
+            rememberedAdminEmail;
+        adminRememberMe.checked = true;
+    }
+
+    adminRememberMe.addEventListener(
+        "change",
+        function() {
+            if (!adminRememberMe.checked) {
+                window.localStorage.removeItem(
+                    rememberedAdminEmailKey
+                );
+            }
+        }
+    );
+}
+
 
 if (adminLoginForm) {
 
@@ -1128,12 +1159,21 @@ if (adminLoginForm) {
                     rememberMe.checked
                 ) {
 
+                    window.localStorage.setItem(
+                        rememberedAdminEmailKey,
+                        email
+                    );
+
                     localStorage.setItem(
                         "anchorAdminRemember",
                         "true"
                     );
 
                 } else {
+
+                    window.localStorage.removeItem(
+                        rememberedAdminEmailKey
+                    );
 
                     localStorage.removeItem(
                         "anchorAdminRemember"
