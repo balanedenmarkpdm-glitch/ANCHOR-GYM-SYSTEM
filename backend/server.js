@@ -745,8 +745,7 @@ async function createSignupVerification(
                     email,
                     full_name,
                     phone,
-                    password_hash,
-                    created_at
+                    password_hash
                 FROM signup_email_verifications
                 WHERE email = $1
                 `,
@@ -765,16 +764,6 @@ async function createSignupVerification(
 
             signup =
                 pendingResult.rows[0];
-
-            const lastSentAt =
-                new Date(signup.created_at).getTime();
-
-            if (Date.now() - lastSentAt < 60 * 1000) {
-                return res.status(429).json({
-                    success: false,
-                    message: "Please wait one minute before requesting another code."
-                });
-            }
         } else {
             const {
                 fullName,
@@ -812,20 +801,6 @@ async function createSignupVerification(
                     success: false,
                     message: "Password must be at least 6 characters."
                 });
-            }
-
-            if (pendingResult.rows.length > 0) {
-                const lastSentAt =
-                    new Date(
-                        pendingResult.rows[0].created_at
-                    ).getTime();
-
-                if (Date.now() - lastSentAt < 60 * 1000) {
-                    return res.status(429).json({
-                        success: false,
-                        message: "A verification code was already sent. Please wait one minute before trying again."
-                    });
-                }
             }
 
             signup = {
@@ -890,23 +865,10 @@ async function createSignupVerification(
             ]
         );
 
-        try {
-            await sendSignupVerificationCode(
-                email,
-                code
-            );
-        } catch (error) {
-            await pool.query(
-                `
-                UPDATE signup_email_verifications
-                SET created_at =
-                    CURRENT_TIMESTAMP - INTERVAL '1 minute'
-                WHERE email = $1
-                `,
-                [email]
-            );
-            throw error;
-        }
+        await sendSignupVerificationCode(
+            email,
+            code
+        );
 
         return res.status(200).json({
             success: true,
@@ -1033,7 +995,7 @@ app.post(
 
                 return res.status(429).json({
                     success: false,
-                    message: "Too many incorrect codes. Wait one minute, then resend the verification code."
+                    message: "Too many incorrect codes. Request a new verification code to try again."
                 });
             }
 
@@ -1060,7 +1022,7 @@ app.post(
 
                     return res.status(429).json({
                         success: false,
-                        message: "Too many incorrect codes. Wait one minute, then resend the verification code."
+                        message: "Too many incorrect codes. Request a new verification code to try again."
                     });
                 }
 
