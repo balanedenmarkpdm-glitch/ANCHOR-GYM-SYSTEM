@@ -5231,12 +5231,12 @@ app.patch(
                                 WHEN
                                     $2 = TRUE
                                     AND $3 = TRUE
-                                    AND $4 IS NOT NULL
-                                    AND $4 <=
+                                    AND $4::timestamp IS NOT NULL
+                                    AND $4::timestamp <=
                                         ${GUEST_NOW_SQL}
 
                                 THEN
-                                    $4
+                                    $4::timestamp
 
                                 ELSE
                                     CURRENT_TIMESTAMP
