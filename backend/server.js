@@ -2100,6 +2100,73 @@ app.post(
 
             }
 
+            const paymentDate =
+                String(payment_date);
+            const dateParts =
+                paymentDate.match(
+                    /^(\d{4})-(\d{2})-(\d{2})$/
+                );
+
+            if (!dateParts) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Payment date must be a valid date."
+                });
+            }
+
+            const paymentYear =
+                Number(dateParts[1]);
+            const paymentMonth =
+                Number(dateParts[2]) - 1;
+            const paymentDay =
+                Number(dateParts[3]);
+            const parsedPaymentDate =
+                new Date(0);
+
+            parsedPaymentDate.setUTCFullYear(
+                paymentYear,
+                paymentMonth,
+                paymentDay
+            );
+
+            if (
+                paymentYear < 1 ||
+                parsedPaymentDate.getUTCFullYear() !== paymentYear ||
+                parsedPaymentDate.getUTCMonth() !== paymentMonth ||
+                parsedPaymentDate.getUTCDate() !== paymentDay
+            ) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Payment date must be a valid date."
+                });
+            }
+
+            const manilaDateParts =
+                new Intl.DateTimeFormat(
+                    "en-US",
+                    {
+                        timeZone: "Asia/Manila",
+                        year: "numeric",
+                        month: "2-digit",
+                        day: "2-digit"
+                    }
+                ).formatToParts(new Date());
+            const manilaDateValues =
+                Object.fromEntries(
+                    manilaDateParts.map(
+                        part => [part.type, part.value]
+                    )
+                );
+            const todayInManila =
+                `${manilaDateValues.year}-${manilaDateValues.month}-${manilaDateValues.day}`;
+
+            if (paymentDate > todayInManila) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Payment date cannot be in the future."
+                });
+            }
+
             if (!payment_screenshot) {
 
                 return res.status(

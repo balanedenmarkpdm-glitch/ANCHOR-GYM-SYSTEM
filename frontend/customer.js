@@ -163,6 +163,49 @@ function loadPageSpecificData(id) {
 
     }
 
+    if (id === "apply") {
+
+        updatePaymentDatePicker();
+
+    }
+
+}
+
+function getCurrentManilaDate() {
+    const parts =
+        new Intl.DateTimeFormat(
+            "en-US",
+            {
+                timeZone: "Asia/Manila",
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit"
+            }
+        ).formatToParts(new Date());
+    const values =
+        Object.fromEntries(
+            parts.map(part => [part.type, part.value])
+        );
+
+    return `${values.year}-${values.month}-${values.day}`;
+}
+
+function updatePaymentDatePicker() {
+    const paymentDateInput =
+        document.getElementById("paymentDate");
+
+    if (!paymentDateInput) {
+        return;
+    }
+
+    const today =
+        getCurrentManilaDate();
+
+    paymentDateInput.max = today;
+
+    if (!paymentDateInput.value || paymentDateInput.value > today) {
+        paymentDateInput.value = today;
+    }
 }
 
 
@@ -2766,6 +2809,10 @@ async function submitApplication() {
 
     const paymentDate =
         paymentDateInput.value;
+    const today =
+        getCurrentManilaDate();
+
+    paymentDateInput.max = today;
 
 
     // ---------------------------------
@@ -2791,6 +2838,14 @@ async function submitApplication() {
 
         return;
 
+    }
+
+    if (paymentDate > today) {
+        alert(
+            "Payment date cannot be in the future."
+        );
+        paymentDateInput.value = today;
+        return;
     }
 
 
@@ -2983,7 +3038,7 @@ async function submitApplication() {
 
 
                 paymentDateInput.value =
-                    "";
+                    getCurrentManilaDate();
 
 
                 screenshotInput.value =
@@ -3510,6 +3565,16 @@ function escapeAttribute(
 document.addEventListener(
     "DOMContentLoaded",
     function() {
+
+        updatePaymentDatePicker();
+        setInterval(
+            updatePaymentDatePicker,
+            60 * 1000
+        );
+        window.addEventListener(
+            "focus",
+            updatePaymentDatePicker
+        );
 
         loadCustomer();
 
