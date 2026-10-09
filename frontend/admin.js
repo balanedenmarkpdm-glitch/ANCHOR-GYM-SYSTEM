@@ -2964,10 +2964,14 @@ async function loadTransactions() {
                             </td>
 
                             <td>
-                                ${escapeHtml(
-                                    transaction.status ||
-                                    "-"
-                                )}
+                                <span class="status ${getStatusClass(
+                                    transaction.status
+                                )}">
+                                    ${escapeHtml(
+                                        getStatus(transaction.status) ||
+                                        "-"
+                                    )}
+                                </span>
                             </td>
 
                             <td>
@@ -5188,7 +5192,9 @@ function getStatusClass(
 
     if (
         normalized ===
-        "APPROVED"
+        "APPROVED" ||
+        normalized ===
+        "VERIFIED"
     ) {
 
         return "approved";
