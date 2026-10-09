@@ -601,6 +601,10 @@ function setProfileEditMode(enabled) {
     phone.readOnly = !enabled;
     currentPassword.disabled = !enabled;
     currentPassword.value = "";
+    setProfilePasswordVisibility(
+        "profileCurrentPassword",
+        false
+    );
     photoInput.hidden = !enabled;
 
     document.getElementById("editProfileButton").hidden =
@@ -802,7 +806,145 @@ function initializeProfileEditor() {
     );
 }
 
+function setProfilePasswordVisibility(inputId, visible) {
+    const input =
+        document.getElementById(inputId);
+    const toggle =
+        document.querySelector(
+            `[data-password-target="${inputId}"]`
+        );
+
+    if (!input || !toggle) {
+        return;
+    }
+
+    toggle.disabled = input.disabled;
+    input.type = visible ? "text" : "password";
+    toggle.textContent = visible ? "Hide" : "Show";
+    const passwordName = {
+        profileCurrentPassword: "current password",
+        changePasswordCurrent: "current password",
+        changePasswordNew: "new password",
+        changePasswordConfirm: "password confirmation"
+    }[inputId] || "password";
+    toggle.setAttribute(
+        "aria-label",
+        `${visible ? "Hide" : "Show"} ${passwordName}`
+    );
+    toggle.setAttribute(
+        "aria-pressed",
+        String(visible)
+    );
+}
+
+function initializePasswordVisibilityToggles() {
+    document
+        .querySelectorAll("[data-password-target]")
+        .forEach(toggle => {
+            toggle.addEventListener(
+                "click",
+                function() {
+                    const inputId =
+                        toggle.dataset.passwordTarget;
+                    const input =
+                        document.getElementById(inputId);
+
+                    if (input) {
+                        setProfilePasswordVisibility(
+                            inputId,
+                            input.type === "password"
+                        );
+                    }
+                }
+            );
+        });
+}
+
+function initializeChangePasswordForm() {
+    const form =
+        document.getElementById("changePasswordForm");
+    const message =
+        document.getElementById("changePasswordMessage");
+    const submitButton =
+        document.getElementById("changePasswordButton");
+
+    form.addEventListener(
+        "submit",
+        async function(event) {
+            event.preventDefault();
+
+            const currentPassword =
+                document.getElementById("changePasswordCurrent").value;
+            const newPassword =
+                document.getElementById("changePasswordNew").value;
+            const confirmPassword =
+                document.getElementById("changePasswordConfirm").value;
+
+            if (newPassword.length < 6) {
+                message.textContent =
+                    "New password must be at least 6 characters.";
+                return;
+            }
+
+            if (newPassword !== confirmPassword) {
+                message.textContent =
+                    "The new passwords do not match.";
+                return;
+            }
+
+            submitButton.disabled = true;
+            message.textContent = "Changing your password...";
+
+            try {
+                const response =
+                    await fetch(
+                        window.anchorApiUrl(
+                            `/api/customer/${customerData.id}/password`
+                        ),
+                        {
+                            method: "PUT",
+                            headers: {
+                                "Content-Type": "application/json"
+                            },
+                            body: JSON.stringify({
+                                current_password: currentPassword,
+                                new_password: newPassword
+                            })
+                        }
+                    );
+
+                const data =
+                    await response.json();
+
+                if (!response.ok || !data.success) {
+                    throw new Error(
+                        data.message || "Unable to change your password."
+                    );
+                }
+
+                form.reset();
+                form.querySelectorAll("[data-password-target]").forEach(
+                    toggle => {
+                        setProfilePasswordVisibility(
+                            toggle.dataset.passwordTarget,
+                            false
+                        );
+                    }
+                );
+                message.textContent = "Password changed successfully.";
+            } catch (error) {
+                console.error("Password change error:", error);
+                message.textContent = error.message;
+            } finally {
+                submitButton.disabled = false;
+            }
+        }
+    );
+}
+
 initializeProfileEditor();
+initializePasswordVisibilityToggles();
+initializeChangePasswordForm();
 
 
 // =====================================

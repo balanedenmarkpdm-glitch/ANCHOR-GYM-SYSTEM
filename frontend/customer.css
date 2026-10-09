@@ -761,6 +761,44 @@ th {
     font-size: 12px;
 }
 
+.profile-password-control {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.profile-password-control input {
+    flex: 1;
+    min-width: 0;
+}
+
+.password-visibility-toggle {
+    min-height: 40px;
+    padding: 0 12px;
+    border: 1px solid #29323c;
+    border-radius: 7px;
+    background: #171c22;
+    color: #c7ced5;
+    cursor: pointer;
+}
+
+.password-visibility-toggle:hover {
+    color: white;
+    border-color: #ef1d2d;
+}
+
+#changePasswordForm h2 {
+    margin: 0 0 4px;
+    font-size: 18px;
+}
+
+#changePasswordMessage {
+    min-height: 18px;
+    margin: 4px 0 0;
+    color: #eac36d;
+    font-size: 12px;
+}
+
 
 .fee {
     display: flex;

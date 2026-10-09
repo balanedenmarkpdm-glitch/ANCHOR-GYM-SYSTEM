@@ -1537,6 +1537,103 @@ app.put(
     }
 );
 
+app.put(
+    "/api/customer/:userId/password",
+    async (req, res) => {
+        const userId =
+            Number(req.params.userId);
+        const currentPassword =
+            String(req.body.current_password || "");
+        const newPassword =
+            String(req.body.new_password || "");
+
+        if (!Number.isSafeInteger(userId) || userId <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid customer ID."
+            });
+        }
+
+        if (!currentPassword) {
+            return res.status(400).json({
+                success: false,
+                message: "Enter your current password."
+            });
+        }
+
+        if (newPassword.length < 6) {
+            return res.status(400).json({
+                success: false,
+                message: "New password must be at least 6 characters."
+            });
+        }
+
+        try {
+            const customerResult =
+                await pool.query(
+                    `
+                    SELECT password
+                    FROM users
+                    WHERE id = $1
+                      AND LOWER(role) = 'customer'
+                    `,
+                    [userId]
+                );
+
+            if (customerResult.rows.length === 0) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Customer account not found."
+                });
+            }
+
+            const passwordMatches =
+                await bcrypt.compare(
+                    currentPassword,
+                    customerResult.rows[0].password
+                );
+
+            if (!passwordMatches) {
+                return res.status(401).json({
+                    success: false,
+                    message: "Your current password is incorrect."
+                });
+            }
+
+            const passwordHash =
+                await bcrypt.hash(newPassword, 10);
+
+            await pool.query(
+                `
+                UPDATE users
+                SET password = $2
+                WHERE id = $1
+                  AND LOWER(role) = 'customer'
+                `,
+                [
+                    userId,
+                    passwordHash
+                ]
+            );
+
+            return res.json({
+                success: true,
+                message: "Password changed successfully."
+            });
+        } catch (error) {
+            console.error(
+                "Change customer password error:",
+                error
+            );
+
+            return res.status(500).json({
+                success: false,
+                message: "Unable to change your password."
+            });
+        }
+    }
+);
+
 app.delete(
     "/api/customer/:userId/notifications/:notificationId",
     async (req, res) => {

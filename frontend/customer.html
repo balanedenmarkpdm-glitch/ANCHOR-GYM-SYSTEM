@@ -1248,12 +1248,23 @@
                             Current Password
                         </label>
 
-                        <input
-                            id="profileCurrentPassword"
-                            type="password"
-                            autocomplete="current-password"
-                            disabled
-                            required>
+                        <div class="profile-password-control">
+                            <input
+                                id="profileCurrentPassword"
+                                type="password"
+                                autocomplete="current-password"
+                                disabled
+                                required>
+
+                            <button
+                                class="password-visibility-toggle"
+                                type="button"
+                                data-password-target="profileCurrentPassword"
+                                aria-label="Show current password"
+                                aria-pressed="false">
+                                Show
+                            </button>
+                        </div>
                     </div>
 
                     <div class="profile-actions">
@@ -1287,6 +1298,94 @@
                         aria-live="polite">
                     </p>
 
+
+                </form>
+
+                <form
+                    id="changePasswordForm"
+                    class="card form">
+
+                    <h2>Change Password</h2>
+
+                    <label for="changePasswordCurrent">
+                        Current Password
+                    </label>
+
+                    <div class="profile-password-control">
+                        <input
+                            id="changePasswordCurrent"
+                            type="password"
+                            autocomplete="current-password"
+                            required>
+
+                        <button
+                            class="password-visibility-toggle"
+                            type="button"
+                            data-password-target="changePasswordCurrent"
+                            aria-label="Show current password"
+                            aria-pressed="false">
+                            Show
+                        </button>
+                    </div>
+
+                    <label for="changePasswordNew">
+                        New Password
+                    </label>
+
+                    <div class="profile-password-control">
+                        <input
+                            id="changePasswordNew"
+                            type="password"
+                            autocomplete="new-password"
+                            minlength="6"
+                            required>
+
+                        <button
+                            class="password-visibility-toggle"
+                            type="button"
+                            data-password-target="changePasswordNew"
+                            aria-label="Show new password"
+                            aria-pressed="false">
+                            Show
+                        </button>
+                    </div>
+
+                    <label for="changePasswordConfirm">
+                        Confirm New Password
+                    </label>
+
+                    <div class="profile-password-control">
+                        <input
+                            id="changePasswordConfirm"
+                            type="password"
+                            autocomplete="new-password"
+                            minlength="6"
+                            required>
+
+                        <button
+                            class="password-visibility-toggle"
+                            type="button"
+                            data-password-target="changePasswordConfirm"
+                            aria-label="Show password confirmation"
+                            aria-pressed="false">
+                            Show
+                        </button>
+                    </div>
+
+                    <div class="profile-actions">
+                        <button
+                            id="changePasswordButton"
+                            class="button red"
+                            type="submit">
+                            Change Password
+                        </button>
+                    </div>
+
+                    <p
+                        id="changePasswordMessage"
+                        role="status"
+                        aria-live="polite">
+                    </p>
 
                 </form>
 
