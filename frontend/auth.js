@@ -118,9 +118,6 @@ const googleLoginMessage =
 const googlePhoneForm =
     document.getElementById("googlePhoneForm");
 
-const signupTerms =
-    document.getElementById("signupTerms");
-
 let pendingGoogleCredential = null;
 
 function setGoogleLoginMessage(message) {
@@ -319,14 +316,6 @@ async function initializeGoogleLogin() {
             function() {
                 setGoogleLoginMessage("");
 
-                if (signupTerms && !signupTerms.checked) {
-                    setGoogleLoginMessage(
-                        "Please accept the terms and conditions to continue."
-                    );
-                    signupTerms.focus();
-                    return;
-                }
-
                 try {
                     googleCodeClient.requestCode();
                 } catch (error) {
@@ -380,17 +369,9 @@ if (googlePhoneForm) {
 
             if (!pendingGoogleCredential) {
                 setGoogleLoginMessage(
-                    "Please choose Google again to continue."
+                    "Please choose Continue with Google again."
                 );
                 googlePhoneForm.hidden = true;
-                return;
-            }
-
-            if (signupTerms && !signupTerms.checked) {
-                setGoogleLoginMessage(
-                    "Please accept the terms and conditions to continue."
-                );
-                signupTerms.focus();
                 return;
             }
 
@@ -459,6 +440,343 @@ if (toggleLoginPassword) {
 }
 
 
+/* =========================
+   SIGN UP
+========================= */
+
+const signupForm =
+    document.getElementById("signupForm");
+
+const signupMessage =
+    document.getElementById("signupMessage");
+
+function isValidSignupGmailAddress(value) {
+    const match =
+        /^([a-z0-9.]+)(?:\+([a-z0-9._-]+))?@gmail\.com$/i.exec(
+            value.trim()
+        );
+
+    if (!match) {
+        return false;
+    }
+
+    const username =
+        match[1].toLowerCase();
+
+    const alias =
+        match[2];
+
+    return (
+        username.length >= 6 &&
+        username.length <= 30 &&
+        !username.startsWith(".") &&
+        !username.endsWith(".") &&
+        !username.includes("..") &&
+        (
+            !alias ||
+            (
+                alias.length <= 30 &&
+                !alias.startsWith(".") &&
+                !alias.endsWith(".") &&
+                !alias.includes("..")
+            )
+        )
+    );
+}
+
+const signupEmailInput =
+    document.getElementById("signupEmail");
+
+if (signupEmailInput) {
+    signupEmailInput.addEventListener(
+        "invalid",
+        function() {
+            if (
+                signupEmailInput.value &&
+                signupMessage &&
+                !isValidSignupGmailAddress(
+                    signupEmailInput.value
+                )
+            ) {
+                signupMessage.textContent =
+                    "Enter a Gmail address in the format name@gmail.com. We cannot check whether the mailbox exists because verification emails are disabled.";
+            }
+        }
+    );
+
+    signupEmailInput.addEventListener(
+        "input",
+        function() {
+            const validGmail =
+                !signupEmailInput.value ||
+                isValidSignupGmailAddress(
+                    signupEmailInput.value
+                );
+
+            signupEmailInput.setCustomValidity(
+                validGmail
+                    ? ""
+                    : "Enter a valid Gmail address, such as name@gmail.com."
+            );
+
+            if (signupMessage && validGmail) {
+                signupMessage.textContent = "";
+            }
+        }
+    );
+
+    signupEmailInput.addEventListener(
+        "blur",
+        function() {
+            signupEmailInput.value =
+                signupEmailInput.value.trim().toLowerCase();
+        }
+    );
+}
+
+
+if (signupForm) {
+
+    signupForm.addEventListener(
+        "submit",
+        async function(event) {
+
+            event.preventDefault();
+
+
+            const firstName =
+                document
+                    .getElementById("firstName")
+                    .value
+                    .trim();
+
+
+            const lastName =
+                document
+                    .getElementById("lastName")
+                    .value
+                    .trim();
+
+
+            const email =
+                document
+                    .getElementById("signupEmail")
+                    .value
+                    .trim();
+
+
+            const phone =
+                document
+                    .getElementById("signupPhone")
+                    .value
+                    .replace(/\D/g, "");
+
+
+            const password =
+                document
+                    .getElementById("signupPassword")
+                    .value;
+
+
+            const confirmPassword =
+                document
+                    .getElementById("signupConfirm")
+                    .value;
+
+
+            const terms =
+                document
+                    .getElementById("terms")
+                    .checked;
+
+
+            // =========================
+            // VALIDATION
+            // =========================
+
+            if (
+                !firstName ||
+                !lastName ||
+                !email ||
+                !phone ||
+                !password
+            ) {
+
+                alert(
+                    "Please complete all required fields."
+                );
+
+                return;
+            }
+
+            if (!isValidSignupGmailAddress(email)) {
+
+                const message =
+                    "Enter a Gmail address in the format name@gmail.com. We cannot check whether the mailbox exists because verification emails are disabled.";
+
+                if (signupMessage) {
+                    signupMessage.textContent = message;
+                }
+
+                return;
+            }
+
+
+            if (!/^09\d{9}$/.test(phone)) {
+
+                alert(
+                    "Please enter a valid 11-digit Philippine mobile number starting with 09."
+                );
+
+                return;
+            }
+
+
+            if (!terms) {
+
+                alert(
+                    "Please accept the terms and conditions."
+                );
+
+                return;
+            }
+
+
+            if (password.length < 6) {
+
+                alert(
+                    "Password must be at least 6 characters."
+                );
+
+                return;
+            }
+
+
+            if (password !== confirmPassword) {
+
+                alert(
+                    "Passwords do not match."
+                );
+
+                return;
+            }
+
+
+            // Combine first and last name
+            const fullName =
+                firstName + " " + lastName;
+
+            const submitButton =
+                document.getElementById("signupSubmitButton");
+            const controller =
+                new AbortController();
+            const timeoutId =
+                window.setTimeout(
+                    function() {
+                        controller.abort();
+                    },
+                    35000
+                );
+
+            if (submitButton) {
+                submitButton.disabled = true;
+                submitButton.textContent = "Creating account...";
+            }
+
+            if (signupMessage) {
+                signupMessage.textContent =
+                    "Creating your account...";
+            }
+
+            try {
+
+                const response =
+                    await fetch(window.anchorApiUrl("/api/signup"), {
+
+                        method: "POST",
+                        signal: controller.signal,
+
+                        headers: {
+                            "Content-Type":
+                                "application/json"
+                        },
+
+                        body: JSON.stringify({
+
+                            full_name: fullName,
+                            email: email,
+                            phone: phone,
+                            password: password
+
+                        })
+
+                    });
+
+
+                const data =
+                    await response.json();
+
+
+                if (!response.ok) {
+
+                    if (signupMessage) {
+                        signupMessage.textContent =
+                            data.message ||
+                            "Unable to create account.";
+                    }
+
+                    alert(
+                        data.message ||
+                        "Unable to create account."
+                    );
+
+                    return;
+                }
+
+                window.anchorSession.set(
+                    "anchorUser",
+                    JSON.stringify(data.user),
+                    false
+                );
+
+                window.location.href =
+                    "customer.html";
+
+
+            } catch (error) {
+
+                console.error(
+                    "Signup error:",
+                    error
+                );
+
+                const message =
+                    error.name === "AbortError"
+                        ? "Signup took too long. Please try again."
+                        : "Unable to connect to the server.";
+
+                if (signupMessage) {
+                    signupMessage.textContent = message;
+                }
+
+                alert(message);
+
+            } finally {
+                window.clearTimeout(timeoutId);
+
+                if (submitButton && !signupForm.hidden) {
+                    submitButton.disabled = false;
+                    submitButton.textContent =
+                        "Create Customer Account";
+                }
+
+            }
+
+        }
+    );
+
+}
+
 function bindPasswordToggle(
     toggleId,
     passwordId
@@ -513,6 +831,17 @@ function bindPasswordToggle(
         }
     );
 }
+
+bindPasswordToggle(
+    "toggleSignupPassword",
+    "signupPassword"
+);
+
+bindPasswordToggle(
+    "toggleSignupConfirm",
+    "signupConfirm"
+);
+
 
 /* =========================
    FORGOT PASSWORD
@@ -626,6 +955,21 @@ if (toggleAdminPassword) {
         }
     );
 
+}
+
+const signupPhoneInput =
+    document.getElementById("signupPhone");
+
+if (signupPhoneInput) {
+    signupPhoneInput.addEventListener(
+        "input",
+        function() {
+            signupPhoneInput.value =
+                signupPhoneInput.value
+                    .replace(/\D/g, "")
+                    .slice(0, 11);
+        }
+    );
 }
 
 const adminLoginForm =

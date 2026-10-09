@@ -27,57 +27,159 @@
         <h2>Create Your Account</h2>
 
         <p class="subtitle">
-            Create an account using a verified Google account.
+            Create a customer account for the
+            ANCHOR GYM SYSTEM.
         </p>
 
-        <label class="remember">
+
+        <form id="signupForm">
+
+            <div class="two-column">
+
+                <div>
+
+                    <label>
+                        FIRST NAME
+                    </label>
+
+                    <input
+                        type="text"
+                        id="firstName"
+                        placeholder="Juan"
+                        required
+                    >
+
+                </div>
+
+
+                <div>
+
+                    <label>
+                        LAST NAME
+                    </label>
+
+                    <input
+                        type="text"
+                        id="lastName"
+                        placeholder="Cruz"
+                        required
+                    >
+
+                </div>
+
+            </div>
+
+
+            <label>
+                EMAIL ADDRESS
+            </label>
+
             <input
-                type="checkbox"
-                id="signupTerms"
+                type="email"
+                id="signupEmail"
+                placeholder="juancruz@gmail.com"
+                autocomplete="email"
+                title="Enter a Gmail address in the format name@gmail.com."
                 required
             >
-            I agree to the terms and conditions.
-        </label>
 
-        <button
-            type="button"
-            class="google-btn google-login-host"
-            id="googleLogin">
-            <span aria-hidden="true">G</span>
-            Sign up with Google
-        </button>
-
-        <p
-            id="googleLoginMessage"
-            role="status"
-            aria-live="polite">
-        </p>
-
-        <form id="googlePhoneForm" hidden>
-            <p class="subtitle">
-                Your Google email is verified. Add your phone number to finish creating your customer account.
+            <p class="info-box">
+                Enter a Gmail address in the correct format. We do not send a verification email, so we cannot check whether that mailbox exists.
             </p>
 
-            <label for="googlePhone">
+
+            <label>
                 CONTACT NUMBER
             </label>
 
             <input
                 type="tel"
-                id="googlePhone"
+                id="signupPhone"
+                placeholder="09XXXXXXXXX"
                 inputmode="numeric"
                 minlength="11"
                 maxlength="11"
                 pattern="09[0-9]{9}"
-                placeholder="09XXXXXXXXX"
+                title="Enter an 11-digit Philippine mobile number starting with 09."
                 required
             >
 
+
+            <!-- PASSWORD -->
+
+            <label>
+                PASSWORD
+            </label>
+
+            <div class="password-box">
+
+                <input
+                    type="password"
+                    id="signupPassword"
+                    placeholder="Create password"
+                    required
+                >
+
+                <button
+                    type="button"
+                    id="toggleSignupPassword">
+                    Show
+                </button>
+
+            </div>
+
+
+            <!-- CONFIRM PASSWORD -->
+
+            <label>
+                CONFIRM PASSWORD
+            </label>
+
+            <div class="password-box">
+
+                <input
+                    type="password"
+                    id="signupConfirm"
+                    placeholder="Repeat password"
+                    required
+                >
+
+                <button
+                    type="button"
+                    id="toggleSignupConfirm">
+                    Show
+                </button>
+
+            </div>
+
+
+            <label class="remember">
+
+                <input
+                    type="checkbox"
+                    id="terms"
+                >
+
+                I agree to the terms and conditions.
+
+            </label>
+
+
             <button
+                id="signupSubmitButton"
                 type="submit"
                 class="main-btn">
+
                 Create Customer Account
+
             </button>
+
+            <p
+                id="signupMessage"
+                role="status"
+                aria-live="polite">
+            </p>
+
         </form>
 
         <p class="bottom-text">
