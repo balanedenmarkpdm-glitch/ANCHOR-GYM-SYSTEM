@@ -38,6 +38,7 @@ const pool = new Pool({
 });
 
 let customerProfilePhotoColumnReady = false;
+let paymentScreenshotColumnReady = false;
 
 async function ensureCustomerProfilePhotoColumn() {
     if (customerProfilePhotoColumnReady) {
@@ -48,6 +49,64 @@ async function ensureCustomerProfilePhotoColumn() {
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo TEXT"
     );
     customerProfilePhotoColumnReady = true;
+}
+
+async function ensurePaymentScreenshotColumn() {
+    if (paymentScreenshotColumnReady) {
+        return;
+    }
+
+    await pool.query(
+        "ALTER TABLE applications ALTER COLUMN payment_screenshot TYPE TEXT"
+    );
+    paymentScreenshotColumnReady = true;
+}
+
+function decodePaymentScreenshot(value) {
+    const matches =
+        String(value || "").match(
+            /^data:image\/(png|jpeg|jpg|webp);base64,([A-Za-z0-9+/]+={0,2})$/i
+        );
+
+    if (!matches) {
+        return null;
+    }
+
+    const imageData =
+        Buffer.from(matches[2], "base64");
+
+    if (imageData.length > 6 * 1024 * 1024) {
+        return null;
+    }
+
+    const requestedType =
+        matches[1].toLowerCase();
+    const mimeType =
+        requestedType === "jpg" || requestedType === "jpeg"
+            ? "image/jpeg"
+            : `image/${requestedType}`;
+    const validSignature =
+        (
+            mimeType === "image/png" &&
+            imageData.subarray(0, 8).equals(
+                Buffer.from("89504e470d0a1a0a", "hex")
+            )
+        ) ||
+        (
+            mimeType === "image/jpeg" &&
+            imageData[0] === 0xff &&
+            imageData[1] === 0xd8 &&
+            imageData[2] === 0xff
+        ) ||
+        (
+            mimeType === "image/webp" &&
+            imageData.toString("ascii", 0, 4) === "RIFF" &&
+            imageData.toString("ascii", 8, 12) === "WEBP"
+        );
+
+    return validSignature
+        ? { mimeType, imageData }
+        : null;
 }
 
 function decodeProfilePhoto(value) {
@@ -1828,6 +1887,8 @@ app.get(
 
             }
 
+            await ensurePaymentScreenshotColumn();
+
             const applicationResult =
                 await pool.query(
                     `
@@ -1837,7 +1898,10 @@ app.get(
                         membership_plan,
                         amount,
                         gcash_reference,
-                        payment_screenshot,
+                        CASE
+                            WHEN payment_screenshot IS NULL THEN NULL
+                            ELSE '/api/applications/' || id || '/screenshot'
+                        END AS payment_screenshot,
                         payment_date,
                         status,
                         rejection_reason,
@@ -2031,6 +2095,141 @@ app.get(
 // =====================================
 // SUBMIT APPLICATION
 // =====================================
+
+app.get(
+    "/api/applications/:applicationId/screenshot",
+    async (req, res) => {
+        const applicationId =
+            Number(req.params.applicationId);
+
+        if (
+            !Number.isSafeInteger(applicationId) ||
+            applicationId <= 0
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid application ID."
+            });
+        }
+
+        try {
+            await ensurePaymentScreenshotColumn();
+
+            const result =
+                await pool.query(
+                    `
+                    SELECT payment_screenshot
+                    FROM applications
+                    WHERE id = $1
+                    `,
+                    [applicationId]
+                );
+
+            if (result.rows.length === 0 || !result.rows[0].payment_screenshot) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Payment screenshot not found."
+                });
+            }
+
+            const storedScreenshot =
+                String(result.rows[0].payment_screenshot);
+            let image =
+                decodePaymentScreenshot(storedScreenshot);
+
+            if (!image && storedScreenshot.startsWith("/uploads/")) {
+                const filename =
+                    storedScreenshot.slice("/uploads/".length);
+                const imagePath =
+                    path.resolve(uploadDir, filename);
+                const uploadsRoot =
+                    `${path.resolve(uploadDir)}${path.sep}`;
+
+                if (
+                    !filename ||
+                    path.basename(filename) !== filename ||
+                    !imagePath.startsWith(uploadsRoot) ||
+                    !fs.existsSync(imagePath)
+                ) {
+                    return res.status(404).json({
+                        success: false,
+                        message: "This older payment screenshot is no longer on the server. Ask the customer to upload it again."
+                    });
+                }
+
+                const imageData =
+                    fs.readFileSync(imagePath);
+                const mimeType =
+                    imageData.subarray(0, 8).equals(
+                        Buffer.from("89504e470d0a1a0a", "hex")
+                    )
+                        ? "image/png"
+                        : imageData[0] === 0xff &&
+                            imageData[1] === 0xd8 &&
+                            imageData[2] === 0xff
+                            ? "image/jpeg"
+                            : imageData.toString("ascii", 0, 4) === "RIFF" &&
+                                imageData.toString("ascii", 8, 12) === "WEBP"
+                                ? "image/webp"
+                                : null;
+
+                if (
+                    !mimeType ||
+                    imageData.length > 6 * 1024 * 1024
+                ) {
+                    return res.status(500).json({
+                        success: false,
+                        message: "The stored payment screenshot is not a supported image."
+                    });
+                }
+
+                const dataUrl =
+                    `data:${mimeType};base64,${imageData.toString("base64")}`;
+
+                await pool.query(
+                    `
+                    UPDATE applications
+                    SET payment_screenshot = $2
+                    WHERE id = $1
+                      AND payment_screenshot = $3
+                    `,
+                    [
+                        applicationId,
+                        dataUrl,
+                        storedScreenshot
+                    ]
+                );
+
+                image = { mimeType, imageData };
+            }
+
+            if (!image) {
+                console.error(
+                    `Stored payment screenshot is invalid for application ${applicationId}.`
+                );
+                return res.status(500).json({
+                    success: false,
+                    message: "Unable to display the payment screenshot."
+                });
+            }
+
+            res.setHeader(
+                "Cache-Control",
+                "private, max-age=31536000, immutable"
+            );
+            return res.type(image.mimeType).send(image.imageData);
+        } catch (error) {
+            console.error(
+                "Load payment screenshot error:",
+                error
+            );
+            return res.status(500).json({
+                success: false,
+                message: "Unable to load the payment screenshot."
+            });
+        }
+    }
+);
 
 app.post(
     "/api/applications",
@@ -2304,106 +2503,17 @@ app.post(
 
             }
 
-            let screenshotPath =
-                null;
+            const screenshotImage =
+                decodePaymentScreenshot(payment_screenshot);
 
-            try {
-
-                const matches =
-                    String(
-                        payment_screenshot
-                    ).match(
-                        /^data:image\/(png|jpeg|jpg|webp);base64,(.+)$/i
-                    );
-
-                if (!matches) {
-
-                    return res.status(
-                        400
-                    ).json({
-
-                        success:
-                            false,
-
-                        message:
-                            "Invalid payment screenshot. Use PNG, JPG, JPEG, or WEBP."
-
-                    });
-
-                }
-
-                const extension =
-                    matches[1]
-                        .toLowerCase()
-                        .replace(
-                            "jpeg",
-                            "jpg"
-                        );
-
-                const imageData =
-                    Buffer.from(
-                        matches[2],
-                        "base64"
-                    );
-
-                if (
-                    imageData.length >
-                    8 *
-                    1024 *
-                    1024
-                ) {
-
-                    return res.status(
-                        400
-                    ).json({
-
-                        success:
-                            false,
-
-                        message:
-                            "Payment screenshot is too large. Maximum is 8MB."
-
-                    });
-
-                }
-
-                const filename =
-                    `${Date.now()}-${crypto.randomUUID()}.${extension}`;
-
-                const filepath =
-                    path.join(
-                        uploadDir,
-                        filename
-                    );
-
-                fs.writeFileSync(
-                    filepath,
-                    imageData
-                );
-
-                screenshotPath =
-                    `/uploads/${filename}`;
-
-            } catch (error) {
-
-                console.error(
-                    "Screenshot save error:",
-                    error
-                );
-
-                return res.status(
-                    400
-                ).json({
-
-                    success:
-                        false,
-
-                    message:
-                        "Unable to save payment screenshot."
-
+            if (!screenshotImage) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Upload a valid PNG, JPG, JPEG, or WEBP payment screenshot up to 6MB."
                 });
-
             }
+
+            await ensurePaymentScreenshotColumn();
 
             const result =
                 await pool.query(
@@ -2434,7 +2544,8 @@ app.post(
                         membership_plan,
                         amount,
                         gcash_reference,
-                        payment_screenshot,
+                        '/api/applications/' || id || '/screenshot'
+                            AS payment_screenshot,
                         payment_date,
                         status,
                         created_at
@@ -2451,7 +2562,7 @@ app.post(
                             gcash_reference
                         ).trim(),
 
-                        screenshotPath,
+                        payment_screenshot,
 
                         payment_date
                     ]
@@ -2517,6 +2628,8 @@ app.get(
 
         try {
 
+            await ensurePaymentScreenshotColumn();
+
             const result =
                 await pool.query(
                     `
@@ -2529,7 +2642,10 @@ app.get(
                         a.membership_plan,
                         a.amount,
                         a.gcash_reference,
-                        a.payment_screenshot,
+                        CASE
+                            WHEN a.payment_screenshot IS NULL THEN NULL
+                            ELSE '/api/applications/' || a.id || '/screenshot'
+                        END AS payment_screenshot,
                         a.payment_date,
                         a.status,
                         a.rejection_reason,
