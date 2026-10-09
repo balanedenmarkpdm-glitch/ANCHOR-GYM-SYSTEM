@@ -4665,8 +4665,9 @@ function viewScreenshot(
 
 
     window.open(
-        url,
-        "_blank"
+        window.anchorApiUrl(url),
+        "_blank",
+        "noopener,noreferrer"
     );
 
 }

@@ -717,6 +717,24 @@ th {
     border: 0;
 }
 
+.upload-preview {
+    display: block;
+
+    max-width: 100%;
+    max-height: 300px;
+
+    margin: 16px auto 0;
+
+    object-fit: contain;
+
+    border: 1px solid #3c4651;
+    border-radius: 8px;
+}
+
+.upload-preview[hidden] {
+    display: none;
+}
+
 
 .warning {
     padding: 13px;

@@ -78,6 +78,8 @@
                 type="email"
                 id="signupEmail"
                 placeholder="juan@gmail.com"
+                pattern="^[^@\s]+@gmail\.com$"
+                title="Use an email address ending in @gmail.com."
                 required
             >
 
@@ -87,9 +89,14 @@
             </label>
 
             <input
-                type="text"
+                type="tel"
                 id="signupPhone"
-                placeholder="09XX XXX XXXX"
+                placeholder="09XXXXXXXXX"
+                inputmode="numeric"
+                minlength="11"
+                maxlength="11"
+                pattern="09[0-9]{9}"
+                title="Enter an 11-digit Philippine mobile number starting with 09."
                 required
             >
 

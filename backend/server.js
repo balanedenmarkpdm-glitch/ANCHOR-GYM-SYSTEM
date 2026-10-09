@@ -598,6 +598,49 @@ app.post(
                     .trim()
                     .toLowerCase();
 
+            if (
+                !/^[^\s@]+@gmail\.com$/.test(
+                    normalizedEmail
+                )
+            ) {
+
+                return res.status(
+                    400
+                ).json({
+                    success:
+                        false,
+
+                    message:
+                        "Please use a valid Gmail address ending in @gmail.com."
+                });
+
+            }
+
+            const normalizedPhone =
+                String(
+                    phone
+                )
+                    .trim()
+                    .replace(/[\s()-]/g, "");
+
+            if (
+                !/^09\d{9}$/.test(
+                    normalizedPhone
+                )
+            ) {
+
+                return res.status(
+                    400
+                ).json({
+                    success:
+                        false,
+
+                    message:
+                        "Please enter a valid 11-digit Philippine mobile number starting with 09."
+                });
+
+            }
+
             const existingUser =
                 await pool.query(
                     `
@@ -670,8 +713,8 @@ app.post(
                         hashedPassword,
 
                         String(
-                            phone
-                        ).trim()
+                            normalizedPhone
+                        )
                     ]
                 );
 

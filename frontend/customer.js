@@ -2562,6 +2562,8 @@ async function submitApplication() {
                 screenshotInput.value =
                     "";
 
+                clearPaymentScreenshotPreview();
+
 
                 // ---------------------------------
                 // REFRESH DATA
@@ -2643,6 +2645,54 @@ async function submitApplication() {
 // =====================================
 // LOGOUT
 // =====================================
+
+const paymentScreenshotInput =
+    document.getElementById("paymentScreenshot");
+
+const paymentScreenshotPreview =
+    document.getElementById("paymentScreenshotPreview");
+
+let paymentScreenshotPreviewUrl = null;
+
+function clearPaymentScreenshotPreview() {
+    if (paymentScreenshotPreviewUrl) {
+        URL.revokeObjectURL(paymentScreenshotPreviewUrl);
+        paymentScreenshotPreviewUrl = null;
+    }
+
+    if (paymentScreenshotPreview) {
+        paymentScreenshotPreview.removeAttribute("src");
+        paymentScreenshotPreview.hidden = true;
+    }
+}
+
+if (
+    paymentScreenshotInput &&
+    paymentScreenshotPreview
+) {
+    paymentScreenshotInput.addEventListener(
+        "change",
+        function() {
+            clearPaymentScreenshotPreview();
+
+            const file =
+                paymentScreenshotInput.files &&
+                paymentScreenshotInput.files[0];
+
+            if (!file) {
+                return;
+            }
+
+            paymentScreenshotPreviewUrl =
+                URL.createObjectURL(file);
+
+            paymentScreenshotPreview.src =
+                paymentScreenshotPreviewUrl;
+            paymentScreenshotPreview.hidden = false;
+        }
+    );
+}
+
 
 function logout() {
 

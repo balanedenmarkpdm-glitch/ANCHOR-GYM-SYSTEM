@@ -210,7 +210,7 @@ if (signupForm) {
                 document
                     .getElementById("signupPhone")
                     .value
-                    .trim();
+                    .replace(/\D/g, "");
 
 
             const password =
@@ -245,6 +245,25 @@ if (signupForm) {
 
                 alert(
                     "Please complete all required fields."
+                );
+
+                return;
+            }
+
+            if (!/^[^\s@]+@gmail\.com$/i.test(email)) {
+
+                alert(
+                    "Please use a valid Gmail address ending in @gmail.com."
+                );
+
+                return;
+            }
+
+
+            if (!/^09\d{9}$/.test(phone)) {
+
+                alert(
+                    "Please enter a valid 11-digit Philippine mobile number starting with 09."
                 );
 
                 return;
@@ -353,6 +372,71 @@ if (signupForm) {
 
 }
 
+function bindPasswordToggle(
+    toggleId,
+    passwordId
+) {
+    const toggle =
+        document.getElementById(toggleId);
+
+    const password =
+        document.getElementById(passwordId);
+
+    if (!toggle || !password) {
+        return;
+    }
+
+    toggle.setAttribute(
+        "aria-controls",
+        passwordId
+    );
+
+    toggle.setAttribute(
+        "aria-pressed",
+        "false"
+    );
+
+    toggle.addEventListener(
+        "click",
+        function() {
+            const showPassword =
+                password.type === "password";
+
+            password.type =
+                showPassword
+                    ? "text"
+                    : "password";
+
+            toggle.textContent =
+                showPassword
+                    ? "Hide"
+                    : "Show";
+
+            toggle.setAttribute(
+                "aria-label",
+                showPassword
+                    ? "Hide password"
+                    : "Show password"
+            );
+
+            toggle.setAttribute(
+                "aria-pressed",
+                String(showPassword)
+            );
+        }
+    );
+}
+
+bindPasswordToggle(
+    "toggleSignupPassword",
+    "signupPassword"
+);
+
+bindPasswordToggle(
+    "toggleSignupConfirm",
+    "signupConfirm"
+);
+
 
 /* =========================
    FORGOT PASSWORD
@@ -452,6 +536,13 @@ if (toggleAdminPassword) {
                     : "Show";
 
             toggleAdminPassword.setAttribute(
+                "aria-label",
+                isPasswordHidden
+                    ? "Hide password"
+                    : "Show password"
+            );
+
+            toggleAdminPassword.setAttribute(
                 "aria-pressed",
                 String(isPasswordHidden)
             );
@@ -459,6 +550,21 @@ if (toggleAdminPassword) {
         }
     );
 
+}
+
+const signupPhoneInput =
+    document.getElementById("signupPhone");
+
+if (signupPhoneInput) {
+    signupPhoneInput.addEventListener(
+        "input",
+        function() {
+            signupPhoneInput.value =
+                signupPhoneInput.value
+                    .replace(/\D/g, "")
+                    .slice(0, 11);
+        }
+    );
 }
 
 const adminLoginForm =
