@@ -615,89 +615,11 @@ app.delete(
 
 app.post(
     "/api/signup",
-    async (req, res) => {
-        const email =
-            normalizeSignupEmail(req.body.email);
-        const fullName =
-            String(req.body.full_name || req.body.fullName || "").trim();
-        const phone =
-            normalizePhilippinePhone(req.body.phone);
-        const password =
-            String(req.body.password || "");
-
-        if (!isValidGmailAddress(email)) {
-            return res.status(400).json({
-                success: false,
-                message: "Please enter a Gmail address in the format name@gmail.com. This checks the format only; it cannot confirm that the mailbox exists."
-            });
-        }
-
-        if (!fullName || !phone || !password) {
-            return res.status(400).json({
-                success: false,
-                message: "Please complete all required fields."
-            });
-        }
-
-        if (!/^09\d{9}$/.test(phone)) {
-            return res.status(400).json({
-                success: false,
-                message: "Please enter a valid 11-digit Philippine mobile number starting with 09."
-            });
-        }
-
-        if (password.length < 6) {
-            return res.status(400).json({
-                success: false,
-                message: "Password must be at least 6 characters."
-            });
-        }
-
-        try {
-            const passwordHash =
-                await bcrypt.hash(password, 10);
-            const userResult =
-                await pool.query(
-                    `
-                    INSERT INTO users
-                    (
-                        full_name,
-                        email,
-                        password,
-                        phone,
-                        role
-                    )
-                    VALUES ($1, $2, $3, $4, 'customer')
-                    RETURNING
-                        id,
-                        full_name,
-                        email,
-                        phone,
-                        role,
-                        created_at
-                    `,
-                    [fullName, email, passwordHash, phone]
-                );
-
-            return res.status(201).json({
-                success: true,
-                message: "Account created. The email address was not verified.",
-                user: userResult.rows[0]
-            });
-        } catch (error) {
-            if (error.code === "23505") {
-                return res.status(409).json({
-                    success: false,
-                    message: "An account with this email already exists."
-                });
-            }
-
-            console.error("Signup account creation error:", error);
-            return res.status(500).json({
-                success: false,
-                message: "Unable to create the account. Please try again."
-            });
-        }
+    (req, res) => {
+        return res.status(410).json({
+            success: false,
+            message: "Create customer accounts with Google sign-in so the Gmail address can be verified."
+        });
     }
 );
 
