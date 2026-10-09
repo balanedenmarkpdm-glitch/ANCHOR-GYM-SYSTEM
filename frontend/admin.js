@@ -67,7 +67,7 @@ async function apiRequest(
 
     const response =
         await fetch(
-            url,
+            window.anchorApiUrl(url),
             {
                 cache:
                     "no-store",

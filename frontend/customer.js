@@ -286,7 +286,9 @@ async function refreshCustomerData(
 
         const response =
             await fetch(
-                `/api/customer/${customerData.id}`,
+                window.anchorApiUrl(
+                    `/api/customer/${customerData.id}`
+                ),
                 {
                     cache: "no-store"
                 }
@@ -1655,7 +1657,9 @@ async function deleteSelectedNotifications() {
 
             const response =
                 await fetch(
-                    `/api/customer/${Number(customerData.id)}/notifications/${notificationId}`,
+                    window.anchorApiUrl(
+                        `/api/customer/${Number(customerData.id)}/notifications/${notificationId}`
+                    ),
                     {
                         method: "DELETE",
                         cache: "no-store"
@@ -2463,7 +2467,7 @@ async function submitApplication() {
 
                 const response =
                     await fetch(
-                        "/api/applications",
+                        window.anchorApiUrl("/api/applications"),
                         {
                             method:
                                 "POST",

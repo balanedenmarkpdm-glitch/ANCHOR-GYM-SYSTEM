@@ -37,7 +37,7 @@ if (loginForm) {
             try {
 
                 const response =
-                    await fetch("/api/login", {
+                    await fetch(window.anchorApiUrl("/api/login"), {
 
                         method: "POST",
 
@@ -289,7 +289,7 @@ if (signupForm) {
             try {
 
                 const response =
-                    await fetch("/api/signup", {
+                    await fetch(window.anchorApiUrl("/api/signup"), {
 
                         method: "POST",
 

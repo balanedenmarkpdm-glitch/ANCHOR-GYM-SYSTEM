@@ -10,6 +10,9 @@ const QRCode = require("qrcode");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const frontendOrigin =
+    process.env.FRONTEND_URL ||
+    "https://anchor-gym-system.vercel.app";
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
@@ -165,6 +168,40 @@ if (
 // =====================================
 // MIDDLEWARE
 // =====================================
+
+app.use(
+    (req, res, next) => {
+
+        const origin =
+            req.get("Origin");
+
+        if (origin === frontendOrigin) {
+            res.setHeader(
+                "Access-Control-Allow-Origin",
+                frontendOrigin
+            );
+            res.setHeader(
+                "Vary",
+                "Origin"
+            );
+        }
+
+        res.setHeader(
+            "Access-Control-Allow-Methods",
+            "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+        );
+        res.setHeader(
+            "Access-Control-Allow-Headers",
+            "Content-Type,Authorization"
+        );
+
+        if (req.method === "OPTIONS") {
+            return res.sendStatus(204);
+        }
+
+        next();
+    }
+);
 
 app.use(
     express.json({
