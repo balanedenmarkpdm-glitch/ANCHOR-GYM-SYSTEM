@@ -3,7 +3,6 @@
 const express = require("express");
 const { Pool } = require("pg");
 const bcrypt = require("bcrypt");
-const nodemailer = require("nodemailer");
 const { OAuth2Client } = require("google-auth-library");
 const fs = require("fs");
 const path = require("path");
@@ -32,7 +31,10 @@ function isAllowedFrontendOrigin(origin) {
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    options: "-c timezone=Asia/Manila"
+    options: "-c timezone=Asia/Manila",
+    connectionTimeoutMillis: 10000,
+    query_timeout: 15000,
+    statement_timeout: 15000
 });
 
 const googleOAuthClient =
@@ -61,71 +63,67 @@ async function ensureEmailVerificationTable() {
     emailVerificationTableReady = true;
 }
 
-function createEmailTransporter() {
-    const {
-        SMTP_HOST,
-        SMTP_PORT,
-        SMTP_USER,
-        SMTP_PASS
-    } = process.env;
+async function sendSignupVerificationCode(
+    email,
+    code
+) {
+    const apiKey =
+        process.env.BREVO_API_KEY;
+    const senderEmail =
+        process.env.EMAIL_FROM;
 
-    if (
-        !SMTP_HOST ||
-        !SMTP_USER ||
-        !SMTP_PASS
-    ) {
+    if (!apiKey || !senderEmail) {
         const error =
             new Error(
-                "Email verification is not configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER, and SMTP_PASS on the backend."
+                "Email verification is not configured. Set BREVO_API_KEY and EMAIL_FROM on the backend."
             );
         error.statusCode = 503;
         throw error;
     }
 
-    const port =
-        Number(SMTP_PORT || 587);
+    const response =
+        await fetch(
+            "https://api.brevo.com/v3/smtp/email",
+            {
+                method: "POST",
+                headers: {
+                    accept: "application/json",
+                    "api-key": apiKey,
+                    "content-type": "application/json"
+                },
+                body: JSON.stringify({
+                    sender: {
+                        name:
+                            process.env.EMAIL_FROM_NAME ||
+                            "ANCHOR GYM",
+                        email: senderEmail
+                    },
+                    to: [
+                        {
+                            email: email
+                        }
+                    ],
+                    subject: "Verify your ANCHOR GYM account",
+                    textContent:
+                        `Your ANCHOR GYM verification code is ${code}. ` +
+                        "It expires in 10 minutes. If you did not request this, ignore this email.",
+                    htmlContent:
+                        `<p>Your ANCHOR GYM verification code is:</p>` +
+                        `<p style="font-size:24px;font-weight:bold;letter-spacing:5px">${code}</p>` +
+                        "<p>This code expires in 10 minutes. If you did not request this, ignore this email.</p>"
+                }),
+                signal: AbortSignal.timeout(15000)
+            }
+        );
 
-    if (!Number.isInteger(port) || port <= 0) {
-        const error =
-            new Error("SMTP_PORT must be a valid port number.");
-        error.statusCode = 503;
-        throw error;
+    if (!response.ok) {
+        const details =
+            await response.text();
+
+        throw new Error(
+            `Brevo email API returned ${response.status}: ${details}`
+        );
     }
-
-    return nodemailer.createTransport({
-        host: SMTP_HOST,
-        port: port,
-        secure:
-            process.env.SMTP_SECURE === "true" ||
-            port === 465,
-        auth: {
-            user: SMTP_USER,
-            pass: SMTP_PASS
-        }
-    });
-}
-
-async function sendSignupVerificationCode(
-    email,
-    code
-) {
-    const transporter =
-        createEmailTransporter();
-
-    await transporter.sendMail({
-        from:
-            process.env.EMAIL_FROM ||
-            process.env.SMTP_USER,
-        to: email,
-        subject: "Verify your ANCHOR GYM account",
-        text:
-            `Your ANCHOR GYM verification code is ${code}. ` +
-            "It expires in 10 minutes. If you did not request this, ignore this email.",
-        html:
-            `<p>Your ANCHOR GYM verification code is:</p>` +
-            `<p style="font-size:24px;font-weight:bold;letter-spacing:5px">${code}</p>` +
-            "<p>This code expires in 10 minutes. If you did not request this, ignore this email.</p>"
-    });
 }
 
 function normalizeSignupEmail(value) {
@@ -887,7 +885,7 @@ async function createSignupVerification(
             message:
                 error.statusCode === 503
                     ? error.message
-                    : "Unable to send the verification code. Please try again later."
+                    : "Unable to complete signup or send the verification code. Check the backend logs and email settings, then try again."
         });
     }
 }

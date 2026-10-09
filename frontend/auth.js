@@ -453,6 +453,9 @@ const signupVerificationForm =
 const signupVerificationMessage =
     document.getElementById("signupVerificationMessage");
 
+const signupMessage =
+    document.getElementById("signupMessage");
+
 let signupVerificationEmail = "";
 
 function isValidSignupGmailAddress(value) {
@@ -645,6 +648,27 @@ if (signupForm) {
             const fullName =
                 firstName + " " + lastName;
 
+            const submitButton =
+                document.getElementById("signupSubmitButton");
+            const controller =
+                new AbortController();
+            const timeoutId =
+                window.setTimeout(
+                    function() {
+                        controller.abort();
+                    },
+                    35000
+                );
+
+            if (submitButton) {
+                submitButton.disabled = true;
+                submitButton.textContent = "Sending verification code...";
+            }
+
+            if (signupMessage) {
+                signupMessage.textContent =
+                    "Sending verification code. This may take a few seconds.";
+            }
 
             try {
 
@@ -652,6 +676,7 @@ if (signupForm) {
                     await fetch(window.anchorApiUrl("/api/signup"), {
 
                         method: "POST",
+                        signal: controller.signal,
 
                         headers: {
                             "Content-Type":
@@ -676,6 +701,12 @@ if (signupForm) {
 
                 if (!response.ok) {
 
+                    if (signupMessage) {
+                        signupMessage.textContent =
+                            data.message ||
+                            "Unable to create account.";
+                    }
+
                     alert(
                         data.message ||
                         "Unable to create account."
@@ -693,6 +724,9 @@ if (signupForm) {
                     signupVerificationEmail;
 
                 signupForm.hidden = true;
+                if (signupMessage) {
+                    signupMessage.textContent = "";
+                }
 
                 if (signupVerificationForm) {
                     signupVerificationForm.hidden = false;
@@ -715,9 +749,25 @@ if (signupForm) {
                     error
                 );
 
-                alert(
-                    "Unable to connect to the server."
-                );
+                const message =
+                    error.name === "AbortError"
+                        ? "Signup took too long. Check the backend email settings and Render logs, then try again."
+                        : "Unable to connect to the server.";
+
+                if (signupMessage) {
+                    signupMessage.textContent = message;
+                }
+
+                alert(message);
+
+            } finally {
+                window.clearTimeout(timeoutId);
+
+                if (submitButton && !signupForm.hidden) {
+                    submitButton.disabled = false;
+                    submitButton.textContent =
+                        "Create Customer Account";
+                }
 
             }
 
