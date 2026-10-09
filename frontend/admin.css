@@ -692,7 +692,14 @@ button {
 .small-btn,
 .approve,
 .reject {
-    padding: 7px 9px;
+    display: inline-flex;
+
+    align-items: center;
+    justify-content: center;
+
+    width: 78px;
+    min-height: 30px;
+    padding: 0 9px;
 
     border-radius: 5px;
 
@@ -703,8 +710,10 @@ button {
     color: white;
 
     font-size: 9px;
-}
+    font-weight: bold;
 
+    white-space: nowrap;
+}
 
 .approve {
     background: #0e6b48;
@@ -712,8 +721,31 @@ button {
     border-color: #0e6b48;
 }
 
+.approve:hover {
+    background: #12845a;
+
+    border-color: #12845a;
+}
 
 .reject {
+    background: #701b24;
+
+    border-color: #701b24;
+}
+
+.reject:hover {
+    background: #92232f;
+
+    border-color: #92232f;
+}
+
+.pending-row button.approve {
+    background: #0e6b48;
+
+    border-color: #0e6b48;
+}
+
+.pending-row button.reject {
     background: #701b24;
 
     border-color: #701b24;

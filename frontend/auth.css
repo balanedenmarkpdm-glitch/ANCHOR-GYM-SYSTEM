@@ -313,6 +313,39 @@ body {
     margin-right: 7px;
 }
 
+.google-login-host {
+    display: flex;
+
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+
+    min-height: 42px;
+    padding: 11px 16px;
+
+    background: #151a20;
+
+    border: 1px solid #303842;
+
+    border-radius: 8px;
+
+    font-family: Arial, sans-serif;
+    font-size: 14px;
+}
+
+.google-login-host:hover {
+    background: #1d232a;
+}
+
+.google-login-host span {
+    margin: 0;
+
+    color: #fff;
+
+    font-size: 14px;
+    font-weight: bold;
+}
+
 
 /* DIVIDER */
 

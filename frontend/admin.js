@@ -37,7 +37,7 @@ if (guestPhoneInput) {
 function checkAdminAccess() {
 
     const loggedIn =
-        localStorage.getItem(
+        window.anchorSession.get(
             "anchorAdminLoggedIn"
         );
 
@@ -703,7 +703,7 @@ async function loadApplications() {
                                     <div>
 
                                         <button
-                                            class="red-button"
+                                            class="approve"
                                             type="button"
                                             onclick="approveApplication(${application.id})">
 
@@ -712,6 +712,7 @@ async function loadApplications() {
                                         </button>
 
                                         <button
+                                            class="reject"
                                             type="button"
                                             onclick="rejectApplication(${application.id})">
 
@@ -879,7 +880,7 @@ function createApplicationRow(
         "PENDING"
             ? `
                 <button
-                    class="red-button"
+                    class="approve"
                     type="button"
                     onclick="approveApplication(${application.id})">
 
@@ -888,6 +889,7 @@ function createApplicationRow(
                 </button>
 
                 <button
+                    class="reject"
                     type="button"
                     onclick="rejectApplication(${application.id})">
 
@@ -4988,7 +4990,7 @@ async function loadEquipment() {
 async function refreshAdminData() {
 
     if (
-        localStorage.getItem(
+        window.anchorSession.get(
             "anchorAdminLoggedIn"
         ) !==
         "true"
@@ -5503,12 +5505,12 @@ function logout() {
     }
 
 
-    localStorage.removeItem(
+    window.anchorSession.remove(
         "anchorAdminLoggedIn"
     );
 
 
-    localStorage.removeItem(
+    window.anchorSession.remove(
         "anchorAdminRole"
     );
 

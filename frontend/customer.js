@@ -171,7 +171,7 @@ function loadPageSpecificData(id) {
 async function loadCustomer() {
 
     const savedUser =
-        localStorage.getItem(
+        window.anchorSession.get(
             "anchorUser"
         );
 
@@ -245,7 +245,7 @@ async function loadCustomer() {
         );
 
 
-        localStorage.removeItem(
+        window.anchorSession.remove(
             "anchorUser"
         );
 
@@ -2230,7 +2230,7 @@ function displayNoQR() {
 async function submitApplication() {
 
     const savedUser =
-        localStorage.getItem(
+        window.anchorSession.get(
             "anchorUser"
         );
 
@@ -2268,7 +2268,7 @@ async function submitApplication() {
         );
 
 
-        localStorage.removeItem(
+        window.anchorSession.remove(
             "anchorUser"
         );
 
@@ -2718,7 +2718,7 @@ function logout() {
     }
 
 
-    localStorage.removeItem(
+    window.anchorSession.remove(
         "anchorUser"
     );
 

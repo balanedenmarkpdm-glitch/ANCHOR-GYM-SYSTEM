@@ -97,11 +97,11 @@
                 <div class="feature">
 
                     <b>
-                        24/7
+                        8 AM
                     </b>
 
                     <small>
-                        Account Access
+                        Opens • Closes 10 PM
                     </small>
 
                 </div>
@@ -138,16 +138,46 @@
 
             <button
                 type="button"
-                class="google-btn"
+                class="google-btn google-login-host"
                 id="googleLogin">
-
-                <span>
-                    G
-                </span>
-
+                <span aria-hidden="true">G</span>
                 Continue with Google
-
             </button>
+
+            <p
+                id="googleLoginMessage"
+                role="status"
+                aria-live="polite">
+            </p>
+
+            <form id="googlePhoneForm" hidden>
+
+                <p class="subtitle">
+                    Your Google email is verified. Add your phone number to finish creating your customer account.
+                </p>
+
+                <label for="googlePhone">
+                    CONTACT NUMBER
+                </label>
+
+                <input
+                    type="tel"
+                    id="googlePhone"
+                    inputmode="numeric"
+                    minlength="11"
+                    maxlength="11"
+                    pattern="09[0-9]{9}"
+                    placeholder="09XXXXXXXXX"
+                    required
+                >
+
+                <button
+                    type="submit"
+                    class="main-btn">
+                    Continue
+                </button>
+
+            </form>
 
 
             <div class="divider">

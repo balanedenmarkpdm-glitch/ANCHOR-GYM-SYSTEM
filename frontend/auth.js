@@ -24,6 +24,9 @@ if (loginForm) {
                     .getElementById("password")
                     .value;
 
+            const rememberMe =
+                document.getElementById("rememberMe");
+
             if (!email || !password) {
 
                 alert(
@@ -69,10 +72,13 @@ if (loginForm) {
                 }
 
 
-                // Save logged-in customer information
-                localStorage.setItem(
+                window.anchorSession.set(
                     "anchorUser",
-                    JSON.stringify(data.user)
+                    JSON.stringify(data.user),
+                    Boolean(
+                        rememberMe &&
+                        rememberMe.checked
+                    )
                 );
 
 
@@ -106,20 +112,286 @@ if (loginForm) {
 const googleLogin =
     document.getElementById("googleLogin");
 
+const googleLoginMessage =
+    document.getElementById("googleLoginMessage");
 
-if (googleLogin) {
+const googlePhoneForm =
+    document.getElementById("googlePhoneForm");
 
-    googleLogin.addEventListener(
-        "click",
-        function() {
+let pendingGoogleCredential = null;
 
-            alert(
-                "Google authentication will open here."
+function setGoogleLoginMessage(message) {
+    if (googleLoginMessage) {
+        googleLoginMessage.textContent = message;
+    }
+}
+
+async function submitGoogleCredential(
+    credential,
+    phone
+) {
+    const response =
+        await fetch(
+            window.anchorApiUrl("/api/auth/google"),
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    id_token: credential,
+                    phone: phone
+                })
+            }
+        );
+
+    const data =
+        await response.json();
+
+    if (!response.ok) {
+        throw new Error(
+            data.message ||
+            "Unable to sign in with Google."
+        );
+    }
+
+    if (data.requires_phone) {
+        pendingGoogleCredential = credential;
+
+        if (googlePhoneForm) {
+            googlePhoneForm.hidden = false;
+            document.getElementById("googlePhone").focus();
+        }
+
+        setGoogleLoginMessage(
+            "Your Google account is verified. Add your phone number to finish."
+        );
+
+        return;
+    }
+
+    window.anchorSession.set(
+        "anchorUser",
+        JSON.stringify(data.user),
+        Boolean(
+            document.getElementById("rememberMe")?.checked
+        )
+    );
+
+    window.location.href =
+        "customer.html";
+}
+
+async function initializeGoogleLogin() {
+    if (!googleLogin) {
+        return;
+    }
+
+    try {
+        const configResponse =
+            await fetch(
+                window.anchorApiUrl("/api/auth/config"),
+                {
+                    cache: "no-store"
+                }
             );
 
+        const config =
+            await configResponse.json();
+
+        if (
+            !configResponse.ok ||
+            !config.googleEnabled ||
+            !config.googleClientId
+        ) {
+            throw new Error(
+                config.message ||
+                "Google sign-in is not configured."
+            );
+        }
+
+        await new Promise(
+            (resolve, reject) => {
+                const script =
+                    document.createElement("script");
+
+                script.src =
+                    "https://accounts.google.com/gsi/client";
+                script.async = true;
+                script.onload = resolve;
+                script.onerror = () => reject(
+                    new Error("Google sign-in could not be loaded.")
+                );
+                document.head.appendChild(script);
+            }
+        );
+
+        const googleCodeClient =
+            window.google.accounts.oauth2.initCodeClient({
+                client_id: config.googleClientId,
+                scope: "openid email profile",
+                ux_mode: "popup",
+                callback: async function(result) {
+                    if (result.error || !result.code) {
+                        setGoogleLoginMessage(
+                            result.error_description ||
+                            result.error ||
+                            "Google sign-in was canceled."
+                        );
+                        return;
+                    }
+
+                    try {
+                        const response =
+                            await fetch(
+                                window.anchorApiUrl(
+                                    "/api/auth/google/code"
+                                ),
+                                {
+                                    method: "POST",
+                                    headers: {
+                                        "Content-Type":
+                                            "application/json",
+                                        "X-Requested-With":
+                                            "XmlHttpRequest"
+                                    },
+                                    body: JSON.stringify({
+                                        code: result.code
+                                    })
+                                }
+                            );
+
+                        const data =
+                            await response.json();
+
+                        if (!response.ok) {
+                            throw new Error(
+                                data.message ||
+                                "Unable to sign in with Google."
+                            );
+                        }
+
+                        if (data.requires_phone) {
+                            pendingGoogleCredential =
+                                data.id_token;
+
+                            googlePhoneForm.hidden = false;
+                            document.getElementById(
+                                "googlePhone"
+                            ).focus();
+
+                            setGoogleLoginMessage(
+                                "Your Google account is verified. Add your phone number to finish."
+                            );
+                            return;
+                        }
+
+                        window.anchorSession.set(
+                            "anchorUser",
+                            JSON.stringify(data.user),
+                            Boolean(
+                                document.getElementById(
+                                    "rememberMe"
+                                )?.checked
+                            )
+                        );
+
+                        window.location.href =
+                            "customer.html";
+                    } catch (error) {
+                        console.error(
+                            "Google sign-in error:",
+                            error
+                        );
+
+                        setGoogleLoginMessage(
+                            error.message
+                        );
+                    }
+                }
+            });
+
+        googleLogin.addEventListener(
+            "click",
+            function() {
+                setGoogleLoginMessage("");
+
+                try {
+                    googleCodeClient.requestCode();
+                } catch (error) {
+                    console.error(
+                        "Google sign-in launch error:",
+                        error
+                    );
+
+                    setGoogleLoginMessage(
+                        error.message
+                    );
+                }
+            }
+        );
+    } catch (error) {
+        googleLogin.hidden = true;
+
+        console.error(
+            "Google sign-in initialization error:",
+            error
+        );
+
+        setGoogleLoginMessage(
+            error.message
+        );
+    }
+}
+
+if (googleLogin) {
+    initializeGoogleLogin();
+}
+
+if (googlePhoneForm) {
+    const googlePhoneInput =
+        document.getElementById("googlePhone");
+
+    googlePhoneInput.addEventListener(
+        "input",
+        function() {
+            googlePhoneInput.value =
+                googlePhoneInput.value
+                    .replace(/\D/g, "")
+                    .slice(0, 11);
         }
     );
 
+    googlePhoneForm.addEventListener(
+        "submit",
+        async function(event) {
+            event.preventDefault();
+
+            if (!pendingGoogleCredential) {
+                setGoogleLoginMessage(
+                    "Please choose Continue with Google again."
+                );
+                googlePhoneForm.hidden = true;
+                return;
+            }
+
+            try {
+                await submitGoogleCredential(
+                    pendingGoogleCredential,
+                    googlePhoneInput.value
+                );
+            } catch (error) {
+                console.error(
+                    "Google account creation error:",
+                    error
+                );
+
+                setGoogleLoginMessage(
+                    error.message
+                );
+            }
+        }
+    );
 }
 
 
@@ -174,6 +446,75 @@ if (toggleLoginPassword) {
 
 const signupForm =
     document.getElementById("signupForm");
+
+const signupVerificationForm =
+    document.getElementById("signupVerificationForm");
+
+const signupVerificationMessage =
+    document.getElementById("signupVerificationMessage");
+
+let signupVerificationEmail = "";
+
+function isValidSignupGmailAddress(value) {
+    const match =
+        /^([a-z0-9.]+)(?:\+([a-z0-9._-]+))?@gmail\.com$/i.exec(
+            value.trim()
+        );
+
+    if (!match) {
+        return false;
+    }
+
+    const username =
+        match[1].toLowerCase();
+
+    const alias =
+        match[2];
+
+    return (
+        username.length >= 6 &&
+        username.length <= 30 &&
+        !username.startsWith(".") &&
+        !username.endsWith(".") &&
+        !username.includes("..") &&
+        (
+            !alias ||
+            (
+                alias.length <= 30 &&
+                !alias.startsWith(".") &&
+                !alias.endsWith(".") &&
+                !alias.includes("..")
+            )
+        )
+    );
+}
+
+const signupEmailInput =
+    document.getElementById("signupEmail");
+
+if (signupEmailInput) {
+    signupEmailInput.addEventListener(
+        "input",
+        function() {
+            signupEmailInput.setCustomValidity(
+                !signupEmailInput.value ||
+                isValidSignupGmailAddress(
+                    signupEmailInput.value
+                )
+                    ? ""
+                    : "Enter a valid Gmail address, such as name@gmail.com."
+            );
+        }
+    );
+
+    signupEmailInput.addEventListener(
+        "blur",
+        function() {
+            signupEmailInput.value =
+                signupEmailInput.value.trim().toLowerCase();
+        }
+    );
+}
 
 
 if (signupForm) {
@@ -250,10 +591,10 @@ if (signupForm) {
                 return;
             }
 
-            if (!/^[^\s@]+@gmail\.com$/i.test(email)) {
+            if (!isValidSignupGmailAddress(email)) {
 
                 alert(
-                    "Please use a valid Gmail address ending in @gmail.com."
+                    "Please enter a valid Gmail address that can receive the verification code."
                 );
 
                 return;
@@ -343,15 +684,28 @@ if (signupForm) {
                     return;
                 }
 
+                signupVerificationEmail =
+                    email.toLowerCase();
 
-                alert(
-                    "Customer account created successfully!"
-                );
+                document.getElementById(
+                    "verificationEmail"
+                ).textContent =
+                    signupVerificationEmail;
 
+                signupForm.hidden = true;
 
-                // Go to customer login
-                window.location.href =
-                    "login.html";
+                if (signupVerificationForm) {
+                    signupVerificationForm.hidden = false;
+                    document.getElementById(
+                        "signupVerificationCode"
+                    ).focus();
+                }
+
+                if (signupVerificationMessage) {
+                    signupVerificationMessage.textContent =
+                        data.message ||
+                        "Check your email for the verification code.";
+                }
 
 
             } catch (error) {
@@ -370,6 +724,121 @@ if (signupForm) {
         }
     );
 
+}
+
+if (signupVerificationForm) {
+    signupVerificationForm.addEventListener(
+        "submit",
+        async function(event) {
+            event.preventDefault();
+
+            const code =
+                document.getElementById(
+                    "signupVerificationCode"
+                ).value.trim();
+
+            try {
+                const response =
+                    await fetch(
+                        window.anchorApiUrl("/api/signup/verify"),
+                        {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json"
+                            },
+                            body: JSON.stringify({
+                                email: signupVerificationEmail,
+                                code: code
+                            })
+                        }
+                    );
+
+                const data =
+                    await response.json();
+
+                if (!response.ok) {
+                    throw new Error(
+                        data.message ||
+                        "Unable to verify your email."
+                    );
+                }
+
+                window.anchorSession.set(
+                    "anchorUser",
+                    JSON.stringify(data.user),
+                    false
+                );
+
+                window.location.href =
+                    "customer.html";
+            } catch (error) {
+                console.error(
+                    "Email verification error:",
+                    error
+                );
+
+                if (signupVerificationMessage) {
+                    signupVerificationMessage.textContent =
+                        error.message;
+                }
+            }
+        }
+    );
+}
+
+const resendSignupCode =
+    document.getElementById("resendSignupCode");
+
+if (resendSignupCode) {
+    resendSignupCode.addEventListener(
+        "click",
+        async function() {
+            if (!signupVerificationEmail) {
+                return;
+            }
+
+            try {
+                const response =
+                    await fetch(
+                        window.anchorApiUrl("/api/signup/resend"),
+                        {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json"
+                            },
+                            body: JSON.stringify({
+                                email: signupVerificationEmail
+                            })
+                        }
+                    );
+
+                const data =
+                    await response.json();
+
+                if (!response.ok) {
+                    throw new Error(
+                        data.message ||
+                        "Unable to resend the verification code."
+                    );
+                }
+
+                if (signupVerificationMessage) {
+                    signupVerificationMessage.textContent =
+                        data.message;
+                }
+            } catch (error) {
+                console.error(
+                    "Resend verification code error:",
+                    error
+                );
+
+                if (signupVerificationMessage) {
+                    signupVerificationMessage.textContent =
+                        error.message;
+                }
+            }
+        }
+    );
 }
 
 function bindPasswordToggle(
@@ -622,21 +1091,29 @@ if (adminLoginForm) {
             ) {
 
                 // Remove customer session
-                localStorage.removeItem(
+                window.anchorSession.remove(
                     "anchorUser"
                 );
 
 
                 // Save admin session
-                localStorage.setItem(
+                window.anchorSession.set(
                     "anchorAdminLoggedIn",
-                    "true"
+                    "true",
+                    Boolean(
+                        rememberMe &&
+                        rememberMe.checked
+                    )
                 );
 
 
-                localStorage.setItem(
+                window.anchorSession.set(
                     "anchorAdminRole",
-                    "admin"
+                    "admin",
+                    Boolean(
+                        rememberMe &&
+                        rememberMe.checked
+                    )
                 );
 
 
@@ -673,12 +1150,12 @@ if (adminLoginForm) {
             // WRONG CREDENTIALS
             // =================================
 
-            localStorage.removeItem(
+            window.anchorSession.remove(
                 "anchorAdminLoggedIn"
             );
 
 
-            localStorage.removeItem(
+            window.anchorSession.remove(
                 "anchorAdminRole"
             );
 

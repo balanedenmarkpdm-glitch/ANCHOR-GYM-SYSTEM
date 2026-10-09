@@ -3,6 +3,8 @@
 const express = require("express");
 const { Pool } = require("pg");
 const bcrypt = require("bcrypt");
+const nodemailer = require("nodemailer");
+const { OAuth2Client } = require("google-auth-library");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
@@ -14,10 +16,163 @@ const frontendOrigin =
     process.env.FRONTEND_URL ||
     "https://anchor-gym-system.vercel.app";
 
+function isAllowedFrontendOrigin(origin) {
+    return (
+        origin === frontendOrigin ||
+        /^https:\/\/anchor-gym-system-[a-z0-9]+-brunheart\.vercel\.app$/.test(
+            origin || ""
+        ) ||
+        (process.env.GOOGLE_ALLOWED_ORIGINS || "")
+            .split(",")
+            .map(value => value.trim())
+            .filter(Boolean)
+            .includes(origin)
+    );
+}
+
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     options: "-c timezone=Asia/Manila"
 });
+
+const googleOAuthClient =
+    new OAuth2Client();
+
+let emailVerificationTableReady = false;
+
+async function ensureEmailVerificationTable() {
+    if (emailVerificationTableReady) {
+        return;
+    }
+
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS signup_email_verifications (
+            email TEXT PRIMARY KEY,
+            full_name TEXT NOT NULL,
+            phone TEXT NOT NULL,
+            password_hash TEXT NOT NULL,
+            code_hash TEXT NOT NULL,
+            expires_at TIMESTAMPTZ NOT NULL,
+            attempts INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+
+    emailVerificationTableReady = true;
+}
+
+function createEmailTransporter() {
+    const {
+        SMTP_HOST,
+        SMTP_PORT,
+        SMTP_USER,
+        SMTP_PASS
+    } = process.env;
+
+    if (
+        !SMTP_HOST ||
+        !SMTP_USER ||
+        !SMTP_PASS
+    ) {
+        const error =
+            new Error(
+                "Email verification is not configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER, and SMTP_PASS on the backend."
+            );
+        error.statusCode = 503;
+        throw error;
+    }
+
+    const port =
+        Number(SMTP_PORT || 587);
+
+    if (!Number.isInteger(port) || port <= 0) {
+        const error =
+            new Error("SMTP_PORT must be a valid port number.");
+        error.statusCode = 503;
+        throw error;
+    }
+
+    return nodemailer.createTransport({
+        host: SMTP_HOST,
+        port: port,
+        secure:
+            process.env.SMTP_SECURE === "true" ||
+            port === 465,
+        auth: {
+            user: SMTP_USER,
+            pass: SMTP_PASS
+        }
+    });
+}
+
+async function sendSignupVerificationCode(
+    email,
+    code
+) {
+    const transporter =
+        createEmailTransporter();
+
+    await transporter.sendMail({
+        from:
+            process.env.EMAIL_FROM ||
+            process.env.SMTP_USER,
+        to: email,
+        subject: "Verify your ANCHOR GYM account",
+        text:
+            `Your ANCHOR GYM verification code is ${code}. ` +
+            "It expires in 10 minutes. If you did not request this, ignore this email.",
+        html:
+            `<p>Your ANCHOR GYM verification code is:</p>` +
+            `<p style="font-size:24px;font-weight:bold;letter-spacing:5px">${code}</p>` +
+            "<p>This code expires in 10 minutes. If you did not request this, ignore this email.</p>"
+    });
+}
+
+function normalizeSignupEmail(value) {
+    return String(value || "")
+        .trim()
+        .toLowerCase();
+}
+
+function isValidGmailAddress(value) {
+    const match =
+        /^([a-z0-9.]+)(?:\+([a-z0-9._-]+))?@gmail\.com$/.exec(
+            normalizeSignupEmail(value)
+        );
+
+    if (!match) {
+        return false;
+    }
+
+    const username =
+        match[1];
+
+    const alias =
+        match[2];
+
+    return (
+        username.length >= 6 &&
+        username.length <= 30 &&
+        !username.startsWith(".") &&
+        !username.endsWith(".") &&
+        !username.includes("..") &&
+        (
+            !alias ||
+            (
+                alias.length <= 30 &&
+                !alias.startsWith(".") &&
+                !alias.endsWith(".") &&
+                !alias.includes("..")
+            )
+        )
+    );
+}
+
+function normalizePhilippinePhone(value) {
+    return String(value || "")
+        .trim()
+        .replace(/[\s()-]/g, "");
+}
 
 // =====================================
 // GUEST TIMER TEST MODE
@@ -175,15 +330,7 @@ app.use(
         const origin =
             req.get("Origin");
 
-        const isVercelPreviewOrigin =
-            /^https:\/\/anchor-gym-system-[a-z0-9]+-brunheart\.vercel\.app$/.test(
-                origin || ""
-            );
-
-        if (
-            origin === frontendOrigin ||
-            isVercelPreviewOrigin
-        ) {
+        if (isAllowedFrontendOrigin(origin)) {
             res.setHeader(
                 "Access-Control-Allow-Origin",
                 origin
@@ -200,7 +347,7 @@ app.use(
         );
         res.setHeader(
             "Access-Control-Allow-Headers",
-            "Content-Type,Authorization"
+            "Content-Type,Authorization,X-Requested-With"
         );
 
         if (req.method === "OPTIONS") {
@@ -554,129 +701,765 @@ app.delete(
 // SIGN UP
 // =====================================
 
-app.post(
-    "/api/signup",
-    async (req, res) => {
+async function createSignupVerification(
+    req,
+    res,
+    resendOnly
+) {
+    try {
+        await ensureEmailVerificationTable();
 
-        try {
+        const email =
+            normalizeSignupEmail(
+                req.body.email
+            );
 
+        if (!isValidGmailAddress(email)) {
+            return res.status(400).json({
+                success: false,
+                message: "Please enter a valid Gmail address that can receive the verification code."
+            });
+        }
+
+        const existingUser =
+            await pool.query(
+                `
+                SELECT id
+                FROM users
+                WHERE LOWER(email) = $1
+                `,
+                [email]
+            );
+
+        if (existingUser.rows.length > 0) {
+            return res.status(409).json({
+                success: false,
+                message: "An account with this email already exists."
+            });
+        }
+
+        const pendingResult =
+            await pool.query(
+                `
+                SELECT
+                    email,
+                    full_name,
+                    phone,
+                    password_hash,
+                    created_at
+                FROM signup_email_verifications
+                WHERE email = $1
+                `,
+                [email]
+            );
+
+        let signup;
+
+        if (resendOnly) {
+            if (pendingResult.rows.length === 0) {
+                return res.status(404).json({
+                    success: false,
+                    message: "No pending signup was found. Please create your account again."
+                });
+            }
+
+            signup =
+                pendingResult.rows[0];
+
+            const lastSentAt =
+                new Date(signup.created_at).getTime();
+
+            if (Date.now() - lastSentAt < 60 * 1000) {
+                return res.status(429).json({
+                    success: false,
+                    message: "Please wait one minute before requesting another code."
+                });
+            }
+        } else {
             const {
                 fullName,
                 full_name,
-                email,
                 password,
                 phone
             } = req.body;
 
             const finalFullName =
-                fullName ||
-                full_name;
+                String(fullName || full_name || "").trim();
+
+            const normalizedPhone =
+                normalizePhilippinePhone(phone);
 
             if (
                 !finalFullName ||
-                !email ||
                 !password ||
-                !phone
+                !normalizedPhone
             ) {
-
-                return res.status(
-                    400
-                ).json({
-                    success:
-                        false,
-
-                    message:
-                        "Please complete all required fields."
+                return res.status(400).json({
+                    success: false,
+                    message: "Please complete all required fields."
                 });
-
             }
 
-            const normalizedEmail =
-                String(
-                    email
-                )
-                    .trim()
-                    .toLowerCase();
-
-            if (
-                !/^[^\s@]+@gmail\.com$/.test(
-                    normalizedEmail
-                )
-            ) {
-
-                return res.status(
-                    400
-                ).json({
-                    success:
-                        false,
-
-                    message:
-                        "Please use a valid Gmail address ending in @gmail.com."
+            if (!/^09\d{9}$/.test(normalizedPhone)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Please enter a valid 11-digit Philippine mobile number starting with 09."
                 });
-
             }
 
-            const normalizedPhone =
-                String(
-                    phone
+            if (String(password).length < 6) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Password must be at least 6 characters."
+                });
+            }
+
+            if (pendingResult.rows.length > 0) {
+                const lastSentAt =
+                    new Date(
+                        pendingResult.rows[0].created_at
+                    ).getTime();
+
+                if (Date.now() - lastSentAt < 60 * 1000) {
+                    return res.status(429).json({
+                        success: false,
+                        message: "A verification code was already sent. Please wait one minute before trying again."
+                    });
+                }
+            }
+
+            signup = {
+                email: email,
+                full_name: finalFullName,
+                phone: normalizedPhone,
+                password_hash: await bcrypt.hash(
+                    String(password),
+                    10
                 )
-                    .trim()
-                    .replace(/[\s()-]/g, "");
+            };
+        }
+
+        const code =
+            String(
+                crypto.randomInt(0, 1000000)
+            ).padStart(6, "0");
+
+        const codeHash =
+            await bcrypt.hash(code, 10);
+
+        await pool.query(
+            `
+            INSERT INTO signup_email_verifications
+            (
+                email,
+                full_name,
+                phone,
+                password_hash,
+                code_hash,
+                expires_at,
+                attempts,
+                created_at
+            )
+            VALUES
+            (
+                $1,
+                $2,
+                $3,
+                $4,
+                $5,
+                CURRENT_TIMESTAMP + INTERVAL '10 minutes',
+                0,
+                CURRENT_TIMESTAMP
+            )
+            ON CONFLICT (email)
+            DO UPDATE SET
+                full_name = EXCLUDED.full_name,
+                phone = EXCLUDED.phone,
+                password_hash = EXCLUDED.password_hash,
+                code_hash = EXCLUDED.code_hash,
+                expires_at = EXCLUDED.expires_at,
+                attempts = 0,
+                created_at = CURRENT_TIMESTAMP
+            `,
+            [
+                signup.email || email,
+                signup.full_name,
+                signup.phone,
+                signup.password_hash,
+                codeHash
+            ]
+        );
+
+        try {
+            await sendSignupVerificationCode(
+                email,
+                code
+            );
+        } catch (error) {
+            await pool.query(
+                `
+                UPDATE signup_email_verifications
+                SET created_at =
+                    CURRENT_TIMESTAMP - INTERVAL '1 minute'
+                WHERE email = $1
+                `,
+                [email]
+            );
+            throw error;
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: `A verification code was sent to ${email}.`
+        });
+    } catch (error) {
+        console.error(
+            "Signup email verification error:",
+            error
+        );
+
+        return res.status(
+            error.statusCode || 500
+        ).json({
+            success: false,
+            message:
+                error.statusCode === 503
+                    ? error.message
+                    : "Unable to send the verification code. Please try again later."
+        });
+    }
+}
+
+app.post(
+    "/api/signup",
+    async (req, res) => {
+        await createSignupVerification(
+            req,
+            res,
+            false
+        );
+    }
+);
+
+app.post(
+    "/api/signup/resend",
+    async (req, res) => {
+        await createSignupVerification(
+            req,
+            res,
+            true
+        );
+    }
+);
+
+app.post(
+    "/api/signup/verify",
+    async (req, res) => {
+        const email =
+            normalizeSignupEmail(
+                req.body.email
+            );
+
+        const code =
+            String(req.body.code || "").trim();
+
+        if (
+            !isValidGmailAddress(email) ||
+            !/^\d{6}$/.test(code)
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Enter the six-digit code sent to your Gmail address."
+            });
+        }
+
+        let client;
+
+        try {
+            await ensureEmailVerificationTable();
+
+            client =
+                await pool.connect();
+
+            await client.query("BEGIN");
+
+            const pendingResult =
+                await client.query(
+                    `
+                    SELECT
+                        email,
+                        full_name,
+                        phone,
+                        password_hash,
+                        code_hash,
+                        expires_at,
+                        attempts
+                    FROM signup_email_verifications
+                    WHERE email = $1
+                    FOR UPDATE
+                    `,
+                    [email]
+                );
+
+            if (pendingResult.rows.length === 0) {
+                await client.query("ROLLBACK");
+                return res.status(404).json({
+                    success: false,
+                    message: "No pending signup was found. Please request a new verification code."
+                });
+            }
+
+            const pending =
+                pendingResult.rows[0];
 
             if (
-                !/^09\d{9}$/.test(
-                    normalizedPhone
-                )
+                new Date(pending.expires_at).getTime() <=
+                Date.now()
             ) {
+                await client.query(
+                    "DELETE FROM signup_email_verifications WHERE email = $1",
+                    [email]
+                );
+                await client.query("COMMIT");
 
-                return res.status(
-                    400
-                ).json({
-                    success:
-                        false,
+                return res.status(410).json({
+                    success: false,
+                    message: "The verification code expired. Please create your account again."
+                });
+            }
 
-                    message:
-                        "Please enter a valid 11-digit Philippine mobile number starting with 09."
+            if (Number(pending.attempts) >= 5) {
+                await client.query("ROLLBACK");
+
+                return res.status(429).json({
+                    success: false,
+                    message: "Too many incorrect codes. Wait one minute, then resend the verification code."
+                });
+            }
+
+            const codeMatches =
+                await bcrypt.compare(
+                    code,
+                    pending.code_hash
+                );
+
+            if (!codeMatches) {
+                const nextAttempts =
+                    Number(pending.attempts) + 1;
+
+                if (nextAttempts >= 5) {
+                    await client.query(
+                        `
+                        UPDATE signup_email_verifications
+                        SET attempts = $2
+                        WHERE email = $1
+                        `,
+                        [email, nextAttempts]
+                    );
+                    await client.query("COMMIT");
+
+                    return res.status(429).json({
+                        success: false,
+                        message: "Too many incorrect codes. Wait one minute, then resend the verification code."
+                    });
+                }
+
+                await client.query(
+                    `
+                    UPDATE signup_email_verifications
+                    SET attempts = $2
+                    WHERE email = $1
+                    `,
+                    [email, nextAttempts]
+                );
+                await client.query("COMMIT");
+
+                return res.status(400).json({
+                    success: false,
+                    message: "That verification code is incorrect."
+                });
+            }
+
+            const userResult =
+                await client.query(
+                    `
+                    INSERT INTO users
+                    (
+                        full_name,
+                        email,
+                        password,
+                        phone,
+                        role
+                    )
+                    VALUES
+                    (
+                        $1,
+                        $2,
+                        $3,
+                        $4,
+                        'customer'
+                    )
+                    RETURNING
+                        id,
+                        full_name,
+                        email,
+                        phone,
+                        role,
+                        created_at
+                    `,
+                    [
+                        pending.full_name,
+                        email,
+                        pending.password_hash,
+                        pending.phone
+                    ]
+                );
+
+            await client.query(
+                "DELETE FROM signup_email_verifications WHERE email = $1",
+                [email]
+            );
+
+            await client.query("COMMIT");
+
+            return res.status(201).json({
+                success: true,
+                message: "Email verified and account created.",
+                user: userResult.rows[0]
+            });
+        } catch (error) {
+            if (client) {
+                try {
+                    await client.query("ROLLBACK");
+                } catch (rollbackError) {
+                    console.error(
+                        "Signup verification rollback error:",
+                        rollbackError
+                    );
+                }
+            }
+
+            console.error(
+                "Signup email verification confirmation error:",
+                error
+            );
+
+            return res.status(500).json({
+                success: false,
+                message: "Unable to verify your email and create the account."
+            });
+        } finally {
+            if (client) {
+                client.release();
+            }
+        }
+    }
+);
+
+app.get(
+    "/api/auth/config",
+    (req, res) => {
+        res.setHeader(
+            "Cache-Control",
+            "no-store"
+        );
+
+        res.json({
+            success: true,
+            googleClientId:
+                process.env.GOOGLE_CLIENT_ID || null,
+            googleEnabled: Boolean(
+                process.env.GOOGLE_CLIENT_ID &&
+                process.env.GOOGLE_CLIENT_SECRET
+            ),
+            message:
+                process.env.GOOGLE_CLIENT_ID &&
+                process.env.GOOGLE_CLIENT_SECRET
+                    ? undefined
+                    : "Google sign-in is not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET on the backend."
+        });
+    }
+);
+
+app.post(
+    "/api/auth/google/code",
+    async (req, res) => {
+        const origin =
+            req.get("Origin");
+
+        if (
+            req.get("X-Requested-With") !== "XmlHttpRequest" ||
+            !isAllowedFrontendOrigin(origin)
+        ) {
+            return res.status(403).json({
+                success: false,
+                message: "Google sign-in request origin could not be verified."
+            });
+        }
+
+        const {
+            GOOGLE_CLIENT_ID: clientId,
+            GOOGLE_CLIENT_SECRET: clientSecret
+        } = process.env;
+
+        if (!clientId || !clientSecret) {
+            return res.status(503).json({
+                success: false,
+                message: "Google sign-in is not configured on the backend."
+            });
+        }
+
+        const code =
+            String(req.body.code || "");
+
+        if (!code) {
+            return res.status(400).json({
+                success: false,
+                message: "Google did not provide an authorization code."
+            });
+        }
+
+        try {
+            const oauthClient =
+                new OAuth2Client(
+                    clientId,
+                    clientSecret
+                );
+
+            const { tokens } =
+                await oauthClient.getToken({
+                    code: code,
+                    redirect_uri: origin
                 });
 
+            if (!tokens.id_token) {
+                return res.status(401).json({
+                    success: false,
+                    message: "Google did not return a verified account token."
+                });
+            }
+
+            const ticket =
+                await oauthClient.verifyIdToken({
+                    idToken: tokens.id_token,
+                    audience: clientId
+                });
+
+            const profile =
+                ticket.getPayload();
+
+            if (
+                !profile ||
+                profile.email_verified !== true ||
+                !profile.email
+            ) {
+                return res.status(401).json({
+                    success: false,
+                    message: "Google did not verify this email address."
+                });
+            }
+
+            const email =
+                normalizeSignupEmail(profile.email);
+
+            if (!isValidGmailAddress(email)) {
+                return res.status(403).json({
+                    success: false,
+                    message: "Please use a verified Gmail account."
+                });
             }
 
             const existingUser =
                 await pool.query(
                     `
-                    SELECT id
+                    SELECT
+                        id,
+                        full_name,
+                        email,
+                        phone,
+                        role,
+                        created_at
                     FROM users
                     WHERE LOWER(email) = $1
                     `,
-                    [
-                        normalizedEmail
-                    ]
+                    [email]
                 );
 
-            if (
-                existingUser.rows.length >
-                0
-            ) {
+            if (existingUser.rows.length > 0) {
+                const user =
+                    existingUser.rows[0];
 
-                return res.status(
-                    400
-                ).json({
-                    success:
-                        false,
+                if (
+                    String(user.role).toLowerCase() !==
+                    "customer"
+                ) {
+                    return res.status(403).json({
+                        success: false,
+                        message: "This login is for customer accounts only."
+                    });
+                }
 
-                    message:
-                        "An account with this email already exists."
+                return res.json({
+                    success: true,
+                    message: "Google sign-in successful.",
+                    user: user
                 });
-
             }
 
-            const hashedPassword =
+            return res.json({
+                success: true,
+                requires_phone: true,
+                id_token: tokens.id_token
+            });
+        } catch (error) {
+            console.error(
+                "Google authorization code exchange error:",
+                error
+            );
+
+            return res.status(401).json({
+                success: false,
+                message: "Unable to verify the Google sign-in. Please try again."
+            });
+        }
+    }
+);
+
+app.post(
+    "/api/auth/google",
+    async (req, res) => {
+        const clientId =
+            process.env.GOOGLE_CLIENT_ID;
+
+        if (!clientId) {
+            return res.status(503).json({
+                success: false,
+                message: "Google sign-in is not configured on the backend."
+            });
+        }
+
+        const idToken =
+            String(req.body.id_token || "");
+
+        if (!idToken) {
+            return res.status(400).json({
+                success: false,
+                message: "Google did not provide an ID token."
+            });
+        }
+
+        let profile;
+
+        try {
+            const ticket =
+                await googleOAuthClient.verifyIdToken({
+                    idToken: idToken,
+                    audience: clientId
+                });
+
+            profile =
+                ticket.getPayload();
+        } catch (error) {
+            console.error(
+                "Google ID token verification error:",
+                error
+            );
+
+            return res.status(401).json({
+                success: false,
+                message: "Unable to verify the Google sign-in. Please try again."
+            });
+        }
+
+        if (
+            !profile ||
+            profile.email_verified !== true ||
+            !profile.email
+        ) {
+            return res.status(401).json({
+                success: false,
+                message: "Google did not verify this email address."
+            });
+        }
+
+        const email =
+            normalizeSignupEmail(profile.email);
+
+        if (!isValidGmailAddress(email)) {
+            return res.status(403).json({
+                success: false,
+                message: "Please use a verified Gmail account."
+            });
+        }
+
+        try {
+            const existingUser =
+                await pool.query(
+                    `
+                    SELECT
+                        id,
+                        full_name,
+                        email,
+                        phone,
+                        role,
+                        created_at
+                    FROM users
+                    WHERE LOWER(email) = $1
+                    `,
+                    [email]
+                );
+
+            if (existingUser.rows.length > 0) {
+                const user =
+                    existingUser.rows[0];
+
+                if (
+                    String(user.role).toLowerCase() !==
+                    "customer"
+                ) {
+                    return res.status(403).json({
+                        success: false,
+                        message: "This login is for customer accounts only."
+                    });
+                }
+
+                return res.json({
+                    success: true,
+                    message: "Google sign-in successful.",
+                    user: user
+                });
+            }
+
+            const phone =
+                normalizePhilippinePhone(
+                    req.body.phone
+                );
+
+            if (!phone) {
+                return res.json({
+                    success: true,
+                    requires_phone: true,
+                    id_token: idToken
+                });
+            }
+
+            if (!/^09\d{9}$/.test(phone)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Please enter a valid 11-digit Philippine mobile number starting with 09."
+                });
+            }
+
+            const randomPassword =
+                crypto.randomBytes(32).toString("hex");
+
+            const passwordHash =
                 await bcrypt.hash(
-                    password,
+                    randomPassword,
                     10
                 );
 
-            const result =
+            const userResult =
                 await pool.query(
                     `
                     INSERT INTO users
@@ -705,62 +1488,31 @@ app.post(
                     `,
                     [
                         String(
-                            finalFullName
+                            profile.name ||
+                            email.split("@")[0]
                         ).trim(),
-
-                        normalizedEmail,
-
-                        hashedPassword,
-
-                        String(
-                            normalizedPhone
-                        )
+                        email,
+                        passwordHash,
+                        phone
                     ]
                 );
 
-            res.status(
-                201
-            ).json({
-
-                success:
-                    true,
-
-                message:
-                    "Account created successfully.",
-
-                user:
-                    result.rows[0]
-
+            return res.status(201).json({
+                success: true,
+                message: "Google account created successfully.",
+                user: userResult.rows[0]
             });
-
         } catch (error) {
-
             console.error(
-                "Signup error:",
+                "Google account processing error:",
                 error
             );
 
-            res.status(
-                500
-            ).json({
-
-                success:
-                    false,
-
-                message:
-                    "Unable to create account.",
-
-                error:
-                    error.message,
-
-                code:
-                    error.code ||
-                    null
-
+            return res.status(500).json({
+                success: false,
+                message: "Unable to complete Google sign-in. Please try again."
             });
-
         }
-
     }
 );
 
