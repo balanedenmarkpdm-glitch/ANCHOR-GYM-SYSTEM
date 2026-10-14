@@ -1774,13 +1774,25 @@ async function loadMembers() {
                             </td>
 
                             <td>
-
-                                <button
-                                    class="remove-button"
-                                    type="button"
-                                    onclick="removeMember(${member.id})">Revoke
-                                </button>
-
+                                ${
+                                    getStatus(member.status) === "REVOKED"
+                                        ? `
+                                            <button
+                                                class="restore-button"
+                                                type="button"
+                                                onclick="restoreRevokedMember(${Number(member.id)})">
+                                                Restore
+                                            </button>
+                                        `
+                                        : `
+                                            <button
+                                                class="remove-button"
+                                                type="button"
+                                                onclick="revokeMember(${Number(member.id)})">
+                                                Revoke
+                                            </button>
+                                        `
+                                }
                             </td>
 
                         </tr>
@@ -1813,20 +1825,20 @@ async function loadMembers() {
 
 
 // =====================================
-// REMOVE MEMBER
+// REVOKE MEMBER
 // =====================================
 
-async function removeMember(
+async function revokeMember(
     memberId
 ) {
 
     const reason =
         await askForReason(
-            "Reason for Removing Member",
+            "Reason for Revoking Member",
             [
                 "Membership violation",
                 "Expired membership",
-                "Customer requested removal",
+                "Customer requested revocation",
                 "False or invalid information",
                 "Repeated rule violation",
                 "Payment issue",
@@ -1848,7 +1860,7 @@ async function removeMember(
 
     const confirmed =
         confirm(
-            `Are you sure you want to remove this member?\n\nReason: ${reason}`
+            `Are you sure you want to revoke this membership?\n\nReason: ${reason}`
         );
 
 
@@ -1863,34 +1875,27 @@ async function removeMember(
 
         const data =
             await apiRequest(
-                `/api/admin/members/${memberId}`,
+                `/api/admin/members/${memberId}/revoke`,
                 {
-                    method:
-                        "DELETE",
+                    method: "PATCH",
 
                     headers: {
-                        "Content-Type":
-                            "application/json"
+                        "Content-Type": "application/json"
                     },
 
-                    body:
-                        JSON.stringify({
-                            reason:
-                                reason
-                        })
+                    body: JSON.stringify({ reason })
                 }
             );
 
 
         alert(
             data.message ||
-            "Membership archived and removed successfully."
+            "Membership revoked successfully."
         );
 
 
         await Promise.all([
             loadMembers(),
-            loadArchivedMembers(),
             loadAdminDashboard(),
             loadTransactions(),
             loadAttendance(),
@@ -1900,17 +1905,39 @@ async function removeMember(
 
     } catch (error) {
 
-        console.error(
-            "Remove member error:",
-            error
-        );
+        console.error("Revoke member error:", error);
 
 
         alert(
             error.message ||
-            "Unable to archive membership."
+            "Unable to revoke membership."
         );
 
+    }
+
+}
+
+async function restoreRevokedMember(memberId) {
+
+    if (!confirm("Restore this revoked membership and resume its remaining days?")) {
+        return;
+    }
+
+    try {
+        const data = await apiRequest(
+            `/api/admin/members/${memberId}/restore`,
+            { method: "POST" }
+        );
+
+        alert(data.message || "Membership restored successfully.");
+        await Promise.all([
+            loadMembers(),
+            loadAdminDashboard(),
+            loadAttendance()
+        ]);
+    } catch (error) {
+        console.error("Restore revoked member error:", error);
+        alert(error.message || "Unable to restore membership.");
     }
 
 }
@@ -5245,7 +5272,9 @@ function getStatusClass(
 
     if (
         normalized ===
-        "SUSPENDED"
+        "SUSPENDED" ||
+        normalized ===
+        "REVOKED"
     ) {
 
         return "suspended";

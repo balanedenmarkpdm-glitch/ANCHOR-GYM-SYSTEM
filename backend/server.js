@@ -39,6 +39,23 @@ const pool = new Pool({
 
 let customerProfilePhotoColumnReady = false;
 let paymentScreenshotColumnReady = false;
+let pausedDaysRemainingColumnReady = false;
+
+async function ensurePausedDaysRemainingColumn() {
+    if (pausedDaysRemainingColumnReady) {
+        return;
+    }
+
+    await pool.query(
+        `
+        ALTER TABLE members
+        ADD COLUMN IF NOT EXISTS
+            paused_days_remaining INTEGER NOT NULL DEFAULT 0
+                CHECK (paused_days_remaining >= 0)
+        `
+    );
+    pausedDaysRemainingColumnReady = true;
+}
 
 async function ensureCustomerProfilePhotoColumn() {
     if (customerProfilePhotoColumnReady) {
@@ -243,7 +260,8 @@ function normalizePhilippinePhone(value) {
 // IMPORTANT:
 // Restart server.js after changing this value.
 //
-const GUEST_TIMER_TEST_MODE = true;
+const GUEST_TIMER_TEST_MODE =
+    process.env.GUEST_TIMER_TEST_MODE === "true";
 
 // =====================================
 // GUEST CLOSING SQL
@@ -3594,6 +3612,8 @@ app.get(
 
         try {
 
+            await ensurePausedDaysRemainingColumn();
+
             const result =
                 await pool.query(
                     `
@@ -3607,6 +3627,7 @@ app.get(
                         m.membership_plan,
                         m.start_date,
                         m.expiration_date,
+                        m.paused_days_remaining,
                         m.status
                     FROM members m
                     JOIN users u
@@ -3653,7 +3674,282 @@ app.get(
 );
 
 // =====================================
-// REMOVE MEMBER
+// REVOKE AND RESTORE MEMBERS
+// =====================================
+
+app.patch(
+    "/api/admin/members/:id/revoke",
+    async (req, res) => {
+
+        const client = await pool.connect();
+        let transactionStarted = false;
+
+        try {
+
+            const memberId = Number(req.params.id);
+            const reason = String(req.body?.reason || "").trim();
+
+            if (!Number.isSafeInteger(memberId) || memberId <= 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid member ID."
+                });
+            }
+
+            if (!reason) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Revocation reason is required."
+                });
+            }
+
+            await ensurePausedDaysRemainingColumn();
+            await client.query("BEGIN");
+            transactionStarted = true;
+
+            const memberResult = await client.query(
+                `
+                SELECT
+                    m.id,
+                    m.user_id,
+                    m.member_id,
+                    m.status,
+                    m.expiration_date,
+                    u.full_name
+                FROM members m
+                JOIN users u
+                    ON u.id = m.user_id
+                WHERE m.id = $1
+                FOR UPDATE OF m
+                `,
+                [memberId]
+            );
+
+            if (memberResult.rows.length === 0) {
+                await client.query("ROLLBACK");
+                transactionStarted = false;
+                return res.status(404).json({
+                    success: false,
+                    message: "Member not found."
+                });
+            }
+
+            const member = memberResult.rows[0];
+            if (String(member.status || "").trim().toUpperCase() === "REVOKED") {
+                await client.query("ROLLBACK");
+                transactionStarted = false;
+                return res.status(409).json({
+                    success: false,
+                    message: "This membership is already revoked."
+                });
+            }
+
+            const openAttendanceResult = await client.query(
+                `
+                SELECT id
+                FROM attendance
+                WHERE member_id = $1
+                  AND UPPER(user_type) = 'MEMBER'
+                  AND check_out IS NULL
+                LIMIT 1
+                FOR UPDATE
+                `,
+                [memberId]
+            );
+
+            if (openAttendanceResult.rows.length > 0) {
+                await client.query("ROLLBACK");
+                transactionStarted = false;
+                return res.status(409).json({
+                    success: false,
+                    message: "Check out the member before revoking the membership."
+                });
+            }
+
+            const revokeResult = await client.query(
+                `
+                UPDATE members
+                SET
+                    paused_days_remaining = GREATEST(
+                        COALESCE(
+                            expiration_date -
+                                (${GUEST_NOW_SQL})::date,
+                            0
+                        ),
+                        0
+                    ),
+                    status = 'REVOKED'
+                WHERE id = $1
+                RETURNING
+                    id,
+                    user_id,
+                    member_id,
+                    expiration_date,
+                    paused_days_remaining,
+                    status
+                `,
+                [memberId]
+            );
+
+            await createNotification(
+                client,
+                member.user_id,
+                "Membership Revoked",
+                `Your membership has been revoked. Reason: ${reason}`
+            );
+
+            await client.query("COMMIT");
+            transactionStarted = false;
+
+            return res.json({
+                success: true,
+                message: "Membership revoked. Remaining membership days have been paused.",
+                member: revokeResult.rows[0]
+            });
+
+        } catch (error) {
+
+            if (transactionStarted) {
+                try {
+                    await client.query("ROLLBACK");
+                } catch (rollbackError) {
+                    console.error("Rollback error:", rollbackError);
+                }
+            }
+
+            console.error("Revoke member error:", error);
+            return res.status(500).json({
+                success: false,
+                message: "Unable to revoke membership.",
+                error: error.message,
+                code: error.code || null,
+                detail: error.detail || null
+            });
+
+        } finally {
+            client.release();
+        }
+
+    }
+);
+
+app.post(
+    "/api/admin/members/:id/restore",
+    async (req, res) => {
+
+        const client = await pool.connect();
+        let transactionStarted = false;
+
+        try {
+
+            const memberId = Number(req.params.id);
+
+            if (!Number.isSafeInteger(memberId) || memberId <= 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid member ID."
+                });
+            }
+
+            await ensurePausedDaysRemainingColumn();
+            await client.query("BEGIN");
+            transactionStarted = true;
+
+            const memberResult = await client.query(
+                `
+                SELECT id, user_id, status
+                FROM members
+                WHERE id = $1
+                FOR UPDATE
+                `,
+                [memberId]
+            );
+
+            if (memberResult.rows.length === 0) {
+                await client.query("ROLLBACK");
+                transactionStarted = false;
+                return res.status(404).json({
+                    success: false,
+                    message: "Member not found."
+                });
+            }
+
+            const member = memberResult.rows[0];
+            if (String(member.status || "").trim().toUpperCase() !== "REVOKED") {
+                await client.query("ROLLBACK");
+                transactionStarted = false;
+                return res.status(409).json({
+                    success: false,
+                    message: "Only revoked memberships can be restored."
+                });
+            }
+
+            const restoreResult = await client.query(
+                `
+                UPDATE members
+                SET
+                    expiration_date =
+                        (${GUEST_NOW_SQL})::date +
+                        paused_days_remaining,
+                    paused_days_remaining = 0,
+                    status = 'ACTIVE'
+                WHERE id = $1
+                RETURNING
+                    id,
+                    user_id,
+                    member_id,
+                    start_date,
+                    expiration_date,
+                    paused_days_remaining,
+                    status
+                `,
+                [memberId]
+            );
+
+            await createNotification(
+                client,
+                member.user_id,
+                "Membership Restored",
+                "Your membership has been restored. Your remaining membership days are active again."
+            );
+
+            await client.query("COMMIT");
+            transactionStarted = false;
+
+            return res.json({
+                success: true,
+                message: "Membership restored successfully.",
+                member: restoreResult.rows[0]
+            });
+
+        } catch (error) {
+
+            if (transactionStarted) {
+                try {
+                    await client.query("ROLLBACK");
+                } catch (rollbackError) {
+                    console.error("Rollback error:", rollbackError);
+                }
+            }
+
+            console.error("Restore revoked membership error:", error);
+            return res.status(500).json({
+                success: false,
+                message: "Unable to restore membership.",
+                error: error.message,
+                code: error.code || null,
+                detail: error.detail || null
+            });
+
+        } finally {
+            client.release();
+        }
+
+    }
+);
+
+// =====================================
+// ARCHIVE MEMBER
 // =====================================
 
 app.delete(
@@ -5174,6 +5470,26 @@ app.post(
                     .trim()
                     .toUpperCase();
 
+            const openAttendanceResult =
+                await client.query(
+                    `
+                    SELECT
+                        id,
+                        check_in,
+                        check_out
+                    FROM attendance
+                    WHERE member_id = $1
+                      AND UPPER(user_type) = 'MEMBER'
+                      AND check_out IS NULL
+                    ORDER BY
+                        check_in DESC,
+                        id DESC
+                    LIMIT 1
+                    FOR UPDATE
+                    `,
+                    [member.id]
+                );
+
             const expiration =
                 member.expiration_date
                     ? new Date(
@@ -5207,7 +5523,8 @@ app.post(
                     expirationEnd.getTime()
                 ) &&
                 expirationEnd <
-                new Date()
+                new Date() &&
+                openAttendanceResult.rows.length === 0
             ) {
 
                 await client.query(
@@ -5244,7 +5561,8 @@ app.post(
 
             if (
                 status !==
-                "ACTIVE"
+                "ACTIVE" &&
+                openAttendanceResult.rows.length === 0
             ) {
 
                 await client.query(
@@ -5316,28 +5634,6 @@ app.post(
 
             }
 
-            const openAttendanceResult =
-                await client.query(
-                    `
-                    SELECT
-                        id,
-                        check_in,
-                        check_out
-                    FROM attendance
-                    WHERE member_id = $1
-                      AND UPPER(user_type) = 'MEMBER'
-                      AND check_out IS NULL
-                    ORDER BY
-                        check_in DESC,
-                        id DESC
-                    LIMIT 1
-                    FOR UPDATE
-                    `,
-                    [
-                        member.id
-                    ]
-                );
-
             let action;
 
             let attendance;
@@ -5356,7 +5652,7 @@ app.post(
                         UPDATE attendance
                         SET
                             check_out =
-                                CURRENT_TIMESTAMP
+                                ${GUEST_NOW_SQL}
                         WHERE id = $1
                         RETURNING
                             id,
@@ -5466,8 +5762,8 @@ app.post(
 
                 message:
                     action === "CHECKED_IN"
-                        ? `${member.full_name} checked in successfully.`
-                        : `${member.full_name} checked out successfully.`,
+                        ? "You checked in successfully."
+                        : "You checked out successfully.",
 
                 member: {
 
@@ -5564,6 +5860,236 @@ app.post(
 
             client.release();
 
+        }
+
+    }
+);
+
+app.post(
+    "/api/admin/attendance/manual",
+    async (req, res) => {
+
+        const client = await pool.connect();
+        let transactionStarted = false;
+
+        try {
+
+            const userId = Number(req.body?.user_id);
+            const action = String(req.body?.action || "")
+                .trim()
+                .toUpperCase()
+                .replace(/[\s-]+/g, "_");
+
+            if (!Number.isSafeInteger(userId) || userId <= 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: "A valid user_id is required."
+                });
+            }
+
+            if (action !== "CHECK_IN" && action !== "CHECK_OUT") {
+                return res.status(400).json({
+                    success: false,
+                    message: "Action must be CHECK_IN or CHECK_OUT."
+                });
+            }
+
+            await client.query("BEGIN");
+            transactionStarted = true;
+
+            const memberResult = await client.query(
+                `
+                SELECT
+                    m.id,
+                    m.user_id,
+                    m.member_id,
+                    m.status,
+                    m.expiration_date,
+                    u.full_name,
+                    (
+                        m.expiration_date IS NULL OR
+                        m.expiration_date >= (${GUEST_NOW_SQL})::date
+                    ) AS membership_unexpired
+                FROM members m
+                JOIN users u
+                    ON u.id = m.user_id
+                WHERE m.user_id = $1
+                ORDER BY m.id DESC
+                LIMIT 1
+                FOR UPDATE OF m
+                `,
+                [userId]
+            );
+
+            if (memberResult.rows.length === 0) {
+                await client.query("ROLLBACK");
+                transactionStarted = false;
+                return res.status(404).json({
+                    success: false,
+                    message: "No membership was found for this user."
+                });
+            }
+
+            const member = memberResult.rows[0];
+            const status = String(member.status || "").trim().toUpperCase();
+
+            const openAttendanceResult = await client.query(
+                `
+                SELECT id
+                FROM attendance
+                WHERE member_id = $1
+                  AND UPPER(user_type) = 'MEMBER'
+                  AND check_out IS NULL
+                ORDER BY check_in DESC, id DESC
+                LIMIT 1
+                FOR UPDATE
+                `,
+                [member.id]
+            );
+
+            let attendance;
+
+            if (action === "CHECK_IN") {
+                if (status !== "ACTIVE" || !member.membership_unexpired) {
+                    if (status === "ACTIVE" && !member.membership_unexpired) {
+                        await client.query(
+                            "UPDATE members SET status = 'EXPIRED' WHERE id = $1",
+                            [member.id]
+                        );
+                        await client.query("COMMIT");
+                        transactionStarted = false;
+                    } else {
+                        await client.query("ROLLBACK");
+                        transactionStarted = false;
+                    }
+
+                    return res.status(400).json({
+                        success: false,
+                        message: "This member does not have an active membership."
+                    });
+                }
+
+                if (openAttendanceResult.rows.length > 0) {
+                    await client.query("ROLLBACK");
+                    transactionStarted = false;
+                    return res.status(409).json({
+                        success: false,
+                        message: "This member is already checked in."
+                    });
+                }
+
+                const checkinResult = await client.query(
+                    `
+                    INSERT INTO attendance
+                        (member_id, user_type, check_in)
+                    VALUES
+                        ($1, 'MEMBER', ${GUEST_NOW_SQL})
+                    RETURNING
+                        id,
+                        member_id,
+                        guest_id,
+                        user_type,
+                        check_in,
+                        check_out
+                    `,
+                    [member.id]
+                );
+
+                attendance = checkinResult.rows[0];
+            } else {
+                if (openAttendanceResult.rows.length === 0) {
+                    await client.query("ROLLBACK");
+                    transactionStarted = false;
+                    return res.status(404).json({
+                        success: false,
+                        message: "This member has no open attendance session to check out."
+                    });
+                }
+
+                const checkoutResult = await client.query(
+                    `
+                    UPDATE attendance
+                    SET check_out = ${GUEST_NOW_SQL}
+                    WHERE id = $1
+                    RETURNING
+                        id,
+                        member_id,
+                        guest_id,
+                        user_type,
+                        check_in,
+                        check_out
+                    `,
+                    [openAttendanceResult.rows[0].id]
+                );
+
+                attendance = checkoutResult.rows[0];
+            }
+
+            const occupancyResult = await client.query(
+                `
+                SELECT
+                    COUNT(*) FILTER (
+                        WHERE UPPER(user_type) = 'MEMBER'
+                          AND check_out IS NULL
+                    )::int AS members_inside,
+                    COUNT(*) FILTER (
+                        WHERE UPPER(user_type) = 'GUEST'
+                          AND check_out IS NULL
+                    )::int AS guests_inside
+                FROM attendance
+                `
+            );
+
+            const membersInside = Number(
+                occupancyResult.rows[0].members_inside || 0
+            );
+            const guestsInside = Number(
+                occupancyResult.rows[0].guests_inside || 0
+            );
+
+            await client.query("COMMIT");
+            transactionStarted = false;
+
+            return res.json({
+                success: true,
+                action: action === "CHECK_IN" ? "CHECKED_IN" : "CHECKED_OUT",
+                message: action === "CHECK_IN"
+                    ? "You checked in successfully."
+                    : "You checked out successfully.",
+                member: {
+                    id: member.id,
+                    user_id: member.user_id,
+                    member_id: member.member_id,
+                    full_name: member.full_name
+                },
+                attendance,
+                membersInside,
+                guestsInside,
+                occupancy: membersInside + guestsInside,
+                capacity: 120
+            });
+
+        } catch (error) {
+
+            if (transactionStarted) {
+                try {
+                    await client.query("ROLLBACK");
+                } catch (rollbackError) {
+                    console.error("Rollback error:", rollbackError);
+                }
+            }
+
+            console.error("Manual attendance override error:", error);
+            return res.status(500).json({
+                success: false,
+                message: "Unable to apply the manual attendance override.",
+                error: error.message,
+                code: error.code || null,
+                detail: error.detail || null
+            });
+
+        } finally {
+            client.release();
         }
 
     }
