@@ -512,3 +512,1187 @@ textarea:focus-visible {
         transition: none;
     }
 }
+
+/* Gold dashboard and customer account surfaces; login pages remain unchanged. */
+:root[data-page="customer-dashboard"],
+:root[data-page="admin-dashboard"],
+:root[data-page="signup"],
+:root[data-page="forgot-password"] {
+    --color-background: #0b0d10;
+    --color-surface: #111418;
+    --color-surface-raised: #1a2029;
+    --color-card: #15191f;
+    --color-input: #1a2029;
+    --color-border: #353a43;
+    --color-secondary: #1a2029;
+    --color-text: #f8fafc;
+    --color-muted: #aab3c2;
+    --color-subtle: #aab3c2;
+    --color-placeholder: #aab3c2;
+    --color-primary: #f5c542;
+    --color-primary-hover: #ffd43b;
+    --color-primary-text: #171717;
+    --color-accent: #ffd43b;
+    --color-link: #f5c542;
+    --color-link-hover: #ffd43b;
+    --color-logo-danger: #f5c542;
+    --color-danger: #ef4444;
+    --color-danger-hover: #f87171;
+    --color-danger-text: #171717;
+    --color-success: #22c55e;
+    --color-warning: #f59e0b;
+    --color-info: #60a5fa;
+    --color-warning-bg: #1a2029;
+    --color-warning-border: #f5c542;
+    --color-warning-text: #f5c542;
+    color-scheme: dark;
+}
+
+:root[data-theme="light"][data-page="customer-dashboard"],
+:root[data-theme="light"][data-page="admin-dashboard"],
+:root[data-theme="light"][data-page="signup"],
+:root[data-theme="light"][data-page="forgot-password"] {
+    --color-background: #f3f4f6;
+    --color-surface: #e9edf2;
+    --color-surface-raised: #f8fafc;
+    --color-card: #ffffff;
+    --color-input: #ffffff;
+    --color-border: #cbd2dc;
+    --color-secondary: #e9edf2;
+    --color-text: #171a20;
+    --color-muted: #4b5563;
+    --color-subtle: #596273;
+    --color-placeholder: #647084;
+    --color-primary: #f5c542;
+    --color-primary-hover: #ffd43b;
+    --color-primary-text: #171717;
+    --color-accent: #9a6b00;
+    --color-link: #815600;
+    --color-link-hover: #704900;
+    --color-logo-danger: #b88708;
+    --color-danger: #b91c1c;
+    --color-danger-hover: #991b1b;
+    --color-danger-text: #ffffff;
+    --color-success: #15803d;
+    --color-warning: #92400e;
+    --color-info: #1d4ed8;
+    --color-warning-bg: #fff8e6;
+    --color-warning-border: #b88708;
+    --color-warning-text: #704900;
+    --color-revoked-text: #704900;
+    color-scheme: light;
+}
+
+:root[data-theme="original"][data-page="customer-dashboard"],
+:root[data-theme="original"][data-page="admin-dashboard"] {
+    --color-card: var(--color-surface-raised);
+    --color-input: var(--color-surface-raised);
+    --color-primary-text: #ffffff;
+    --color-link: var(--color-primary);
+    --color-link-hover: var(--color-accent);
+    --color-danger: #ff0000;
+    --color-danger-hover: #cc0000;
+    --color-danger-text: #ffffff;
+}
+
+:root[data-theme="original"][data-page="signup"],
+:root[data-theme="original"][data-page="forgot-password"] {
+    --color-card: var(--color-surface-raised);
+    --color-input: var(--color-surface-raised);
+    --color-primary-text: #ffffff;
+    --color-link: var(--color-primary);
+    --color-link-hover: var(--color-accent);
+    --color-danger: #ff0000;
+    --color-danger-hover: #cc0000;
+    --color-danger-text: #ffffff;
+}
+
+:root[data-page="customer-dashboard"] body,
+:root[data-page="admin-dashboard"] body,
+:root[data-page="signup"] body,
+:root[data-page="forgot-password"] body {
+    background: var(--color-background);
+    color: var(--color-text);
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .layout,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .main,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .content {
+    min-width: 0;
+    background: transparent;
+    color: var(--color-text);
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .sidebar,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .topbar {
+    background: var(--color-surface);
+    border-color: var(--color-border);
+    color: var(--color-text);
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .brand {
+    background: var(--color-surface);
+    border-color: var(--color-border);
+    color: var(--color-text);
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .brand b,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .brand strong {
+    color: var(--color-text);
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .brand small {
+    color: var(--color-primary);
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .logo {
+    border-color: var(--color-logo-danger);
+    color: var(--color-logo-danger);
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .sidebar nav button,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .sidebar .logout button {
+    min-height: 46px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--color-muted);
+    text-align: left;
+    transition: background-color .16s ease, color .16s ease;
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .sidebar nav button:hover,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .sidebar .logout button:hover {
+    background: var(--color-surface-raised);
+    color: var(--color-text);
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .sidebar nav button.active {
+    position: relative;
+    background: rgba(245, 197, 66, .13);
+    color: var(--color-primary);
+    font-weight: 700;
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .sidebar nav button.active::before {
+    position: absolute;
+    top: 8px;
+    bottom: 8px;
+    left: 0;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: var(--color-primary);
+    content: "";
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .sidebar nav button span,
+:root[data-page="customer-dashboard"] .topbar-notifications span {
+    background: var(--color-primary);
+    color: var(--color-primary-text);
+    font-weight: 700;
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .logout,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .topbar {
+    border-color: var(--color-border);
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .topbar-profile,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .admin-user {
+    color: var(--color-text);
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .avatar {
+    background: var(--color-secondary);
+    color: var(--color-text);
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) h1,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) h2,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) h3,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) h4,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) th,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) td,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) strong,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .metric {
+    color: var(--color-text);
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) p,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) small,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .subtitle,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .description,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .helper-text,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .table-toolbar,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .occupancy-info,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .pending-row small,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .legend div,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .countdown-note,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .notification-toolbar,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .notification-select,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .notification p {
+    color: var(--color-subtle);
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .card,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .surface,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .form,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .report,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .modal-content,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .reason-modal,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .dropdown-menu,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .menu-panel {
+    min-width: 0;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    background: var(--color-card);
+    color: var(--color-text);
+    box-shadow: none;
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .card-header,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .notification,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .pending-row,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) th,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) td {
+    border-color: var(--color-border);
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .card-header h3 {
+    color: var(--color-text);
+    font-size: 14px;
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .stat p {
+    font-size: 12px;
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .stat small,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .pending-row small,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .legend div,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .occupancy-info {
+    font-size: 11px;
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .notification b,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .notification p,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .table-toolbar {
+    font-size: 12px;
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .stat strong,
+:root[data-page="customer-dashboard"] .detail-card h2,
+:root[data-page="admin-dashboard"] .occupancy > strong {
+    color: var(--color-primary);
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .progress,
+:root[data-page="admin-dashboard"] .bar {
+    background: var(--color-surface-raised);
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) input:not([type="checkbox"]):not([type="radio"]),
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) select,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) textarea,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .theme-toggle {
+    color: var(--color-text);
+    background-color: var(--color-input);
+    border-color: var(--color-border);
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) input::placeholder,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) textarea::placeholder {
+    color: var(--color-placeholder);
+    opacity: 1;
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) input:focus,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) select:focus,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) textarea:focus,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .table-toolbar input[type="search"]:focus {
+    border-color: var(--color-accent);
+    outline-color: var(--color-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 18%, transparent);
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .theme-toggle {
+    border-radius: 8px;
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .button.red:not(#deleteSelectedNotificationsButton),
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .red-button,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .main-btn,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .approve,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .restore-button,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .pending-row button.approve,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) button[type="submit"],
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .action-button {
+    border: 1px solid var(--color-primary);
+    background: var(--color-primary);
+    color: var(--color-primary-text);
+    font-weight: 700;
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .button.red:not(#deleteSelectedNotificationsButton):hover,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .red-button:hover,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .main-btn:hover,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .approve:hover,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .restore-button:hover,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) button[type="submit"]:hover,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .action-button:hover {
+    border-color: var(--color-primary-hover);
+    background: var(--color-primary-hover);
+    color: var(--color-primary-text);
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .button:not(.red),
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .small-btn,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .password-visibility-toggle {
+    border: 1px solid var(--color-border);
+    background: var(--color-surface-raised);
+    color: var(--color-text);
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .button:not(.red):hover,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .small-btn:hover,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .password-visibility-toggle:hover {
+    border-color: var(--color-primary);
+    background: var(--color-secondary);
+    color: var(--color-primary);
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .remove-button,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .reject,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .delete-button,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .danger-button,
+:root[data-page="customer-dashboard"] #deleteSelectedNotificationsButton {
+    border-color: var(--color-danger);
+    background: var(--color-danger);
+    color: var(--color-danger-text);
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .remove-button:hover,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .reject:hover,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .delete-button:hover,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .danger-button:hover,
+:root[data-page="customer-dashboard"] #deleteSelectedNotificationsButton:hover {
+    border-color: var(--color-danger-hover);
+    background: var(--color-danger-hover);
+    color: var(--color-danger-text);
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) button:disabled {
+    cursor: not-allowed;
+    opacity: .55;
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) a {
+    color: var(--color-link);
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) a:hover {
+    color: var(--color-link-hover);
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .warning,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .info-box {
+    border: 1px solid var(--color-border);
+    border-left: 4px solid var(--color-warning-border);
+    border-radius: 8px;
+    background: var(--color-warning-bg);
+    color: var(--color-warning-text);
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .warning *,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .info-box * {
+    color: inherit;
+}
+
+:root[data-page="customer-dashboard"] .success-box {
+    border-color: color-mix(in srgb, var(--color-success) 45%, var(--color-border));
+    background: color-mix(in srgb, var(--color-success) 12%, var(--color-card));
+    color: var(--color-success);
+}
+
+:root[data-page="customer-dashboard"] .status:not(.revoked),
+:root[data-page="admin-dashboard"] .approved {
+    border-color: color-mix(in srgb, var(--color-success) 45%, transparent);
+    background: color-mix(in srgb, var(--color-success) 14%, var(--color-card));
+    color: var(--color-success);
+}
+
+:root[data-page="admin-dashboard"] .pending {
+    background: color-mix(in srgb, var(--color-warning) 16%, var(--color-card));
+    color: var(--color-warning);
+}
+
+:root[data-page="admin-dashboard"] .rejected,
+:root[data-page="admin-dashboard"] .timed-out-label {
+    background: color-mix(in srgb, var(--color-danger) 16%, var(--color-card));
+    color: var(--color-danger);
+}
+
+:root[data-page="admin-dashboard"] .normal {
+    background: color-mix(in srgb, var(--color-info) 16%, var(--color-card));
+    color: var(--color-info);
+}
+
+:root[data-page="admin-dashboard"] .guest {
+    background: var(--color-surface-raised);
+    color: var(--color-muted);
+}
+
+:root[data-page="admin-dashboard"] .reason-modal-overlay {
+    background: rgba(4, 6, 9, .72);
+    backdrop-filter: blur(3px);
+}
+
+:root[data-page="admin-dashboard"] .reason-modal {
+    border: 1px solid var(--color-border);
+    border-radius: 14px;
+    background: var(--color-card);
+    color: var(--color-text);
+    box-shadow: 0 22px 56px rgba(0, 0, 0, .38);
+}
+
+:root[data-page="admin-dashboard"] .reason-modal h3 {
+    color: var(--color-text);
+}
+
+:root[data-page="admin-dashboard"] .reason-modal select,
+:root[data-page="admin-dashboard"] .reason-modal textarea {
+    border-color: var(--color-border);
+    background: var(--color-input);
+    color: var(--color-text);
+}
+
+:root[data-page="admin-dashboard"] .reason-modal select:focus,
+:root[data-page="admin-dashboard"] .reason-modal textarea:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(245, 197, 66, .16);
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .card:has(table) {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) table {
+    min-width: 600px;
+    border-collapse: collapse;
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) th {
+    background: var(--color-surface);
+    color: var(--color-muted);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .035em;
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) td {
+    color: var(--color-text);
+    font-size: 12px;
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) tbody tr:hover {
+    background: color-mix(in srgb, var(--color-primary) 5%, var(--color-card));
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) button:focus-visible,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) a:focus-visible,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) input:focus-visible,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) select:focus-visible,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) textarea:focus-visible {
+    outline: 3px solid var(--color-accent);
+    outline-offset: 2px;
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) #qr-reader button {
+    background: var(--color-primary) !important;
+    color: var(--color-primary-text) !important;
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) #qr-reader__dashboard_section_swaplink {
+    color: var(--color-primary) !important;
+}
+
+:root:is(
+    [data-page="signup"],
+    [data-page="forgot-password"]
+) .center-page {
+    align-items: safe center;
+    background: var(--color-background);
+}
+
+:root:is(
+    [data-page="signup"],
+    [data-page="forgot-password"]
+) .auth-card {
+    width: min(100%, 520px);
+    padding: clamp(24px, 5vw, 38px);
+    border: 1px solid var(--color-border);
+    border-radius: 14px;
+    background: var(--color-card);
+    color: var(--color-text);
+    box-shadow: 0 18px 44px rgba(0, 0, 0, .2);
+}
+
+:root[data-page="signup"] .signup-card {
+    width: min(100%, 560px);
+    margin-block: 0;
+}
+
+:root:is(
+    [data-page="signup"],
+    [data-page="forgot-password"]
+) .auth-card > .logo {
+    display: grid;
+    width: 48px;
+    height: 48px;
+    place-items: center;
+    border: 2px solid var(--color-primary);
+    border-radius: 8px;
+    color: var(--color-primary);
+    font-size: 23px;
+    font-weight: 750;
+}
+
+:root:is(
+    [data-page="signup"],
+    [data-page="forgot-password"]
+) .auth-card h2 {
+    color: var(--color-text);
+    font-size: 28px;
+    letter-spacing: -.5px;
+}
+
+:root:is(
+    [data-page="signup"],
+    [data-page="forgot-password"]
+) .auth-card .subtitle {
+    color: var(--color-muted);
+    font-size: 14px;
+}
+
+:root:is(
+    [data-page="signup"],
+    [data-page="forgot-password"]
+) .auth-card label {
+    color: var(--color-muted);
+    font-size: 11px;
+    letter-spacing: .045em;
+}
+
+:root:is(
+    [data-page="signup"],
+    [data-page="forgot-password"]
+) .auth-card input:not([type="checkbox"]):not([type="radio"]) {
+    min-height: 48px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: var(--color-input);
+    color: var(--color-text);
+}
+
+:root:is(
+    [data-page="signup"],
+    [data-page="forgot-password"]
+) .auth-card input::placeholder {
+    color: var(--color-placeholder);
+    opacity: 1;
+}
+
+:root:is(
+    [data-page="signup"],
+    [data-page="forgot-password"]
+) .auth-card input:focus {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 18%, transparent);
+}
+
+:root:is(
+    [data-page="signup"],
+    [data-page="forgot-password"]
+) .auth-card .password-box {
+    gap: 8px;
+}
+
+:root:is(
+    [data-page="signup"],
+    [data-page="forgot-password"]
+) .auth-card .password-box button {
+    min-width: 66px;
+    min-height: 48px;
+    margin-bottom: 15px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: var(--color-surface-raised);
+    color: var(--color-text);
+    font-size: 12px;
+}
+
+:root:is(
+    [data-page="signup"],
+    [data-page="forgot-password"]
+) .auth-card .password-box button:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
+:root:is(
+    [data-page="signup"],
+    [data-page="forgot-password"]
+) .auth-card .main-btn,
+:root:is(
+    [data-page="signup"],
+    [data-page="forgot-password"]
+) .auth-card button[type="submit"] {
+    min-height: 50px;
+    border: 1px solid var(--color-primary);
+    border-radius: 8px;
+    background: var(--color-primary);
+    color: var(--color-primary-text);
+    font-size: 14px;
+    font-weight: 750;
+    transition: background-color .16s ease, transform .16s ease;
+}
+
+:root:is(
+    [data-page="signup"],
+    [data-page="forgot-password"]
+) .auth-card .main-btn:hover,
+:root:is(
+    [data-page="signup"],
+    [data-page="forgot-password"]
+) .auth-card button[type="submit"]:hover {
+    border-color: var(--color-primary-hover);
+    background: var(--color-primary-hover);
+    color: var(--color-primary-text);
+    transform: translateY(-1px);
+}
+
+:root:is(
+    [data-page="signup"],
+    [data-page="forgot-password"]
+) .auth-card .remember {
+    align-items: center;
+    color: var(--color-muted);
+    font-size: 13px;
+}
+
+:root:is(
+    [data-page="signup"],
+    [data-page="forgot-password"]
+) .auth-card input[type="checkbox"] {
+    accent-color: var(--color-primary);
+}
+
+:root:is(
+    [data-page="signup"],
+    [data-page="forgot-password"]
+) .auth-card .bottom-text {
+    color: var(--color-muted);
+    font-size: 13px;
+}
+
+:root:is(
+    [data-page="signup"],
+    [data-page="forgot-password"]
+) .auth-card .bottom-text a {
+    color: var(--color-link);
+}
+
+:root[data-page="signup"] .info-box {
+    border: 1px solid var(--color-border);
+    border-left: 4px solid var(--color-warning-border);
+    border-radius: 8px;
+    background: var(--color-warning-bg);
+    color: var(--color-warning-text);
+    font-size: 12px;
+}
+
+:root[data-page="signup"] #signupMessage {
+    color: var(--color-muted);
+    font-size: 13px;
+}
+
+:root[data-page="signup"] .password-strength-heading,
+:root[data-page="signup"] .password-strength-heading strong,
+:root[data-page="signup"] .password-strength p {
+    color: var(--color-muted);
+}
+
+:root[data-page="signup"] .password-strength-track {
+    background: var(--color-surface-raised);
+}
+
+:root:is(
+    [data-page="signup"],
+    [data-page="forgot-password"]
+) button:focus-visible,
+:root:is(
+    [data-page="signup"],
+    [data-page="forgot-password"]
+) a:focus-visible,
+:root:is(
+    [data-page="signup"],
+    [data-page="forgot-password"]
+) input:focus-visible {
+    outline: 3px solid var(--color-accent);
+    outline-offset: 2px;
+}
+
+@media (max-width: 700px) {
+    :root:is(
+        [data-page="customer-dashboard"],
+        [data-page="admin-dashboard"]
+    ) .sidebar nav button.active::before {
+        top: auto;
+        right: 12px;
+        bottom: 0;
+        left: 12px;
+        width: auto;
+        height: 3px;
+        border-radius: 3px 3px 0 0;
+    }
+
+    :root:is(
+        [data-page="customer-dashboard"],
+        [data-page="admin-dashboard"]
+    ) .sidebar nav button,
+    :root:is(
+        [data-page="customer-dashboard"],
+        [data-page="admin-dashboard"]
+    ) .sidebar .logout button {
+        min-height: 44px;
+    }
+
+    :root:is(
+        [data-page="customer-dashboard"],
+        [data-page="admin-dashboard"]
+    ) .topbar {
+        gap: 8px;
+    }
+
+    :root:is(
+        [data-page="customer-dashboard"],
+        [data-page="admin-dashboard"]
+    ) .theme-toggle {
+        max-width: 108px;
+        padding-inline: 8px;
+    }
+
+    :root:is(
+        [data-page="customer-dashboard"],
+        [data-page="admin-dashboard"]
+    ) table {
+        min-width: 560px;
+    }
+
+    :root:is(
+        [data-page="signup"],
+        [data-page="forgot-password"]
+    ) .center-page {
+        align-items: flex-start;
+        padding: 18px 14px;
+    }
+
+    :root:is(
+        [data-page="signup"],
+        [data-page="forgot-password"]
+    ) .auth-card {
+        margin-block: auto;
+    }
+}
+
+@media (max-width: 420px) {
+    :root[data-page="signup"] .two-column {
+        gap: 6px;
+    }
+
+    :root:is(
+        [data-page="signup"],
+        [data-page="forgot-password"]
+    ) .auth-card {
+        padding: 22px 18px;
+    }
+}

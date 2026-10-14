@@ -486,23 +486,37 @@ if (toggleLoginPassword) {
                     "password"
                 );
 
+            const visible =
+                password.type === "password";
 
-            if (
-                password.type ===
-                "password"
-            ) {
+            password.type =
+                visible
+                    ? "text"
+                    : "password";
 
-                password.type = "text";
+            const label =
+                visible
+                    ? "Hide password"
+                    : "Show password";
 
-                this.textContent = "Hide";
+            this.setAttribute(
+                "aria-label",
+                label
+            );
 
-            } else {
+            this.setAttribute(
+                "title",
+                label
+            );
 
-                password.type = "password";
+            this.setAttribute(
+                "aria-pressed",
+                String(visible)
+            );
 
-                this.textContent = "Show";
-
-            }
+            document.getElementById(
+                "toggleLoginPasswordLabel"
+            ).textContent = label;
 
         }
     );
