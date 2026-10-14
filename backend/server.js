@@ -5068,6 +5068,50 @@ app.post(
             transactionStarted =
                 true;
 
+            const gymHoursResult =
+                await client.query(
+                    `
+                    SELECT
+                        ${GUEST_NOW_SQL} >=
+                            date_trunc(
+                                'day',
+                                ${GUEST_NOW_SQL}
+                            ) + INTERVAL '8 hours'
+                        AND ${GUEST_NOW_SQL} <
+                            date_trunc(
+                                'day',
+                                ${GUEST_NOW_SQL}
+                            ) + INTERVAL '22 hours'
+                        AS is_open
+                    `
+                );
+
+            if (
+                !gymHoursResult.rows[0]
+                    .is_open
+            ) {
+
+                await client.query(
+                    "ROLLBACK"
+                );
+
+                transactionStarted =
+                    false;
+
+                return res.status(
+                    403
+                ).json({
+
+                    success:
+                        false,
+
+                    message:
+                        "Member QR check-in and check-out are available from 8:00 AM to 10:00 PM Manila time."
+
+                });
+
+            }
+
             const memberResult =
                 await client.query(
                     `
@@ -5235,7 +5279,7 @@ app.post(
                             check_in,
                             COALESCE(check_out, check_in)
                           ) >=
-                          ${GUEST_NOW_SQL} - INTERVAL '5 minutes'
+                          ${GUEST_NOW_SQL} - INTERVAL '5 seconds'
                     ORDER BY
                         check_in DESC,
                         id DESC
@@ -5266,7 +5310,7 @@ app.post(
                         false,
 
                     message:
-                        "This member was scanned recently. Please wait 5 minutes before scanning again."
+                        "This member was scanned just now. Please wait 5 seconds before scanning again."
 
                 });
 
@@ -6562,14 +6606,74 @@ async function autoCheckoutExpiredGuests() {
 
 }
 
+async function autoCheckoutMembersAtClosing() {
+
+    try {
+
+        const result =
+            await pool.query(
+                `
+                UPDATE attendance a
+                SET check_out =
+                    date_trunc(
+                        'day',
+                        a.check_in
+                    ) + INTERVAL '22 hours'
+                WHERE UPPER(a.user_type) = 'MEMBER'
+                  AND a.check_out IS NULL
+                  AND
+                  (
+                      ${GUEST_NOW_SQL} >=
+                          date_trunc(
+                              'day',
+                              ${GUEST_NOW_SQL}
+                          ) + INTERVAL '22 hours'
+                      OR a.check_in <
+                          date_trunc(
+                              'day',
+                              ${GUEST_NOW_SQL}
+                          )
+                  )
+                RETURNING a.id
+                `
+            );
+
+        if (
+            result.rows.length >
+            0
+        ) {
+
+            console.log(
+                `Automatically checked out ${result.rows.length} member visit(s) at gym closing.`
+            );
+
+        }
+
+    } catch (error) {
+
+        console.error(
+            "Automatic member checkout error:",
+            error
+        );
+
+    }
+
+}
+
 // =====================================
 // START AUTOMATIC TIMER
 // =====================================
 
 autoCheckoutExpiredGuests();
+autoCheckoutMembersAtClosing();
 
 setInterval(
     autoCheckoutExpiredGuests,
+    30 * 1000
+);
+
+setInterval(
+    autoCheckoutMembersAtClosing,
     30 * 1000
 );
 

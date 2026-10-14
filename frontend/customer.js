@@ -60,7 +60,7 @@ function showPage(id, button) {
 // SHOW PAGE BY ID
 // =====================================
 
-function showPageById(id) {
+function showPageById(id, refreshData = true) {
 
     document
         .querySelectorAll(".page")
@@ -104,7 +104,7 @@ function showPageById(id) {
     }
 
 
-    loadPageSpecificData(id);
+    loadPageSpecificData(id, refreshData);
 
 }
 
@@ -113,9 +113,9 @@ function showPageById(id) {
 // PAGE-SPECIFIC DATA
 // =====================================
 
-function loadPageSpecificData(id) {
+function loadPageSpecificData(id, refreshData = true) {
 
-    if (!customerData) {
+    if (!customerData || !refreshData) {
 
         return;
 
@@ -1151,161 +1151,6 @@ function displayMembership(
 
 
     // ---------------------------------
-    // DASHBOARD MEMBERSHIP CARD
-    // ---------------------------------
-
-    const badge =
-        document.getElementById(
-            "dashboardMembershipBadge"
-        );
-
-
-    const title =
-        document.getElementById(
-            "dashboardMembershipTitle"
-        );
-
-
-    const details =
-        document.getElementById(
-            "dashboardMembershipDetails"
-        );
-
-
-    if (badge) {
-
-        badge.textContent =
-            `● ${status || "PENDING"}`;
-
-    }
-
-
-    if (title) {
-
-        if (status === "ACTIVE") {
-
-            title.textContent =
-                "Active Membership";
-
-        } else if (status === "EXPIRED") {
-
-            title.textContent =
-                "Membership Expired";
-
-        } else if (status === "SUSPENDED") {
-
-            title.textContent =
-                "Membership Suspended";
-
-        } else {
-
-            title.textContent =
-                "Membership Pending";
-
-        }
-
-    }
-
-
-    if (details) {
-
-        if (status === "ACTIVE") {
-
-            details.textContent =
-                `Your ${plan} membership is active. Member ID: ${memberId}.`;
-
-        } else {
-
-            details.textContent =
-                `Membership status: ${status || "PENDING"}.`;
-
-        }
-
-    }
-
-
-    // ---------------------------------
-    // MEMBERSHIP PROGRESS BOX
-    // ---------------------------------
-
-    const progressBox =
-        document.getElementById(
-            "membershipProgressBox"
-        );
-
-
-    if (progressBox) {
-
-        if (status === "ACTIVE") {
-
-            progressBox.innerHTML = `
-
-                <strong>
-                    Your membership is ACTIVE.
-                </strong>
-
-                <br><br>
-
-                Plan:
-                <strong>
-                    ${escapeHtml(plan)}
-                </strong>
-
-                <br>
-
-                Member ID:
-                <strong>
-                    ${escapeHtml(memberId)}
-                </strong>
-
-                <br>
-
-                Expiration:
-                <strong>
-                    ${
-                        expirationDate
-                            ? formatDate(expirationDate)
-                            : "—"
-                    }
-                </strong>
-
-                <br>
-
-                Days Remaining:
-                <strong>
-                    ${
-                        expirationDate
-                            ? Math.max(
-                                0,
-                                daysRemaining
-                              )
-                            : "—"
-                    }
-                </strong>
-
-            `;
-
-        } else {
-
-            progressBox.innerHTML = `
-
-                Membership Status:
-                <strong>
-                    ${escapeHtml(status || "PENDING")}
-                </strong>
-
-                <br><br>
-
-                Your membership is not currently active.
-
-            `;
-
-        }
-
-    }
-
-
-    // ---------------------------------
     // MY MEMBERSHIP PAGE
     // ---------------------------------
 
@@ -1437,47 +1282,6 @@ function displayNoMembership() {
         "dashboardExpiration",
         "No membership expiration."
     );
-
-
-    setText(
-        "dashboardMembershipBadge",
-        "● NOT A MEMBER"
-    );
-
-
-    setText(
-        "dashboardMembershipTitle",
-        "Not Registered"
-    );
-
-
-    setText(
-        "dashboardMembershipDetails",
-        "You have a customer account, but you have not activated a gym membership yet."
-    );
-
-
-    const progressBox =
-        document.getElementById(
-            "membershipProgressBox"
-        );
-
-
-    if (progressBox) {
-
-        progressBox.innerHTML = `
-
-            You do not have an active membership.
-
-            <br><br>
-
-            Apply for membership and submit
-            your ₱800 GCash payment proof
-            for admin review.
-
-        `;
-
-    }
 
 
     // ---------------------------------
@@ -3089,11 +2893,12 @@ async function submitApplication() {
 
 
                 // ---------------------------------
-                // GO TO MEMBERSHIP PAGE
+                // GO TO APPLICATION STATUS
                 // ---------------------------------
 
                 showPageById(
-                    "membership"
+                    "dashboard",
+                    false
                 );
 
 

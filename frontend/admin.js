@@ -6,6 +6,7 @@ let refreshTimer = null;
 let countdownTimer = null;
 let qrScanner = null;
 let qrScanBusy = false;
+let lastScannedQr = null;
 let autoCheckoutInProgress = new Set();
 
 const guestPhoneInput =
@@ -118,6 +119,16 @@ function showPage(
     id,
     button = null
 ) {
+
+    if (
+        id !== "attendance" &&
+        qrScanner
+    ) {
+
+        void stopQrScanner();
+
+    }
+
 
     document
         .querySelectorAll(
@@ -414,17 +425,10 @@ async function loadAdminDashboard() {
         );
 
 
-        setText(
-            "dashboardPendingLegend",
-            data.pendingApplications ??
-            0
-        );
-
         updateMembershipPie({
             active: data.activeMembers,
             expired: data.expiredMembers,
-            suspended: data.suspendedMembers,
-            pending: data.pendingApplications
+            suspended: data.suspendedMembers
         });
 
 
@@ -473,10 +477,6 @@ function updateMembershipPie(
         {
             value: Number(counts.suspended) || 0,
             color: "#ef3645"
-        },
-        {
-            value: Number(counts.pending) || 0,
-            color: "#7f8993"
         }
     ];
 
@@ -576,55 +576,39 @@ async function loadApplications() {
             rejectedApplications.length
         );
 
-
-        // ---------------------------------
-        // RECENT APPLICATIONS
-        // ---------------------------------
-
-        const recentBody =
+        const recentDecisionsBody =
             document.getElementById(
-                "recentApplicationsBody"
+                "recentDecisionsBody"
             );
 
+        if (recentDecisionsBody) {
 
-        if (recentBody) {
+            const recentDecisions =
+                applications
+                    .filter(application => {
+                        const status =
+                            getStatus(application.status);
 
-            const recent =
-                applications.slice(
-                    0,
-                    5
-                );
+                        return (
+                            status === "APPROVED" ||
+                            status === "VERIFIED" ||
+                            status === "REJECTED"
+                        );
+                    })
+                    .slice(0, 5);
 
-
-            if (
-                recent.length ===
-                0
-            ) {
-
-                recentBody.innerHTML = `
-                    <tr>
-                        <td
-                            colspan="4"
-                            style="text-align:center;">
-                            No applications found.
-                        </td>
-                    </tr>
-                `;
-
-            } else {
-
-                recentBody.innerHTML =
-                    recent
-                        .map(
-                            application =>
-                                createRecentApplicationRow(
-                                    application
-                                )
-                        )
+            recentDecisionsBody.innerHTML =
+                recentDecisions.length === 0
+                    ? `
+                        <tr>
+                            <td colspan="4" style="text-align:center;">
+                                No completed application decisions yet.
+                            </td>
+                        </tr>
+                    `
+                    : recentDecisions
+                        .map(createRecentDecisionRow)
                         .join("");
-
-            }
-
         }
 
 
@@ -789,10 +773,10 @@ async function loadApplications() {
 
 
 // =====================================
-// RECENT APPLICATION ROW
+// RECENT DECISION ROW
 // =====================================
 
-function createRecentApplicationRow(
+function createRecentDecisionRow(
     application
 ) {
 
@@ -801,44 +785,16 @@ function createRecentApplicationRow(
             application.status
         );
 
-
     return `
         <tr>
-
+            <td>${escapeHtml(application.full_name || "-")}</td>
+            <td>₱${Number(application.amount || 0).toLocaleString()}</td>
+            <td>${escapeHtml(application.gcash_reference || "-")}</td>
             <td>
-                ${escapeHtml(
-                    application.full_name ||
-                    "-"
-                )}
-            </td>
-
-            <td>
-                ₱${Number(
-                    application.amount ||
-                    0
-                ).toLocaleString()}
-            </td>
-
-            <td>
-                ${escapeHtml(
-                    application.gcash_reference ||
-                    "-"
-                )}
-            </td>
-
-            <td>
-
-                <span
-                    class="status ${getStatusClass(status)}">
-
-                    ${escapeHtml(
-                        status
-                    )}
-
+                <span class="status ${getStatusClass(status)}">
+                    ${escapeHtml(status)}
                 </span>
-
             </td>
-
         </tr>
     `;
 
@@ -1822,10 +1778,7 @@ async function loadMembers() {
                                 <button
                                     class="remove-button"
                                     type="button"
-                                    onclick="removeMember(${member.id})">
-
-                                    Remove
-
+                                    onclick="removeMember(${member.id})">Revoke
                                 </button>
 
                             </td>
@@ -4301,6 +4254,37 @@ async function addGuest(
 // QR SCANNER
 // =====================================
 
+function isWithinMemberQrHours() {
+
+    const currentTime =
+        new Intl.DateTimeFormat(
+            "en-GB",
+            {
+                timeZone: "Asia/Manila",
+                hour: "2-digit",
+                minute: "2-digit",
+                hourCycle: "h23"
+            }
+        ).format(
+            new Date()
+        );
+
+    const [hour, minute] =
+        currentTime
+            .split(":")
+            .map(Number);
+
+    const minutesSinceMidnight =
+        hour * 60 + minute;
+
+    return (
+        minutesSinceMidnight >= 8 * 60 &&
+        minutesSinceMidnight < 22 * 60
+    );
+
+}
+
+
 async function scanCustomerQr() {
 
     if (
@@ -4311,6 +4295,26 @@ async function scanCustomerQr() {
         alert(
             "QR scanner library is not loaded."
         );
+
+        return;
+
+    }
+
+    if (!isWithinMemberQrHours()) {
+
+        const message =
+            "Member QR check-in and check-out are available from 8:00 AM to 10:00 PM Manila time.";
+
+        const status =
+            document.getElementById(
+                "qrScanStatus"
+            );
+
+        if (status) {
+            status.textContent = message;
+        }
+
+        alert(message);
 
         return;
 
@@ -4436,7 +4440,10 @@ async function scanCustomerQr() {
                 decodedText
             ) => {
 
-                if (qrScanBusy) {
+                if (
+                    qrScanBusy ||
+                    decodedText === lastScannedQr
+                ) {
 
                     return;
 
@@ -4445,6 +4452,24 @@ async function scanCustomerQr() {
 
                 qrScanBusy =
                     true;
+
+                lastScannedQr =
+                    decodedText;
+
+                if (!isWithinMemberQrHours()) {
+
+                    const message =
+                        "Gym QR scanning is closed. Members still inside are checked out automatically at 10:00 PM Manila time.";
+
+                    if (status) {
+                        status.textContent = message;
+                    }
+
+                    await stopQrScanner();
+
+                    return;
+
+                }
 
 
                 try {
@@ -4471,34 +4496,15 @@ async function scanCustomerQr() {
 
 
                     if (status) {
-
                         status.textContent =
-                            data.message ||
-                            "Scan successful.";
-
+                            `${data.message || "Scan successful."} Ready for the next member.`;
                     }
-
-
-                    alert(
-                        data.message ||
-                        "Scan successful."
-                    );
-
 
                     await Promise.all([
                         loadAttendance(),
                         loadAdminDashboard(),
                         loadReports()
                     ]);
-
-
-                    await stopQrScanner();
-
-
-                    showPageById(
-                        "attendance"
-                    );
-
 
                 } catch (error) {
 
@@ -4544,7 +4550,9 @@ async function scanCustomerQr() {
 
             },
 
-            () => {}
+            () => {
+                lastScannedQr = null;
+            }
 
         );
 
@@ -4626,6 +4634,9 @@ async function stopQrScanner() {
 
     qrScanBusy =
         false;
+
+    lastScannedQr =
+        null;
 
 }
 

@@ -1,15 +1,38 @@
+:root {
+    color-scheme: dark;
+    --color-primary: #e11d48;
+    --color-primary-hover: #be123c;
+    --color-secondary: #1e293b;
+    --color-accent: #14b8a6;
+    --color-background: #0b1120;
+    --color-surface: #111827;
+    --color-surface-raised: #172033;
+    --color-border: #334155;
+    --color-text: #f8fafc;
+    --color-muted: #cbd5e1;
+    --color-subtle: #94a3b8;
+    --radius-card: 12px;
+    --space-page: clamp(16px, 3vw, 36px);
+}
+
 * {
     box-sizing: border-box;
 }
 
+html {
+    scroll-behavior: smooth;
+}
+
 body {
     margin: 0;
+    min-height: 100vh;
+    min-height: 100svh;
+    background: var(--color-background);
 
-    background: #07090c;
+    color: var(--color-text);
 
-    color: white;
-
-    font-family: Arial, sans-serif;
+    font-family: Inter, "Segoe UI", Arial, sans-serif;
+    line-height: 1.5;
 }
 
 #customerApplicationStatus {
@@ -32,6 +55,7 @@ body {
 
 .layout {
     min-height: 100vh;
+    min-height: 100svh;
 
     display: flex;
 }
@@ -45,13 +69,19 @@ body {
     top: 0;
     bottom: 0;
 
-    background: #090c10;
+    background: var(--color-surface);
 
-    border-right: 1px solid #242a31;
+    border-right: 1px solid var(--color-border);
 
     display: flex;
 
     flex-direction: column;
+}
+
+nav {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
 }
 
 
@@ -78,9 +108,9 @@ body {
 
     place-items: center;
 
-    border: 4px solid #ef1d2d;
+    border: 3px solid var(--color-primary);
 
-    color: #ef1d2d;
+    color: var(--color-primary);
 
     font-size: 23px;
 
@@ -123,7 +153,7 @@ nav button,
 
     background: none;
 
-    color: #aeb7c0;
+    color: var(--color-muted);
 
     text-align: left;
 
@@ -133,9 +163,9 @@ nav button,
 
 nav button:hover,
 .logout button:hover {
-    background: #15191f;
+    background: var(--color-surface-raised);
 
-    color: white;
+    color: var(--color-text);
 }
 
 
@@ -143,8 +173,8 @@ nav button.active {
     background:
         linear-gradient(
             90deg,
-            #c31624,
-            #ef1d2d
+            var(--color-primary-hover),
+            var(--color-primary)
         );
 
     color: white;
@@ -156,7 +186,7 @@ nav button.active {
 nav button span {
     float: right;
 
-    background: #ef1d2d;
+    background: var(--color-primary);
 
     padding: 2px 6px;
 
@@ -174,10 +204,10 @@ nav button span {
 
 
 .main {
-    width:
-        calc(100% - 245px);
-
+    flex: 1;
+    width: auto;
     margin-left: 245px;
+    min-width: 0;
 }
 
 
@@ -282,7 +312,10 @@ nav button span {
 
 
 .content {
-    padding: 28px 35px;
+    width: 100%;
+    max-width: 1600px;
+    margin-inline: auto;
+    padding: var(--space-page);
 }
 
 
@@ -293,6 +326,11 @@ nav button span {
 
 .page.active {
     display: block;
+}
+
+.grid > *,
+.stats > * {
+    min-width: 0;
 }
 
 
@@ -337,13 +375,13 @@ nav button span {
     background:
         linear-gradient(
             145deg,
-            #0e1319,
-            #0a0e13
+            var(--color-surface-raised),
+            var(--color-surface)
         );
 
-    border: 1px solid #252c34;
+    border: 1px solid var(--color-border);
 
-    border-radius: 9px;
+    border-radius: var(--radius-card);
 
     overflow: hidden;
 }
@@ -394,11 +432,6 @@ nav button span {
 }
 
 
-.member-card {
-    padding: 23px;
-}
-
-
 .status {
     padding: 6px 9px;
 
@@ -414,25 +447,6 @@ nav button span {
 }
 
 
-.member-card p {
-    color: #89939e;
-
-    margin-top: 30px;
-
-    font-size: 10px;
-}
-
-
-.member-card h2 {
-    font-size: 29px;
-}
-
-
-.member-card small {
-    color: #909aa4;
-}
-
-
 .actions {
     display: flex;
 
@@ -443,13 +457,14 @@ nav button span {
 
 
 .button {
+    min-height: 44px;
     padding: 10px 14px;
 
     border: 1px solid #2b333c;
 
     border-radius: 7px;
 
-    background: #12171e;
+    background: var(--color-secondary);
 
     color: white;
 
@@ -461,16 +476,11 @@ nav button span {
 
 .button.red,
 .red-button {
-    background: #ef1d2d;
+    background: var(--color-primary);
 
-    border-color: #ef1d2d;
+    border-color: var(--color-primary);
 
     color: white;
-}
-
-
-.progress-card {
-    padding: 20px;
 }
 
 
@@ -694,6 +704,7 @@ th {
 
 
 .form {
+    width: min(100%, 700px);
     max-width: 700px;
 
     padding: 25px;
@@ -705,16 +716,18 @@ th {
 
 
 .form label {
-    color: #c7ced5;
+    color: var(--color-muted);
 
-    font-size: 10px;
+    font-size: 12px;
 
     font-weight: bold;
 }
 
 
 .form input {
+    min-height: 44px;
     padding: 12px;
+    font: inherit;
 
     margin-bottom: 17px;
 
@@ -948,6 +961,7 @@ th {
 
 
 .red-button {
+    min-height: 44px;
     padding: 12px;
 
     border: 0;
@@ -991,63 +1005,60 @@ th {
     border: 10px solid white;
 }
 
+button,
+.button,
+.red-button,
+.profile-actions button,
+.password-visibility-toggle {
+    min-height: 44px;
+    font: inherit;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+    outline: 3px solid var(--color-accent);
+    outline-offset: 2px;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+    accent-color: var(--color-primary);
+}
+
+a {
+    color: var(--color-primary);
+}
+
+a:hover {
+    color: var(--color-accent);
+}
+
 
 @media(max-width:1000px) {
 
+    .sidebar {
+        width: 220px;
+    }
+
+    .main {
+        width: auto;
+        margin-left: 220px;
+    }
+
     .stats {
         grid-template-columns:
-            repeat(2, 1fr);
+            repeat(2, minmax(0, 1fr));
     }
 
     .grid {
         grid-template-columns: 1fr;
     }
 
-}
-
-
-@media(max-width:700px) {
-
-    .notification-toolbar {
-
-        align-items: stretch;
-
-        flex-direction: column;
-
-    }
-
-    .notification-toolbar button {
-
-        min-height: 44px;
-
-    }
-
-    .sidebar {
-        width: 70px;
-    }
-
-    .brand div:not(.logo),
-    nav button {
-        font-size: 0;
-    }
-
-    nav button {
-        padding: 18px;
-    }
-
-    .main {
-        margin-left: 70px;
-
-        width:
-            calc(100% - 70px);
-    }
-
     .content {
-        padding: 20px;
-    }
-
-    .stats {
-        grid-template-columns: 1fr;
+        padding-inline: clamp(16px, 3vw, 28px);
     }
 
 }
@@ -1060,26 +1071,60 @@ th {
         right: 0;
         bottom: 0;
         left: 0;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 68px;
+        grid-template-rows: 34px 48px;
         width: 100%;
-        height: calc(64px + env(safe-area-inset-bottom));
+        height: calc(84px + env(safe-area-inset-bottom));
         padding-bottom: env(safe-area-inset-bottom);
-        flex-direction: row;
         z-index: 1000;
-        background: #090c10;
-        border-top: 1px solid #242a31;
+        background: var(--color-surface);
+        border-top: 1px solid var(--color-border);
         border-right: 0;
     }
 
     .brand {
-        display: none;
+        display: flex;
+        grid-column: 1 / -1;
+        grid-row: 1;
+        width: 100%;
+        flex: none;
+        height: 34px;
+        padding: 3px 10px;
+        gap: 8px;
+        border-bottom: 1px solid var(--color-border);
+        border-right: 0;
+    }
+
+    .brand .logo {
+        width: 25px;
+        height: 25px;
+        border-width: 2px;
+        border-radius: 6px;
+        font-size: 13px;
+    }
+
+    .brand b {
+        font-size: 10px;
+        letter-spacing: 1px;
+    }
+
+    .brand small {
+        font-size: 7px;
+        letter-spacing: 1px;
     }
 
     .sidebar nav {
         display: flex;
-        flex: 1;
+        grid-column: 1;
+        grid-row: 2;
+        width: 100%;
+        height: 48px;
+        flex: none;
         min-width: 0;
         padding: 0;
         overflow-x: auto;
+        overflow-y: hidden;
         scrollbar-width: none;
         -webkit-overflow-scrolling: touch;
     }
@@ -1091,27 +1136,16 @@ th {
     .sidebar nav button {
         position: relative;
         display: grid;
-        flex: 0 0 56px;
-        width: 56px;
-        min-height: 56px;
-        padding: 0;
+        flex: 0 0 88px;
+        width: 88px;
+        min-height: 48px;
+        padding: 6px 4px;
         place-items: center;
-        font-size: 0;
+        color: #c4cbd2;
+        font-size: 10px;
+        line-height: 1.2;
         text-align: center;
     }
-
-    .sidebar nav button::before {
-        font-size: 20px;
-        line-height: 1;
-    }
-
-    .sidebar nav button:nth-child(1)::before { content: "🏠"; }
-    .sidebar nav button:nth-child(2)::before { content: "◆"; }
-    .sidebar nav button:nth-child(3)::before { content: "▣"; }
-    .sidebar nav button:nth-child(4)::before { content: "▤"; }
-    .sidebar nav button:nth-child(5)::before { content: "▦"; }
-    .sidebar nav button:nth-child(6)::before { content: "●"; }
-    .sidebar nav button:nth-child(7)::before { content: "👤"; }
 
     .sidebar nav button span {
         position: absolute;
@@ -1123,34 +1157,43 @@ th {
     }
 
     .sidebar .logout {
-        flex: 0 0 56px;
+        grid-column: 2;
+        grid-row: 2;
+        width: 68px;
+        height: 48px;
+        flex: none;
         margin: 0;
         border-top: 0;
-        border-left: 1px solid #222830;
+        border-left: 1px solid var(--color-border);
     }
 
     .sidebar .logout button {
         display: grid;
-        width: 56px;
-        min-height: 56px;
+        width: 100%;
+        min-height: 48px;
         padding: 0;
         place-items: center;
-        font-size: 0;
-    }
-
-    .sidebar .logout button::before {
-        content: "⇥";
-        font-size: 22px;
+        font-size: 10px;
+        text-align: center;
     }
 
     .main {
         width: 100%;
         margin-left: 0;
-        padding-bottom: calc(72px + env(safe-area-inset-bottom));
+        padding-bottom: calc(96px + env(safe-area-inset-bottom));
     }
 
     .content {
         padding: 18px 12px 24px;
+    }
+
+    .notification-toolbar {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .notification-toolbar button {
+        min-height: 44px;
     }
 
     .title {
@@ -1183,5 +1226,31 @@ th {
     .detail-card {
         width: 100%;
         padding: 18px 14px;
+    }
+
+    .form input,
+    .form select,
+    .form textarea {
+        min-height: 44px;
+        font-size: 16px;
+    }
+
+    .actions {
+        flex-wrap: wrap;
+    }
+}
+
+@media(max-width:420px) {
+    .stats {
+        grid-template-columns: 1fr;
+    }
+
+    .content {
+        padding-inline: 10px;
+    }
+
+    .sidebar nav button {
+        flex-basis: 78px;
+        width: 78px;
     }
 }

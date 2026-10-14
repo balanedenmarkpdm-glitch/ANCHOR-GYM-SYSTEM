@@ -250,71 +250,6 @@
 
                 <div class="grid">
 
-                    <div class="card">
-
-                        <div class="card-header">
-
-                            <h3>
-                                📄 Recent Applications
-                            </h3>
-
-                            <button
-                                type="button"
-                                onclick="showPageById('applications')">
-
-                                View All →
-
-                            </button>
-
-                        </div>
-
-                        <table>
-
-                            <thead>
-
-                                <tr>
-
-                                    <th>
-                                        Name
-                                    </th>
-
-                                    <th>
-                                        Amount
-                                    </th>
-
-                                    <th>
-                                        Reference
-                                    </th>
-
-                                    <th>
-                                        Status
-                                    </th>
-
-                                </tr>
-
-                            </thead>
-
-                            <tbody
-                                id="recentApplicationsBody">
-
-                                <tr>
-
-                                    <td
-                                        colspan="4"
-                                        style="text-align:center;">
-
-                                        Loading applications...
-
-                                    </td>
-
-                                </tr>
-
-                            </tbody>
-
-                        </table>
-
-                    </div>
-
                     <div
                         class="card occupancy">
 
@@ -368,31 +303,6 @@
                         <small>
                             Based on active attendance records.
                         </small>
-
-                    </div>
-
-                </div>
-
-                <div class="grid">
-
-                    <div class="card">
-
-                        <div class="card-header">
-
-                            <h3>
-                                🔴 Pending Applications
-                            </h3>
-
-                        </div>
-
-                        <div
-                            id="pendingApplicationsDashboard">
-
-                            <p>
-                                Loading applications...
-                            </p>
-
-                        </div>
 
                     </div>
 
@@ -455,18 +365,95 @@
 
                             </div>
 
-                            <div>
+                        </div>
 
-                                ⚪ Pending
+                    </div>
 
-                                <b
-                                    id="dashboardPendingLegend">
+                </div>
 
-                                    0
+                <div class="grid">
 
-                                </b>
+                    <div class="card">
 
-                            </div>
+                        <div class="card-header">
+
+                            <h3>
+                                Recent Decisions
+                            </h3>
+
+                        </div>
+
+                        <table>
+
+                            <thead>
+
+                                <tr>
+
+                                    <th>
+                                        Name
+                                    </th>
+
+                                    <th>
+                                        Amount
+                                    </th>
+
+                                    <th>
+                                        Reference
+                                    </th>
+
+                                    <th>
+                                        Status
+                                    </th>
+
+                                </tr>
+
+                            </thead>
+
+                            <tbody
+                                id="recentDecisionsBody">
+
+                                <tr>
+
+                                    <td
+                                        colspan="4"
+                                        style="text-align:center;">
+
+                                        Loading decisions...
+
+                                    </td>
+
+                                </tr>
+
+                            </tbody>
+
+                        </table>
+
+                    </div>
+
+                    <div class="card">
+
+                        <div class="card-header">
+
+                            <h3>
+                                🔴 Pending Applications
+                            </h3>
+
+                            <button
+                                type="button"
+                                onclick="showPageById('applications')">
+
+                                View All →
+
+                            </button>
+
+                        </div>
+
+                        <div
+                            id="pendingApplicationsDashboard">
+
+                            <p>
+                                Loading applications...
+                            </p>
 
                         </div>
 
@@ -1027,8 +1014,10 @@
                     <p
                         id="qrScanStatus">
 
-                        Scan a customer's QR code
-                        to check them in or out.
+                        Scan a member's QR code from
+                        8:00 AM to 10:00 PM Manila time.
+                        Members still inside are checked
+                        out automatically at closing.
 
                     </p>
 

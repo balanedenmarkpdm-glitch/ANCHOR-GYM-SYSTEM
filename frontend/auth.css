@@ -1,22 +1,43 @@
+:root {
+    color-scheme: dark;
+    --color-primary: #e11d48;
+    --color-primary-hover: #be123c;
+    --color-secondary: #1e293b;
+    --color-accent: #14b8a6;
+    --color-background: #0b1120;
+    --color-surface: #111827;
+    --color-surface-raised: #172033;
+    --color-border: #334155;
+    --color-text: #f8fafc;
+    --color-muted: #cbd5e1;
+    --color-subtle: #94a3b8;
+    --radius-card: 12px;
+}
+
 * {
     box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
 }
 
 body {
     margin: 0;
     min-height: 100vh;
+    min-height: 100svh;
+    font-family: Inter, "Segoe UI", Arial, sans-serif;
+    line-height: 1.5;
 
-    font-family: Arial, sans-serif;
-
-    color: white;
+    color: var(--color-text);
 
     background:
         radial-gradient(
             circle at 70% 30%,
-            rgba(239,29,45,.12),
+            rgba(225,29,72,.12),
             transparent 35%
         ),
-        #06080b;
+        var(--color-background);
 }
 
 
@@ -26,10 +47,11 @@ body {
 
 .auth-page {
     min-height: 100vh;
+    min-height: 100svh;
 
     display: grid;
 
-    grid-template-columns: 1.05fr .95fr;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr);
 }
 
 
@@ -38,9 +60,10 @@ body {
 ========================= */
 
 .brand-side {
-    padding: 55px 70px;
+    min-width: 0;
+    padding: clamp(28px, 5vw, 55px) clamp(28px, 6vw, 70px);
 
-    border-right: 1px solid #222931;
+    border-right: 1px solid var(--color-border);
 
     display: flex;
 
@@ -74,9 +97,9 @@ body {
 
     place-items: center;
 
-    border: 4px solid #ef1d2d;
+    border: 3px solid var(--color-primary);
 
-    color: #ef1d2d;
+    color: var(--color-primary);
 
     font-size: 25px;
 
@@ -98,7 +121,7 @@ body {
 .brand small {
     display: block;
 
-    color: #929ca6;
+    color: var(--color-subtle);
 
     font-size: 9px;
 
@@ -116,7 +139,7 @@ body {
 
 
 .hero > span {
-    color: #ff5360;
+    color: var(--color-accent);
 
     font-size: 11px;
 
@@ -127,7 +150,7 @@ body {
 
 
 .hero h1 {
-    font-size: 55px;
+    font-size: clamp(38px, 5vw, 55px);
 
     line-height: 1;
 
@@ -136,12 +159,12 @@ body {
 
 
 .hero h1 b {
-    color: #ef1d2d;
+    color: var(--color-primary);
 }
 
 
 .hero p {
-    color: #929ca6;
+    color: var(--color-muted);
 
     font-size: 14px;
 
@@ -152,6 +175,8 @@ body {
 .feature-row {
     display: flex;
 
+    flex-wrap: wrap;
+
     gap: 12px;
 
     margin-top: 28px;
@@ -159,13 +184,14 @@ body {
 
 
 .feature {
-    width: 130px;
+    flex: 1 1 110px;
+    min-width: 0;
 
     padding: 15px;
 
-    background: #0e1318;
+    background: var(--color-surface);
 
-    border: 1px solid #242c34;
+    border: 1px solid var(--color-border);
 
     border-radius: 9px;
 }
@@ -181,14 +207,14 @@ body {
 
 
 .feature small {
-    color: #858f9a;
+    color: var(--color-subtle);
 
     font-size: 9px;
 }
 
 
 .copyright {
-    color: #5c6670;
+    color: var(--color-subtle);
 
     font-size: 9px;
 }
@@ -206,7 +232,8 @@ body {
 
     justify-content: center;
 
-    padding: 35px;
+    min-width: 0;
+    padding: clamp(16px, 4vw, 35px);
 
 }
 
@@ -214,34 +241,36 @@ body {
 .center-page {
 
     min-height: 100vh;
+    min-height: 100svh;
 
     display: flex;
 
     justify-content: center;
 
-    align-items: center;
+    align-items: flex-start;
 
-    padding: 25px;
+    padding: clamp(12px, 4vw, 25px);
 
 }
 
 
 .auth-card {
 
-    width: 440px;
+    width: min(100%, 440px);
+    margin-block: auto;
 
     padding: 34px;
 
     background:
         linear-gradient(
             145deg,
-            #11161c,
-            #0a0e12
+            var(--color-surface-raised),
+            var(--color-surface)
         );
 
-    border: 1px solid #2a3139;
+    border: 1px solid var(--color-border);
 
-    border-radius: 12px;
+    border-radius: var(--radius-card);
 
     box-shadow:
         0 30px 80px rgba(0,0,0,.4);
@@ -250,7 +279,7 @@ body {
 
 
 .signup-card {
-    width: 500px;
+    width: min(100%, 500px);
 }
 
 
@@ -287,13 +316,14 @@ body {
 
     width: 100%;
 
+    min-height: 48px;
     padding: 12px;
 
-    background: #151a20;
+    background: var(--color-surface-raised);
 
     color: white;
 
-    border: 1px solid #303842;
+    border: 1px solid var(--color-border);
 
     border-radius: 8px;
 
@@ -320,12 +350,12 @@ body {
     justify-content: center;
     gap: 10px;
 
-    min-height: 42px;
+    min-height: 48px;
     padding: 11px 16px;
 
-    background: #151a20;
+    background: var(--color-surface-raised);
 
-    border: 1px solid #303842;
+    border: 1px solid var(--color-border);
 
     border-radius: 8px;
 
@@ -386,9 +416,9 @@ label {
 
     display: block;
 
-    color: #c8ced5;
+    color: var(--color-muted);
 
-    font-size: 10px;
+    font-size: 12px;
 
     font-weight: bold;
 
@@ -397,33 +427,36 @@ label {
 }
 
 
-input {
+input:not([type="checkbox"]):not([type="radio"]) {
 
     width: 100%;
 
-    padding: 13px;
+    min-height: 48px;
+    padding: 12px 13px;
 
     margin-bottom: 15px;
 
-    background: #080c10;
+    background: var(--color-background);
 
-    color: white;
+    color: var(--color-text);
 
-    border: 1px solid #29323c;
+    border: 1px solid var(--color-border);
 
     border-radius: 8px;
 
     outline: none;
+    font: inherit;
+    font-size: 14px;
 
 }
 
 
 input:focus {
 
-    border-color: #ef1d2d;
+    border-color: var(--color-accent);
 
     box-shadow:
-        0 0 0 3px rgba(239,29,45,.08);
+        0 0 0 3px rgba(20,184,166,.16);
 
 }
 
@@ -454,6 +487,7 @@ input:focus {
 
 .password-box button {
 
+    min-height: 48px;
     padding: 10px 14px;
 
     margin-bottom: 15px;
@@ -593,11 +627,12 @@ input:focus {
 
     width: 100%;
 
+    min-height: 48px;
     padding: 13px;
 
-    background: #ef1d2d;
+    background: var(--color-primary);
 
-    border: 1px solid #ef1d2d;
+    border: 1px solid var(--color-primary);
 
     color: white;
 
@@ -612,7 +647,7 @@ input:focus {
 
 .main-btn:hover {
 
-    background: #ff3040;
+    background: var(--color-primary-hover);
 
 }
 
@@ -621,7 +656,10 @@ input:focus {
 
 a {
 
-    color: #ff4d59;
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    color: var(--color-primary);
 
     text-decoration: none;
 
@@ -630,7 +668,7 @@ a {
 
 a:hover {
 
-    color: #ff6974;
+    color: var(--color-accent);
 
 }
 
@@ -639,7 +677,7 @@ a:hover {
 
     text-align: center;
 
-    color: #808a95;
+    color: var(--color-subtle);
 
     font-size: 10px;
 
@@ -669,7 +707,7 @@ a:hover {
 
     display: grid;
 
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
 
     gap: 12px;
 
@@ -726,6 +764,19 @@ a:hover {
 
 }
 
+button {
+    font: inherit;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+    outline: 3px solid var(--color-accent);
+    outline-offset: 2px;
+}
+
 
 /* =========================
    RESPONSIVE
@@ -740,15 +791,27 @@ a:hover {
     }
 
     .brand-side {
+        gap: 18px;
+        padding: 22px clamp(20px, 5vw, 40px);
+        border-right: 0;
+        border-bottom: 1px solid var(--color-border);
+    }
 
-        display: none;
+    .hero {
+        max-width: 720px;
+    }
 
+    .hero h1 {
+        font-size: clamp(30px, 7vw, 42px);
+    }
+
+    .hero p {
+        margin-block: 10px;
     }
 
     .form-side {
-
-        min-height: 100vh;
-
+        min-height: 0;
+        padding: 20px;
     }
 
 }
@@ -756,30 +819,61 @@ a:hover {
 
 @media(max-width:550px) {
 
+    .brand-side {
+        padding: 18px 16px;
+    }
+
+    .brand .logo {
+        width: 44px;
+        height: 44px;
+        font-size: 20px;
+    }
+
+    .hero h1 {
+        font-size: 32px;
+        line-height: 1.1;
+    }
+
+    .hero > span {
+        font-size: 10px;
+        letter-spacing: 2px;
+    }
+
+    .feature-row {
+        gap: 8px;
+        margin-top: 14px;
+    }
+
+    .feature {
+        flex-basis: 105px;
+        padding: 12px;
+    }
+
     .auth-card {
-
-        padding: 25px;
-
+        padding: clamp(18px, 6vw, 25px);
     }
 
     .password-box input {
-
         min-width: 0;
-
         font-size: 16px;
 
     }
 
-    .password-box button {
-
-        min-height: 44px;
-
+    .two-column {
+        grid-template-columns: 1fr;
     }
 
-    .two-column {
+    .options {
+        flex-wrap: wrap;
+        gap: 10px;
+    }
 
-        grid-template-columns: 1fr;
+    .options a {
+        padding-block: 8px;
+    }
 
+    .remember {
+        line-height: 1.4;
     }
 
 }

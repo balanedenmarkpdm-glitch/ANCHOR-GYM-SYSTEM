@@ -358,104 +358,6 @@
 
 
                 <!-- =================================
-                     MEMBERSHIP + PROGRESS
-                ================================= -->
-
-                <div class="grid">
-
-
-                    <!-- MEMBERSHIP CARD -->
-
-                    <div
-                        class="card member-card">
-
-
-                        <span
-                            class="status"
-                            id="dashboardMembershipBadge">
-
-                            ● NOT A MEMBER
-
-                        </span>
-
-
-                        <p>
-                            MEMBERSHIP
-                        </p>
-
-
-                        <h2
-                            id="dashboardMembershipTitle">
-
-                            Not Registered
-
-                        </h2>
-
-
-                        <small
-                            id="dashboardMembershipDetails">
-
-                            You have a customer account,
-                            but you have not activated a
-                            gym membership yet.
-
-                        </small>
-
-
-                        <div class="actions">
-
-
-                            <button
-                                class="button red"
-                                onclick="showPageById('apply')">
-
-                                Apply for Membership
-
-                            </button>
-
-
-                        </div>
-
-
-                    </div>
-
-
-
-                    <!-- MEMBERSHIP PROGRESS -->
-
-                    <div
-                        class="card progress-card">
-
-
-                        <h3>
-                            Membership Status
-                        </h3>
-
-
-                        <div
-                            class="success-box"
-                            id="membershipProgressBox">
-
-                            You do not have an active
-                            membership.
-
-                            <br><br>
-
-                            Apply for membership and submit
-                            your ₱800 GCash payment proof
-                            for admin review.
-
-                        </div>
-
-
-                    </div>
-
-
-                </div>
-
-
-
-                <!-- =================================
                      APPLICATION STATUS
                 ================================= -->
 
@@ -469,13 +371,6 @@
                         <h3>
                             Latest Application
                         </h3>
-
-                        <button
-                            onclick="showPageById('apply')">
-
-                            Apply / Renew
-
-                        </button>
 
                     </div>
 
@@ -595,6 +490,14 @@
                             <h3>
                                 Notifications
                             </h3>
+
+                            <button
+                                type="button"
+                                onclick="showPageById('notifications')">
+
+                                View All →
+
+                            </button>
 
                         </div>
 
@@ -876,8 +779,12 @@
 
                     <div class="warning">
 
-                        Send exactly ₱800 to the
-                        gym's GCash account.
+                        Before paying, confirm the
+                        gym's verified GCash account
+                        name and number with staff.
+                        Send exactly ₱800, then enter
+                        your reference number and
+                        upload the payment screenshot.
 
                         <br><br>
 
