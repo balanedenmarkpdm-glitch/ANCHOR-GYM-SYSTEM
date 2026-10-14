@@ -145,12 +145,75 @@ async function ensureDashboardSchema() {
             payment_method TEXT NOT NULL
                 CHECK (payment_method IN ('CASH', 'GCASH')),
             transaction_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            transaction_reference TEXT,
+            attendance_id BIGINT,
+            extension_type TEXT,
+            additional_hours INTEGER,
+            payment_status TEXT NOT NULL DEFAULT 'CONFIRMED'
+                CHECK (payment_status IN ('PENDING', 'CONFIRMED', 'FAILED')),
+            previous_expiration TIMESTAMPTZ,
+            new_expiration TIMESTAMPTZ
         )
+    `);
+    await pool.query(`
+        ALTER TABLE guest_transactions
+        ADD COLUMN IF NOT EXISTS transaction_reference TEXT,
+        ADD COLUMN IF NOT EXISTS attendance_id BIGINT,
+        ADD COLUMN IF NOT EXISTS extension_type TEXT,
+        ADD COLUMN IF NOT EXISTS additional_hours INTEGER,
+        ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT 'CONFIRMED',
+        ADD COLUMN IF NOT EXISTS previous_expiration TIMESTAMPTZ,
+        ADD COLUMN IF NOT EXISTS new_expiration TIMESTAMPTZ
+    `);
+    await pool.query(`
+        ALTER TABLE guest_transactions
+        ALTER COLUMN payment_status SET DEFAULT 'CONFIRMED',
+        ALTER COLUMN payment_status TYPE TEXT,
+        ALTER COLUMN payment_status SET NOT NULL
+    `);
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS guest_visit_extensions (
+            id BIGSERIAL PRIMARY KEY,
+            attendance_id BIGINT NOT NULL,
+            guest_id BIGINT NOT NULL,
+            extension_type TEXT NOT NULL CHECK (extension_type IN ('EXTRA_HOURS', 'ALL_DAY')),
+            additional_hours INTEGER,
+            amount NUMERIC(10, 2) NOT NULL CHECK (amount >= 0),
+            payment_status TEXT NOT NULL DEFAULT 'CONFIRMED'
+                CHECK (payment_status IN ('PENDING', 'CONFIRMED', 'FAILED')),
+            previous_expiration TIMESTAMPTZ,
+            new_expiration TIMESTAMPTZ,
+            transaction_reference TEXT,
+            payment_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE (attendance_id, extension_type, additional_hours, payment_status)
+        )
+    `);
+    await pool.query(`
+        ALTER TABLE guest_visit_extensions
+        ADD COLUMN IF NOT EXISTS transaction_reference TEXT,
+        ADD COLUMN IF NOT EXISTS payment_date TIMESTAMPTZ,
+        ADD COLUMN IF NOT EXISTS payment_status TEXT DEFAULT 'CONFIRMED',
+        ADD COLUMN IF NOT EXISTS previous_expiration TIMESTAMPTZ,
+        ADD COLUMN IF NOT EXISTS new_expiration TIMESTAMPTZ,
+        ADD COLUMN IF NOT EXISTS amount NUMERIC(10, 2),
+        ADD COLUMN IF NOT EXISTS additional_hours INTEGER,
+        ADD COLUMN IF NOT EXISTS extension_type TEXT,
+        ADD COLUMN IF NOT EXISTS attendance_id BIGINT,
+        ADD COLUMN IF NOT EXISTS guest_id BIGINT
+    `);
+    await pool.query(`
+        ALTER TABLE attendance
+        ADD COLUMN IF NOT EXISTS expiration_time TIMESTAMPTZ
     `);
     await pool.query(`
         CREATE INDEX IF NOT EXISTS guest_transactions_created_at_idx
         ON guest_transactions (created_at)
+    `);
+    await pool.query(`
+        CREATE INDEX IF NOT EXISTS guest_visit_extensions_attendance_idx
+        ON guest_visit_extensions (attendance_id)
     `);
     await pool.query(`
         DO $$
@@ -5068,6 +5131,10 @@ app.get(
 
         try {
 
+            const filterType = String(req.query.type || "all").trim().toLowerCase();
+            const memberWhere = filterType === "guest" ? "FALSE" : "TRUE";
+            const guestWhere = filterType === "member" ? "FALSE" : "TRUE";
+
             const [
                 memberTransactionsResult,
                 guestTransactionsResult
@@ -5089,6 +5156,7 @@ app.get(
                     FROM member_transactions t
                     JOIN users u
                         ON u.id = t.user_id
+                    WHERE ${memberWhere}
                     ORDER BY
                         t.transaction_date DESC,
                         t.id DESC
@@ -5104,8 +5172,15 @@ app.get(
                         amount,
                         payment_method,
                         transaction_date,
-                        created_at
+                        created_at,
+                        payment_status,
+                        extension_type,
+                        additional_hours,
+                        attendance_id,
+                        previous_expiration,
+                        new_expiration
                     FROM guest_transactions
+                    WHERE ${guestWhere}
                     ORDER BY transaction_date DESC, id DESC
                     `
                 )
@@ -5115,6 +5190,9 @@ app.get(
 
                 success:
                     true,
+
+                type:
+                    filterType,
 
                 memberTransactions:
                     memberTransactionsResult.rows,
