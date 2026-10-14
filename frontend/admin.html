@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-portal="admin" data-theme="dark">
 
 <head>
 
@@ -12,6 +12,9 @@
 
     <link rel="stylesheet"
           href="admin.css">
+
+    <link rel="stylesheet"
+          href="portal-theme.css">
 
 </head>
 
@@ -134,6 +137,19 @@
     <main class="main">
 
         <header class="topbar">
+
+            <label for="themePreference">
+                Theme
+            </label>
+
+            <select
+                class="theme-toggle"
+                id="themePreference"
+                aria-label="Choose dashboard theme">
+                <option value="dark">Dark</option>
+                <option value="light">Light</option>
+                <option value="original">Original</option>
+            </select>
 
             🔔
 
@@ -354,10 +370,10 @@
 
                             <div>
 
-                                🔴 Suspended
+                                🟠 Revoked
 
                                 <b
-                                    id="dashboardSuspendedLegend">
+                                    id="dashboardRevokedLegend">
 
                                     0
 
@@ -692,7 +708,7 @@
 
                 <p class="subtitle">
 
-                    Previously removed gym memberships.
+                    Revoked memberships and previously removed history.
 
                 </p>
 
@@ -831,87 +847,72 @@
 
                 </p>
 
-                <div class="table-toolbar">
+                <div class="transactions-grid">
 
-                    <span id="transactionsSelectedCount">
-                        0 selected
-                    </span>
+                    <div class="card">
 
-                    <button
-                        id="deleteSelectedTransactionsButton"
-                        class="remove-button"
-                        type="button"
-                        disabled
-                        onclick="deleteSelectedTransactions()">
-                        Delete selected
-                    </button>
+                        <h2>Member Transactions</h2>
 
-                </div>
+                        <div class="table-scroll">
+                            <table>
 
-                <div class="card">
+                                <thead>
 
-                    <table>
+                                    <tr>
 
-                        <thead>
+                                        <th scope="col">Transaction ID</th>
+                                        <th scope="col">Member</th>
+                                        <th scope="col">Amount</th>
+                                        <th scope="col">Reference</th>
+                                        <th scope="col">Status</th>
 
-                            <tr>
+                                    </tr>
 
-                                <th>
-                                    <input
-                                        id="selectAllTransactions"
-                                        type="checkbox"
-                                        disabled
-                                        aria-label="Select all transactions"
-                                        onchange="toggleSelectAllRows('transactionsTableBody', 'selectAllTransactions', 'deleteSelectedTransactionsButton', 'transactionsSelectedCount')">
-                                </th>
+                                </thead>
 
-                                <th>
-                                    Transaction ID
-                                </th>
+                                <tbody id="memberTransactionsTableBody">
+                                    <tr>
+                                        <td colspan="5" style="text-align:center;">
+                                            No member transactions available.
+                                        </td>
+                                    </tr>
+                                </tbody>
 
-                                <th>
-                                    Customer
-                                </th>
+                            </table>
+                        </div>
 
-                                <th>
-                                    Amount
-                                </th>
+                    </div>
 
-                                <th>
-                                    Reference
-                                </th>
+                    <div class="card">
 
-                                <th>
-                                    Status
-                                </th>
+                        <h2>Guest / Walk-in Transactions</h2>
 
-                                <th>
-                                    Action
-                                </th>
+                        <div class="table-scroll">
+                            <table>
 
-                            </tr>
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Transaction ID</th>
+                                        <th scope="col">Guest</th>
+                                        <th scope="col">Visit Type</th>
+                                        <th scope="col">Amount</th>
+                                        <th scope="col">Payment Method</th>
+                                        <th scope="col">Date</th>
+                                    </tr>
+                                </thead>
 
-                        </thead>
+                                <tbody id="guestTransactionsTableBody">
+                                    <tr>
+                                        <td colspan="6" style="text-align:center;">
+                                            No guest transactions available.
+                                        </td>
+                                    </tr>
+                                </tbody>
 
-                        <tbody
-                            id="transactionsTableBody">
+                            </table>
+                        </div>
 
-                            <tr>
-
-                                <td
-                                    colspan="7"
-                                    style="text-align:center;">
-
-                                    No transaction data available yet.
-
-                                </td>
-
-                            </tr>
-
-                        </tbody>
-
-                    </table>
-
+                    </div>
                 </div>
 
             </div>
@@ -1388,69 +1389,54 @@
                         Peak Attendance
                     </h3>
 
-                    <div class="bars">
-
-                        <div
-                            style="height:0%"
-                            id="bar10">
-
-                            <span>
-                                10 AM
-                            </span>
-
-                        </div>
-
-                        <div
-                            style="height:0%"
-                            id="bar12">
-
-                            <span>
-                                12 PM
-                            </span>
-
-                        </div>
-
-                        <div
-                            style="height:0%"
-                            id="bar2">
-
-                            <span>
-                                2 PM
-                            </span>
-
-                        </div>
-
-                        <div
-                            style="height:0%"
-                            id="bar4">
-
-                            <span>
-                                4 PM
-                            </span>
-
-                        </div>
-
-                        <div
-                            style="height:0%"
-                            id="bar6">
-
-                            <span>
-                                6 PM
-                            </span>
-
-                        </div>
-
-                        <div
-                            style="height:0%"
-                            id="bar8">
-
-                            <span>
-                                8 PM
-                            </span>
-
-                        </div>
-
+                    <div
+                        class="report-toggle"
+                        role="group"
+                        aria-label="Attendance chart time range">
+                        <button
+                            type="button"
+                            data-report-period="daily"
+                            aria-pressed="true"
+                            onclick="loadReports('daily')">
+                            Daily
+                        </button>
+                        <button
+                            type="button"
+                            data-report-period="weekly"
+                            aria-pressed="false"
+                            onclick="loadReports('weekly')">
+                            Weekly
+                        </button>
+                        <button
+                            type="button"
+                            data-report-period="monthly"
+                            aria-pressed="false"
+                            onclick="loadReports('monthly')">
+                            Monthly
+                        </button>
                     </div>
+
+                    <div class="report-chart">
+                        <div
+                            id="reportYAxis"
+                            class="chart-axis-y"
+                            aria-hidden="true">
+                        </div>
+                        <div class="chart-scroll">
+                            <div
+                                id="peakAttendanceChart"
+                                class="bars"
+                                role="list"
+                                aria-label="Daily peak attendance">
+                            </div>
+                        </div>
+                    </div>
+
+                    <p
+                        id="reportChartDescription"
+                        class="sr-only"
+                        aria-live="polite">
+                    </p>
 
                     <p
                         id="reportMessage">
@@ -1614,6 +1600,7 @@
     type="text/javascript">
 </script>
 
+<script src="portal-theme.js"></script>
 <script src="api-config.js"></script>
 <script src="admin.js"></script>
 

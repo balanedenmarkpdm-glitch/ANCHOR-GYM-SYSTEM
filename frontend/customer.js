@@ -1369,8 +1369,8 @@ function getMembershipTitle(
         case "EXPIRED":
             return "Membership Expired";
 
-        case "SUSPENDED":
-            return "Membership Suspended";
+        case "REVOKED":
+            return "Membership Revoked";
 
         case "PENDING":
             return "Membership Pending";
@@ -1399,8 +1399,8 @@ function getMembershipDescription(
         case "EXPIRED":
             return "Your membership has expired. Please renew your membership.";
 
-        case "SUSPENDED":
-            return "Your membership is currently suspended. Please contact the gym.";
+        case "REVOKED":
+            return "Your membership has been revoked. Please contact the gym for assistance.";
 
         case "PENDING":
             return "Your membership application is still waiting for admin approval.";
@@ -3271,6 +3271,10 @@ function getStatusClass(
 
         return "rejected";
 
+    }
+
+    if (normalized === "revoked") {
+        return "revoked";
     }
 
 

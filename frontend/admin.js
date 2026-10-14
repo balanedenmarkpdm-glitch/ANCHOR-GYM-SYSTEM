@@ -8,6 +8,7 @@ let qrScanner = null;
 let qrScanBusy = false;
 let lastScannedQr = null;
 let autoCheckoutInProgress = new Set();
+let reportPeriod = "daily";
 
 const guestPhoneInput =
     document.getElementById(
@@ -419,8 +420,8 @@ async function loadAdminDashboard() {
 
 
         setText(
-            "dashboardSuspendedLegend",
-            data.suspendedMembers ??
+            "dashboardRevokedLegend",
+            data.revokedMembers ??
             0
         );
 
@@ -428,7 +429,7 @@ async function loadAdminDashboard() {
         updateMembershipPie({
             active: data.activeMembers,
             expired: data.expiredMembers,
-            suspended: data.suspendedMembers
+            revoked: data.revokedMembers
         });
 
 
@@ -475,8 +476,8 @@ function updateMembershipPie(
             color: "#f3ad29"
         },
         {
-            value: Number(counts.suspended) || 0,
-            color: "#ef3645"
+            value: Number(counts.revoked) || 0,
+            color: "#a78bfa"
         }
     ];
 
@@ -1896,6 +1897,7 @@ async function revokeMember(
 
         await Promise.all([
             loadMembers(),
+            loadArchivedMembers(),
             loadAdminDashboard(),
             loadTransactions(),
             loadAttendance(),
@@ -1932,6 +1934,7 @@ async function restoreRevokedMember(memberId) {
         alert(data.message || "Membership restored successfully.");
         await Promise.all([
             loadMembers(),
+            loadArchivedMembers(),
             loadAdminDashboard(),
             loadAttendance()
         ]);
@@ -2439,24 +2442,37 @@ async function loadArchivedMembers() {
                 .map(
                     member => {
 
+                        const revoked =
+                            member.record_type === "REVOKED" ||
+                            getStatus(member.status) === "REVOKED";
+
                         const restored =
-                            Boolean(
-                                member.restored_at
-                            ) ||
-                            getStatus(
-                                member.status
-                            ) ===
-                            "RESTORED";
+                            !revoked &&
+                            (
+                                Boolean(member.restored_at) ||
+                                getStatus(member.status) === "RESTORED"
+                            );
 
 
                         const displayStatus =
-                            restored
+                            revoked
+                                ? "REVOKED"
+                                : restored
                                 ? "RESTORED"
                                 : "ARCHIVED";
 
 
                         const action =
-                            restored
+                            revoked
+                                ? `
+                                    <button
+                                        class="restore-button"
+                                        type="button"
+                                        onclick="restoreRevokedMember(${Number(member.original_member_id)})">
+                                        Restore
+                                    </button>
+                                `
+                                : restored
                                 ? `
                                     <button
                                         class="remove-button"
@@ -2483,17 +2499,23 @@ async function loadArchivedMembers() {
                             <tr>
 
                                 <td>
-                                    <input
-                                        class="archive-row-select"
-                                        type="checkbox"
-                                        data-selectable="${restored ? "restored" : "archived"}"
-                                        data-record-id="${Number(member.archive_id)}"
-                                        aria-label="Select ${restored ? "restored" : "archived"} member ${escapeAttribute(
-                                            member.full_name ||
-                                            member.member_id ||
-                                            "record"
-                                        )}"
-                                        onchange="updateArchiveMemberSelection()">
+                                    ${
+                                        revoked
+                                            ? ""
+                                            : `
+                                                <input
+                                                    class="archive-row-select"
+                                                    type="checkbox"
+                                                    data-selectable="${restored ? "restored" : "archived"}"
+                                                    data-record-id="${Number(member.archive_id)}"
+                                                    aria-label="Select ${restored ? "restored" : "archived"} member ${escapeAttribute(
+                                                        member.full_name ||
+                                                        member.member_id ||
+                                                        "record"
+                                                    )}"
+                                                    onchange="updateArchiveMemberSelection()">
+                                            `
+                                    }
                                 </td>
 
                                 <td>
@@ -2855,257 +2877,71 @@ async function loadTransactions() {
                 "/api/admin/transactions"
             );
 
-
-        const transactions =
-            data.transactions ||
-            [];
-
-
-        const body =
+        const memberBody =
             document.getElementById(
-                "transactionsTableBody"
+                "memberTransactionsTableBody"
             );
 
-
-        if (!body) {
-
-            return;
-
-        }
-
-
-        if (
-            transactions.length ===
-            0
-        ) {
-
-            body.innerHTML = `
-                <tr>
-                    <td
-                        colspan="7"
-                        style="text-align:center;">
-                        No transaction data available yet.
-                    </td>
-                </tr>
-            `;
-
-            updateBulkSelection(
-                "transactionsTableBody",
-                "selectAllTransactions",
-                "deleteSelectedTransactionsButton",
-                "transactionsSelectedCount"
+        const guestBody =
+            document.getElementById(
+                "guestTransactionsTableBody"
             );
 
-            return;
+        const memberTransactions =
+            data.memberTransactions || [];
+        const guestTransactions =
+            data.guestTransactions || [];
 
+        if (memberBody) {
+            memberBody.innerHTML = memberTransactions.length
+                ? memberTransactions.map(transaction => `
+                    <tr>
+                        <td>${Number(transaction.id)}</td>
+                        <td>${escapeHtml(transaction.full_name || "-")}</td>
+                        <td>₱${Number(transaction.amount || 0).toLocaleString()}</td>
+                        <td>${escapeHtml(transaction.gcash_reference || "-")}</td>
+                        <td>
+                            <span class="status ${getStatusClass(transaction.status)}">
+                                ${escapeHtml(getStatus(transaction.status) || "-")}
+                            </span>
+                        </td>
+                    </tr>
+                `).join("")
+                : `
+                    <tr>
+                        <td colspan="5" style="text-align:center;">
+                            No member transactions available.
+                        </td>
+                    </tr>
+                `;
         }
 
-
-        body.innerHTML =
-            transactions
-                .map(
-                    transaction =>
-                        `
-                        <tr>
-
-                            <td>
-                                <input
-                                    class="row-select"
-                                    type="checkbox"
-                                    data-selectable="transaction"
-                                    data-record-id="${Number(transaction.id)}"
-                                    aria-label="Select transaction ${Number(transaction.id)}"
-                                    onchange="updateBulkSelection('transactionsTableBody', 'selectAllTransactions', 'deleteSelectedTransactionsButton', 'transactionsSelectedCount')">
-                            </td>
-
-                            <td>
-                                ${Number(transaction.id)}
-                            </td>
-
-                            <td>
-                                ${escapeHtml(
-                                    transaction.full_name ||
-                                    "-"
-                                )}
-                            </td>
-
-                            <td>
-                                ₱${Number(
-                                    transaction.amount ||
-                                    0
-                                ).toLocaleString()}
-                            </td>
-
-                            <td>
-                                ${escapeHtml(
-                                    transaction.gcash_reference ||
-                                    "-"
-                                )}
-                            </td>
-
-                            <td>
-                                <span class="status ${getStatusClass(
-                                    transaction.status
-                                )}">
-                                    ${escapeHtml(
-                                        getStatus(transaction.status) ||
-                                        "-"
-                                    )}
-                                </span>
-                            </td>
-
-                            <td>
-
-                                <button
-                                    class="remove-button"
-                                    type="button"
-                                    onclick="deleteTransaction(${transaction.id})">
-
-                                    Delete
-
-                                </button>
-
-                            </td>
-
-                        </tr>
-                        `
-                )
-                .join("");
-
-        updateBulkSelection(
-            "transactionsTableBody",
-            "selectAllTransactions",
-            "deleteSelectedTransactionsButton",
-            "transactionsSelectedCount"
-        );
+        if (guestBody) {
+            guestBody.innerHTML = guestTransactions.length
+                ? guestTransactions.map(transaction => `
+                    <tr>
+                        <td>${Number(transaction.id)}</td>
+                        <td>${escapeHtml(transaction.guest_name || "-")}</td>
+                        <td>${escapeHtml(transaction.visit_type || "-")}</td>
+                        <td>₱${Number(transaction.amount || 0).toLocaleString()}</td>
+                        <td>${escapeHtml(transaction.payment_method || "-")}</td>
+                        <td>${formatDateTime(transaction.transaction_date)}</td>
+                    </tr>
+                `).join("")
+                : `
+                    <tr>
+                        <td colspan="6" style="text-align:center;">
+                            No guest transactions available.
+                        </td>
+                    </tr>
+                `;
+        }
 
     } catch (error) {
 
         console.error(
             "Transactions loading error:",
             error
-        );
-
-    }
-
-}
-
-async function deleteSelectedTransactions() {
-
-    const selectedIds =
-        getSelectedRecordIds(
-            "transactionsTableBody"
-        );
-
-    if (!selectedIds.length) {
-        return;
-    }
-
-    const confirmed =
-        confirm(
-            `Permanently delete ${selectedIds.length} selected transaction record(s)? This does not remove memberships.`
-        );
-
-    if (!confirmed) {
-        return;
-    }
-
-    const failedIds = [];
-
-    for (const transactionId of selectedIds) {
-
-        try {
-
-            await apiRequest(
-                `/api/admin/transactions/${transactionId}`,
-                {
-                    method: "DELETE"
-                }
-            );
-
-        } catch (error) {
-
-            console.error(
-                `Unable to delete selected transaction ${transactionId}:`,
-                error
-            );
-
-            failedIds.push(transactionId);
-
-        }
-    }
-
-    await loadTransactions();
-
-    if (failedIds.length) {
-
-        alert(
-            `${selectedIds.length - failedIds.length} transaction(s) deleted. ` +
-            `Unable to delete transaction ID(s): ${failedIds.join(", ")}.`
-        );
-
-        return;
-    }
-
-    alert(
-        `${selectedIds.length} transaction(s) deleted successfully.`
-    );
-}
-
-
-// =====================================
-// DELETE TRANSACTION
-// =====================================
-
-async function deleteTransaction(
-    transactionId
-) {
-
-    const confirmed =
-        confirm(
-            "Delete this transaction history? This does not remove the membership."
-        );
-
-
-    if (!confirmed) {
-
-        return;
-
-    }
-
-
-    try {
-
-        const data =
-            await apiRequest(
-                `/api/admin/transactions/${transactionId}`,
-                {
-                    method:
-                        "DELETE"
-                }
-            );
-
-
-        alert(
-            data.message ||
-            "Transaction deleted successfully."
-        );
-
-
-        await loadTransactions();
-
-
-    } catch (error) {
-
-        console.error(
-            "Delete transaction error:",
-            error
-        );
-
-
-        alert(
-            error.message ||
-            "Unable to delete transaction."
         );
 
     }
@@ -4721,13 +4557,30 @@ function viewScreenshot(
 // REPORTS
 // =====================================
 
-async function loadReports() {
+async function loadReports(
+    period = reportPeriod
+) {
+
+    if (!["daily", "weekly", "monthly"].includes(period)) {
+        return;
+    }
+
+    const periodChanged = period !== reportPeriod;
+    reportPeriod = period;
+    document
+        .querySelectorAll("[data-report-period]")
+        .forEach(button => {
+            button.setAttribute(
+                "aria-pressed",
+                String(button.dataset.reportPeriod === reportPeriod)
+            );
+        });
 
     try {
 
         const data =
             await apiRequest(
-                "/api/admin/reports"
+                `/api/admin/reports?period=${encodeURIComponent(reportPeriod)}`
             );
 
 
@@ -4771,8 +4624,9 @@ async function loadReports() {
 
 
         updatePeakBars(
-            data.hourly ||
-            []
+            data.series || [],
+            reportPeriod,
+            periodChanged
         );
 
 
@@ -4807,113 +4661,70 @@ async function loadReports() {
 // =====================================
 
 function updatePeakBars(
-    hourly
+    series,
+    period,
+    announcePeriodChange
 ) {
+    const chart =
+        document.getElementById("peakAttendanceChart");
+    const yAxis =
+        document.getElementById("reportYAxis");
+    const description =
+        document.getElementById("reportChartDescription");
 
-    const hourMap =
-        {};
+    if (!chart || !yAxis) {
+        return;
+    }
 
-
-    hourly.forEach(
-        item => {
-
-            hourMap[
-                Number(
-                    item.hour
-                )
-            ] =
-                Number(
-                    item.visits ||
-                    0
-                );
-
-        }
-    );
-
-
-    const ids = [
-
-        [
-            "bar10",
-            10
-        ],
-
-        [
-            "bar12",
-            12
-        ],
-
-        [
-            "bar2",
-            14
-        ],
-
-        [
-            "bar4",
-            16
-        ],
-
-        [
-            "bar6",
-            18
-        ],
-
-        [
-            "bar8",
-            20
-        ]
-
-    ];
-
-
-    const values =
-        ids.map(
-            (
-                [id, hour]
-            ) => ({
-
-                id,
-
-                value:
-                    Number(
-                        hourMap[
-                            hour
-                        ] ||
-                        0
-                    )
-
-            })
-        );
-
-
+    const values = series.map(item => ({
+        label: String(item.label || ""),
+        visits: Math.max(0, Number(item.visits) || 0)
+    }));
     const max =
-        Math.max(
-            1,
-
-            ...values.map(
-                item =>
-                    item.value
-            )
+        Math.max(1, ...values.map(item => item.visits));
+    const ticks =
+        Array.from(
+            { length: 5 },
+            (_, index) => Math.round(max * (4 - index) / 4)
         );
 
+    yAxis.innerHTML =
+        ticks.map(value => `<span>${value}</span>`).join("");
 
-    values.forEach(
-        (
-            {
-                id,
-                value
-            }
-        ) => {
+    chart.innerHTML =
+        values.map(item => {
+            const height =
+                item.visits === 0
+                    ? 0
+                    : Math.max(2, item.visits / max * 100);
 
-            setBarHeight(
-                id,
-                value,
-                max
-            );
+            return `
+                <div
+                    class="report-bar"
+                    role="listitem"
+                    aria-label="${escapeAttribute(`${item.label}: ${item.visits} visits`)}"
+                    style="--bar-height:${height}%">
+                    <span class="report-bar-value">${item.visits}</span>
+                    <span class="report-bar-label">${escapeHtml(item.label)}</span>
+                </div>
+            `;
+        }).join("");
 
-        }
+    const periodDescription = {
+        daily: "hourly attendance for today",
+        weekly: "daily attendance for the current week",
+        monthly: "monthly attendance for the past 12 months"
+    }[period];
+
+    chart.setAttribute(
+        "aria-label",
+        `Peak attendance chart showing ${periodDescription}`
     );
-
+    if (description && (announcePeriodChange || !description.textContent)) {
+        description.textContent =
+            `Peak attendance chart showing ${periodDescription}. ` +
+            values.map(item => `${item.label}: ${item.visits} visits`).join("; ");
+    }
 }
 
 
@@ -5136,57 +4947,6 @@ function updateOccupancyBar(
 
 
 // =====================================
-// PEAK BAR HEIGHT
-// =====================================
-
-function setBarHeight(
-    id,
-    value,
-    max
-) {
-
-    const element =
-        document.getElementById(
-            id
-        );
-
-
-    if (!element) {
-
-        return;
-
-    }
-
-
-    const percentage =
-        max >
-        0
-
-            ? Math.min(
-                100,
-                Math.max(
-                    0,
-                    (
-                        value /
-                        max
-                    ) *
-                    100
-                )
-            )
-
-            : 0;
-
-
-    element.style.height =
-        `${Math.max(
-            5,
-            percentage
-        )}%`;
-
-}
-
-
-// =====================================
 // STATUS
 // =====================================
 
@@ -5270,15 +5030,12 @@ function getStatusClass(
     }
 
 
-    if (
-        normalized ===
-        "SUSPENDED" ||
-        normalized ===
-        "REVOKED"
-    ) {
+    if (normalized === "REVOKED") {
+        return "revoked";
+    }
 
-        return "suspended";
-
+    if (normalized === "SUSPENDED") {
+        return "revoked";
     }
 
 

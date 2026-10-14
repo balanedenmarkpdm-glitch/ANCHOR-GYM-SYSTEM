@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-portal="customer" data-theme="dark">
 
 <head>
 
@@ -12,6 +12,9 @@
 
     <link rel="stylesheet"
           href="customer.css">
+
+    <link rel="stylesheet"
+          href="portal-theme.css">
 
 </head>
 
@@ -143,6 +146,19 @@
         ===================================== -->
 
         <header class="topbar">
+
+            <label for="themePreference">
+                Theme
+            </label>
+
+            <select
+                class="theme-toggle"
+                id="themePreference"
+                aria-label="Choose dashboard theme">
+                <option value="dark">Dark</option>
+                <option value="light">Light</option>
+                <option value="original">Original</option>
+            </select>
 
             <button
                 class="topbar-notifications"
@@ -1331,6 +1347,7 @@
 </div>
 
 
+<script src="portal-theme.js"></script>
 <script src="api-config.js"></script>
 <script src="customer.js"></script>
 

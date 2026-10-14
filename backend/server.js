@@ -37,6 +37,233 @@ const pool = new Pool({
     statement_timeout: 15000
 });
 
+let transactionPurgeInterval = null;
+
+async function purgeExpiredTransactions() {
+    try {
+        const result = await pool.query(`
+            WITH deleted_member_transactions AS (
+                DELETE FROM member_transactions
+                WHERE created_at <= NOW() - INTERVAL '240 hours'
+                RETURNING id
+            ),
+            deleted_guest_transactions AS (
+                DELETE FROM guest_transactions
+                WHERE created_at <= NOW() - INTERVAL '240 hours'
+                RETURNING id
+            )
+            SELECT
+                (SELECT COUNT(*) FROM deleted_member_transactions)::int
+                    AS member_count,
+                (SELECT COUNT(*) FROM deleted_guest_transactions)::int
+                    AS guest_count
+        `);
+
+        const { member_count, guest_count } = result.rows[0];
+        if (member_count || guest_count) {
+            console.log(
+                `Automatically purged ${member_count} member and ${guest_count} guest transaction(s) older than 10 days.`
+            );
+        }
+    } catch (error) {
+        console.error("Automatic transaction purge error:", error);
+    }
+}
+
+async function expireMemberships() {
+    try {
+        const result = await pool.query(`
+            UPDATE members
+            SET status = 'EXPIRED'
+            WHERE status = 'ACTIVE'
+              AND expiration_date IS NOT NULL
+              AND expiration_date <= (${GUEST_NOW_SQL})::date
+            RETURNING id
+        `);
+
+        if (result.rowCount > 0) {
+            console.log(
+                `Automatically expired ${result.rowCount} membership(s) whose countdown reached zero.`
+            );
+        }
+    } catch (error) {
+        console.error("Automatic membership expiration error:", error);
+    }
+}
+
+function startTransactionPurgeFallback() {
+    if (transactionPurgeInterval) {
+        return;
+    }
+
+    console.warn(
+        "pg_cron is unavailable; transaction retention will use a one-minute application sweep."
+    );
+    void purgeExpiredTransactions();
+    transactionPurgeInterval = setInterval(
+        purgeExpiredTransactions,
+        60 * 1000
+    );
+}
+
+async function ensureDashboardSchema() {
+    await pool.query(`
+        DO $$
+        BEGIN
+            IF to_regclass('member_transactions') IS NULL
+               AND to_regclass('transactions') IS NOT NULL THEN
+                ALTER TABLE transactions RENAME TO member_transactions;
+            END IF;
+        END;
+        $$;
+    `);
+    await pool.query(`
+        ALTER TABLE member_transactions
+        ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ
+    `);
+    await pool.query(`
+        UPDATE member_transactions
+        SET created_at = COALESCE(transaction_date, NOW())
+        WHERE created_at IS NULL
+    `);
+    await pool.query(`
+        ALTER TABLE member_transactions
+        ALTER COLUMN created_at SET DEFAULT NOW(),
+        ALTER COLUMN created_at SET NOT NULL
+    `);
+    await pool.query(`
+        CREATE INDEX IF NOT EXISTS member_transactions_created_at_idx
+        ON member_transactions (created_at)
+    `);
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS guest_transactions (
+            id BIGSERIAL PRIMARY KEY,
+            guest_id BIGINT NOT NULL,
+            guest_name TEXT NOT NULL,
+            visit_type TEXT NOT NULL,
+            amount NUMERIC(10, 2) NOT NULL CHECK (amount >= 0),
+            payment_method TEXT NOT NULL
+                CHECK (payment_method IN ('CASH', 'GCASH')),
+            transaction_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `);
+    await pool.query(`
+        CREATE INDEX IF NOT EXISTS guest_transactions_created_at_idx
+        ON guest_transactions (created_at)
+    `);
+    await pool.query(`
+        DO $$
+        DECLARE
+            status_constraint RECORD;
+        BEGIN
+            FOR status_constraint IN
+                SELECT conname
+                FROM pg_constraint
+                WHERE conrelid = 'members'::regclass
+                  AND contype = 'c'
+                  AND pg_get_constraintdef(oid) ILIKE '%status%'
+                  AND (
+                      pg_get_constraintdef(oid) ILIKE '%ACTIVE%'
+                      OR pg_get_constraintdef(oid) ILIKE '%PENDING%'
+                      OR pg_get_constraintdef(oid) ILIKE '%EXPIRED%'
+                      OR pg_get_constraintdef(oid) ILIKE '%SUSPENDED%'
+                      OR pg_get_constraintdef(oid) ILIKE '%REVOKED%'
+                  )
+                  AND conname <> 'members_lifecycle_status_check'
+            LOOP
+                EXECUTE FORMAT(
+                    'ALTER TABLE members DROP CONSTRAINT %I',
+                    status_constraint.conname
+                );
+            END LOOP;
+        END;
+        $$;
+    `);
+    await pool.query(`
+        UPDATE members
+        SET status = CASE
+            WHEN UPPER(status) IN ('SUSPENDED', 'ARCHIVED') THEN 'REVOKED'
+            WHEN status IS NULL THEN 'PENDING'
+            ELSE UPPER(status)
+        END
+        WHERE status IS NULL
+           OR status <> UPPER(status)
+           OR UPPER(status) IN ('SUSPENDED', 'ARCHIVED')
+    `);
+    await pool.query(`
+        ALTER TABLE members
+        ALTER COLUMN status SET DEFAULT 'PENDING',
+        ALTER COLUMN status SET NOT NULL
+    `);
+    await pool.query(`
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_constraint
+                WHERE conname = 'members_lifecycle_status_check'
+                  AND conrelid = 'members'::regclass
+            ) THEN
+                ALTER TABLE members
+                ADD CONSTRAINT members_lifecycle_status_check
+                CHECK (status IN ('ACTIVE', 'PENDING', 'EXPIRED', 'REVOKED'));
+            END IF;
+        END;
+        $$;
+    `);
+
+    try {
+        await pool.query("CREATE EXTENSION IF NOT EXISTS pg_cron");
+        await pool.query(`
+            CREATE OR REPLACE PROCEDURE public.purge_expired_transactions()
+            LANGUAGE plpgsql
+            AS $procedure$
+            BEGIN
+                DELETE FROM member_transactions
+                WHERE created_at <= NOW() - INTERVAL '240 hours';
+                DELETE FROM guest_transactions
+                WHERE created_at <= NOW() - INTERVAL '240 hours';
+            END;
+            $procedure$
+        `);
+
+        const jobName = "anchor-gym-transaction-retention";
+        const existingJobs = await pool.query(
+            "SELECT jobid FROM cron.job WHERE jobname = $1",
+            [jobName]
+        );
+        for (const job of existingJobs.rows) {
+            await pool.query(
+                "SELECT cron.unschedule($1)",
+                [job.jobid]
+            );
+        }
+
+        await pool.query(
+            "SELECT cron.schedule($1, $2, $3)",
+            [
+                jobName,
+                "* * * * *",
+                "CALL public.purge_expired_transactions()"
+            ]
+        );
+
+        if (transactionPurgeInterval) {
+            clearInterval(transactionPurgeInterval);
+            transactionPurgeInterval = null;
+        }
+        console.log(
+            "pg_cron scheduled transaction retention every minute."
+        );
+    } catch (error) {
+        console.warn(
+            `Unable to enable pg_cron transaction retention (${error.message}).`
+        );
+        startTransactionPurgeFallback();
+    }
+}
+
 let customerProfilePhotoColumnReady = false;
 let paymentScreenshotColumnReady = false;
 let pausedDaysRemainingColumnReady = false;
@@ -2020,7 +2247,7 @@ app.get(
                         gcash_reference,
                         transaction_date,
                         status
-                    FROM transactions
+                    FROM member_transactions
                     WHERE user_id = $1
                     ORDER BY
                         transaction_date DESC,
@@ -3035,7 +3262,7 @@ app.post(
 
             await client.query(
                 `
-                INSERT INTO transactions
+                INSERT INTO member_transactions
                 (
                     user_id,
                     application_id,
@@ -3400,8 +3627,8 @@ app.get(
                         )::int AS expired_members,
 
                         COUNT(*) FILTER (
-                            WHERE UPPER(status) = 'SUSPENDED'
-                        )::int AS suspended_members
+                            WHERE UPPER(status) = 'REVOKED'
+                        )::int AS revoked_members
 
                     FROM members
                     `
@@ -3497,10 +3724,10 @@ app.get(
                     0
                 );
 
-            const suspendedMembers =
+            const revokedMembers =
                 Number(
                     membersResult.rows[0]
-                        .suspended_members ||
+                        .revoked_members ||
                     0
                 );
 
@@ -3556,7 +3783,7 @@ app.get(
 
                 expiredMembers,
 
-                suspendedMembers,
+                revokedMembers,
 
                 pendingApplications,
 
@@ -3632,6 +3859,7 @@ app.get(
                     FROM members m
                     JOIN users u
                         ON u.id = m.user_id
+                    WHERE UPPER(m.status) <> 'REVOKED'
                     ORDER BY m.id DESC
                     `
                 );
@@ -4325,8 +4553,31 @@ app.get(
                         qr_code,
                         archived_at,
                         restored_at,
-                        removal_reason
+                        removal_reason,
+                        'ARCHIVED'::text AS record_type
                     FROM archived_members
+                    UNION ALL
+                    SELECT
+                        NULL::bigint AS archive_id,
+                        m.id AS original_member_id,
+                        m.user_id,
+                        m.member_id,
+                        u.full_name,
+                        u.email,
+                        m.registration_type,
+                        m.membership_plan,
+                        m.start_date,
+                        m.expiration_date,
+                        m.status,
+                        m.qr_code,
+                        NULL::timestamptz AS archived_at,
+                        NULL::timestamptz AS restored_at,
+                        'Membership revoked'::text AS removal_reason,
+                        'REVOKED'::text AS record_type
+                    FROM members m
+                    JOIN users u
+                        ON u.id = m.user_id
+                    WHERE UPPER(m.status) = 'REVOKED'
                     ORDER BY
                         archived_at DESC,
                         archive_id DESC
@@ -4817,8 +5068,11 @@ app.get(
 
         try {
 
-            const result =
-                await pool.query(
+            const [
+                memberTransactionsResult,
+                guestTransactionsResult
+            ] = await Promise.all([
+                pool.query(
                     `
                     SELECT
                         t.id,
@@ -4830,23 +5084,43 @@ app.get(
                         t.payment_method,
                         t.gcash_reference,
                         t.transaction_date,
+                        t.created_at,
                         t.status
-                    FROM transactions t
+                    FROM member_transactions t
                     JOIN users u
                         ON u.id = t.user_id
                     ORDER BY
                         t.transaction_date DESC,
                         t.id DESC
                     `
-                );
+                ),
+                pool.query(
+                    `
+                    SELECT
+                        id,
+                        guest_id,
+                        guest_name,
+                        visit_type,
+                        amount,
+                        payment_method,
+                        transaction_date,
+                        created_at
+                    FROM guest_transactions
+                    ORDER BY transaction_date DESC, id DESC
+                    `
+                )
+            ]);
 
             res.json({
 
                 success:
                     true,
 
-                transactions:
-                    result.rows
+                memberTransactions:
+                    memberTransactionsResult.rows,
+
+                guestTransactions:
+                    guestTransactionsResult.rows
 
             });
 
@@ -4866,112 +5140,6 @@ app.get(
 
                 message:
                     "Unable to load transactions.",
-
-                error:
-                    error.message
-
-            });
-
-        }
-
-    }
-);
-
-// =====================================
-// DELETE TRANSACTION
-// =====================================
-
-app.delete(
-    "/api/admin/transactions/:id",
-    async (req, res) => {
-
-        try {
-
-            const transactionId =
-                Number(
-                    req.params.id
-                );
-
-            if (
-                !Number.isInteger(
-                    transactionId
-                )
-            ) {
-
-                return res.status(
-                    400
-                ).json({
-
-                    success:
-                        false,
-
-                    message:
-                        "Invalid transaction ID."
-
-                });
-
-            }
-
-            const result =
-                await pool.query(
-                    `
-                    DELETE FROM transactions
-                    WHERE id = $1
-                    RETURNING id
-                    `,
-                    [
-                        transactionId
-                    ]
-                );
-
-            if (
-                result.rows.length ===
-                0
-            ) {
-
-                return res.status(
-                    404
-                ).json({
-
-                    success:
-                        false,
-
-                    message:
-                        "Transaction not found."
-
-                });
-
-            }
-
-            res.json({
-
-                success:
-                    true,
-
-                message:
-                    "Transaction deleted successfully.",
-
-                transaction:
-                    result.rows[0]
-
-            });
-
-        } catch (error) {
-
-            console.error(
-                "Delete transaction error:",
-                error
-            );
-
-            res.status(
-                500
-            ).json({
-
-                success:
-                    false,
-
-                message:
-                    "Unable to delete transaction.",
 
                 error:
                     error.message
@@ -5417,6 +5585,10 @@ app.post(
                         m.member_id,
                         m.membership_plan,
                         m.expiration_date,
+                        (
+                            m.expiration_date IS NOT NULL
+                            AND m.expiration_date <= (${GUEST_NOW_SQL})::date
+                        ) AS membership_expired,
                         m.status,
                         m.qr_code,
                         u.full_name,
@@ -5490,40 +5662,8 @@ app.post(
                     [member.id]
                 );
 
-            const expiration =
-                member.expiration_date
-                    ? new Date(
-                        member.expiration_date
-                    )
-                    : null;
-
-            const expirationEnd =
-                expiration
-                    ? new Date(
-                        expiration
-                    )
-                    : null;
-
             if (
-                expirationEnd
-            ) {
-
-                expirationEnd.setHours(
-                    23,
-                    59,
-                    59,
-                    999
-                );
-
-            }
-
-            if (
-                expirationEnd &&
-                !Number.isNaN(
-                    expirationEnd.getTime()
-                ) &&
-                expirationEnd <
-                new Date() &&
+                member.membership_expired &&
                 openAttendanceResult.rows.length === 0
             ) {
 
@@ -6370,6 +6510,34 @@ app.post(
             const guest =
                 guestResult.rows[0];
 
+            await client.query(
+                `
+                INSERT INTO guest_transactions
+                (
+                    guest_id,
+                    guest_name,
+                    visit_type,
+                    amount,
+                    payment_method
+                )
+                VALUES
+                (
+                    $1,
+                    $2,
+                    $3,
+                    $4,
+                    $5
+                )
+                `,
+                [
+                    guest.id,
+                    guest.full_name,
+                    guest.visit_type,
+                    guest.amount_paid,
+                    guest.payment_method
+                ]
+            );
+
             const attendanceResult =
                 await client.query(
                     `
@@ -7212,6 +7380,17 @@ app.get(
     async (req, res) => {
 
         try {
+            const period =
+                String(req.query.period || "daily")
+                    .trim()
+                    .toLowerCase();
+
+            if (!["daily", "weekly", "monthly"].includes(period)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Report period must be daily, weekly, or monthly."
+                });
+            }
 
             const totalVisitsResult =
                 await pool.query(
@@ -7242,31 +7421,55 @@ app.get(
                     `
                 );
 
-            const dailyResult =
-                await pool.query(
-                    `
+            const seriesQueries = {
+                daily: `
                     SELECT
-                        EXTRACT(
-                            HOUR FROM check_in
-                        )::int AS hour,
+                        TO_CHAR(period.bucket, 'FMHH12 AM') AS label,
+                        COUNT(a.id)::int AS visits
+                    FROM GENERATE_SERIES(
+                        DATE_TRUNC('day', NOW()) + INTERVAL '8 hours',
+                        DATE_TRUNC('day', NOW()) + INTERVAL '21 hours',
+                        INTERVAL '1 hour'
+                    ) AS period(bucket)
+                    LEFT JOIN attendance a
+                        ON a.check_in >= period.bucket
+                       AND a.check_in < period.bucket + INTERVAL '1 hour'
+                    GROUP BY period.bucket
+                    ORDER BY period.bucket
+                `,
+                weekly: `
+                    SELECT
+                        TO_CHAR(period.bucket, 'Dy MM/DD') AS label,
+                        COUNT(a.id)::int AS visits
+                    FROM GENERATE_SERIES(
+                        DATE_TRUNC('week', NOW()),
+                        DATE_TRUNC('week', NOW()) + INTERVAL '6 days',
+                        INTERVAL '1 day'
+                    ) AS period(bucket)
+                    LEFT JOIN attendance a
+                        ON a.check_in >= period.bucket
+                       AND a.check_in < period.bucket + INTERVAL '1 day'
+                    GROUP BY period.bucket
+                    ORDER BY period.bucket
+                `,
+                monthly: `
+                    SELECT
+                        TO_CHAR(period.bucket, 'Mon YYYY') AS label,
+                        COUNT(a.id)::int AS visits
+                    FROM GENERATE_SERIES(
+                        DATE_TRUNC('month', NOW()) - INTERVAL '11 months',
+                        DATE_TRUNC('month', NOW()),
+                        INTERVAL '1 month'
+                    ) AS period(bucket)
+                    LEFT JOIN attendance a
+                        ON a.check_in >= period.bucket
+                       AND a.check_in < period.bucket + INTERVAL '1 month'
+                    GROUP BY period.bucket
+                    ORDER BY period.bucket
+                `
+            };
 
-                        COUNT(*)::int AS visits
-
-                    FROM attendance
-
-                    WHERE
-                        check_in::date =
-                        CURRENT_DATE
-
-                    GROUP BY
-                        EXTRACT(
-                            HOUR FROM check_in
-                        )
-
-                    ORDER BY
-                        hour
-                    `
-                );
+            const seriesResult = await pool.query(seriesQueries[period]);
 
             res.json({
 
@@ -7288,8 +7491,10 @@ app.get(
                         .guest_visits ||
                     0,
 
-                hourly:
-                    dailyResult.rows
+                period,
+
+                series:
+                    seriesResult.rows
 
             });
 
@@ -7397,11 +7602,18 @@ app.use(
 // START SERVER
 // =====================================
 
-app.listen(
-    PORT,
-    "0.0.0.0",
-    () => {
+async function startServer() {
+    await ensureDashboardSchema();
+    await expireMemberships();
+    setInterval(
+        expireMemberships,
+        60 * 1000
+    );
 
+    app.listen(
+        PORT,
+        "0.0.0.0",
+        () => {
         console.log(
             `ANCHOR server running on port ${PORT}`
         );
@@ -7420,5 +7632,13 @@ app.listen(
                 : "Normal guest mode: 10:00 PM same-day closing."
         );
 
-    }
-);
+        }
+    );
+}
+
+startServer().catch(error => {
+    console.error("Database schema initialization failed:", error);
+    void pool.end().finally(() => {
+        process.exitCode = 1;
+    });
+});
