@@ -56,36 +56,6 @@
     --color-accent: #be123c;
 }
 
-:root[data-theme="original"][data-portal="admin"] {
-    --color-background: #111820;
-    --color-surface: #1d2732;
-    --color-surface-raised: #293746;
-    --color-border: #405366;
-    --color-secondary: #1e293b;
-    --color-text: #f3f4f6;
-    --color-muted: #d1d9e0;
-    --color-subtle: #a6b3bf;
-    --color-placeholder: #b8c3ce;
-    --color-primary: #4f6f91;
-    --color-primary-hover: #3b5877;
-    --color-accent: #14b8a6;
-}
-
-:root[data-theme="original"][data-portal="customer"] {
-    --color-background: #0b1120;
-    --color-surface: #111827;
-    --color-surface-raised: #172033;
-    --color-border: #334155;
-    --color-secondary: #1e293b;
-    --color-text: #f3f4f6;
-    --color-muted: #cbd5e1;
-    --color-subtle: #9ca3af;
-    --color-placeholder: #9ca3af;
-    --color-primary: #be123c;
-    --color-primary-hover: #9f1239;
-    --color-accent: #fb7185;
-}
-
 :root:not([data-theme="light"]) {
     --color-revoked-text: #fbbf24;
 }
@@ -583,30 +553,6 @@ textarea:focus-visible {
     color-scheme: light;
 }
 
-:root[data-theme="original"][data-page="customer-dashboard"],
-:root[data-theme="original"][data-page="admin-dashboard"] {
-    --color-card: var(--color-surface-raised);
-    --color-input: var(--color-surface-raised);
-    --color-primary-text: #ffffff;
-    --color-link: var(--color-primary);
-    --color-link-hover: var(--color-accent);
-    --color-danger: #ff0000;
-    --color-danger-hover: #cc0000;
-    --color-danger-text: #ffffff;
-}
-
-:root[data-theme="original"][data-page="signup"],
-:root[data-theme="original"][data-page="forgot-password"] {
-    --color-card: var(--color-surface-raised);
-    --color-input: var(--color-surface-raised);
-    --color-primary-text: #ffffff;
-    --color-link: var(--color-primary);
-    --color-link-hover: var(--color-accent);
-    --color-danger: #ff0000;
-    --color-danger-hover: #cc0000;
-    --color-danger-text: #ffffff;
-}
-
 :root[data-page="customer-dashboard"] body,
 :root[data-page="admin-dashboard"] body,
 :root[data-page="signup"] body,
@@ -1051,6 +997,57 @@ textarea:focus-visible {
     [data-page="admin-dashboard"]
 ) .theme-toggle {
     border-radius: 8px;
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) #themeToggle {
+    display: inline-flex;
+    min-width: 112px;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 0 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: var(--color-surface-raised);
+    color: var(--color-text);
+    font-size: 12px;
+    font-weight: 650;
+    line-height: 1;
+    cursor: pointer;
+    transition: border-color .16s ease, background-color .16s ease, color .16s ease;
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) #themeToggle:hover {
+    border-color: var(--color-primary);
+    background: var(--color-secondary);
+    color: var(--color-primary);
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .theme-toggle-icon {
+    width: 17px;
+    height: 17px;
+    flex: 0 0 17px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.8;
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .theme-toggle-icon[hidden] {
+    display: none;
 }
 
 :root:is(
