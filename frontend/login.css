@@ -312,9 +312,11 @@ body.login-page {
 .login-input-wrap > svg {
     position: absolute;
     z-index: 1;
+    top: 50%;
     left: 14px;
     width: 19px;
     height: 19px;
+    transform: translateY(-50%);
     fill: none;
     stroke: var(--color-muted);
     stroke-linecap: round;
@@ -358,12 +360,16 @@ body.login-page {
 }
 
 .login-form .password-box {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 8px;
     margin-bottom: 18px;
 }
 
 .login-form .password-box input {
-    padding-right: 54px;
+    flex: 1;
+    min-width: 0;
+    padding-right: 14px;
 }
 
 .login-form .password-box > svg {
@@ -371,25 +377,49 @@ body.login-page {
 }
 
 .login-password-toggle {
-    position: absolute;
-    top: 6px;
-    right: 6px;
     display: grid;
-    width: 40px;
-    height: 40px;
+    flex: 0 0 44px;
+    width: 44px;
+    min-height: 52px;
+    height: 52px;
     place-items: center;
     padding: 0;
-    border: 0;
-    border-radius: 6px;
-    background: transparent;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: var(--login-input);
     color: var(--color-muted);
     cursor: pointer;
     transition: background-color .16s ease, color .16s ease;
 }
 
+.login-form .password-box .login-password-toggle {
+    margin: 0;
+    border-color: var(--color-border);
+    background: var(--login-input);
+    color: var(--color-muted);
+}
+
 .login-password-toggle:hover {
-    background: rgba(248, 250, 252, .07);
+    border-color: var(--color-primary);
+    background: #20262e;
     color: var(--color-text);
+}
+
+.login-form .password-box .login-password-toggle:hover {
+    border-color: var(--color-primary);
+    background: #20262e;
+    color: var(--color-text);
+}
+
+.login-form .password-box .login-password-toggle[aria-pressed="true"],
+.login-form .password-box .login-password-toggle[aria-pressed="true"]:hover {
+    border-color: var(--color-primary);
+    background: var(--login-input);
+    color: var(--color-primary);
+}
+
+.login-form .password-box .login-password-toggle[aria-pressed="true"] svg {
+    stroke: var(--color-primary);
 }
 
 .login-password-toggle svg {
@@ -628,7 +658,8 @@ body.login-page {
     }
 
     .login-password-toggle {
-        top: 3px;
+        min-height: 46px;
+        height: 46px;
     }
 
     .login-options {

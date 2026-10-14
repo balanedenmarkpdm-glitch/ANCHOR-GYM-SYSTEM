@@ -932,10 +932,19 @@ function bindPasswordToggle(
                     ? "text"
                     : "password";
 
-            toggle.textContent =
-                showPassword
-                    ? "Hide"
-                    : "Show";
+            const showIcon =
+                toggle.querySelector(
+                    '[data-password-icon="show"]'
+                );
+            const hideIcon =
+                toggle.querySelector(
+                    '[data-password-icon="hide"]'
+                );
+
+            if (showIcon && hideIcon) {
+                showIcon.hidden = showPassword;
+                hideIcon.hidden = !showPassword;
+            }
 
             toggle.setAttribute(
                 "aria-label",
@@ -1055,10 +1064,19 @@ if (toggleAdminPassword) {
                     ? "text"
                     : "password";
 
-            toggleAdminPassword.textContent =
-                isPasswordHidden
-                    ? "Hide"
-                    : "Show";
+            const showIcon =
+                toggleAdminPassword.querySelector(
+                    '[data-password-icon="show"]'
+                );
+            const hideIcon =
+                toggleAdminPassword.querySelector(
+                    '[data-password-icon="hide"]'
+                );
+
+            if (showIcon && hideIcon) {
+                showIcon.hidden = isPasswordHidden;
+                hideIcon.hidden = !isPasswordHidden;
+            }
 
             toggleAdminPassword.setAttribute(
                 "aria-label",
