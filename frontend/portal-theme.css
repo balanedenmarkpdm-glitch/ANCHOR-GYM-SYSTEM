@@ -930,6 +930,22 @@ textarea:focus-visible {
     color: var(--color-primary);
 }
 
+:root[data-page="admin-dashboard"] #dashboardTotalMembers {
+    color: #9ca3af;
+}
+
+:root[data-page="admin-dashboard"] #dashboardActiveMembers {
+    color: #22c55e;
+}
+
+:root[data-page="admin-dashboard"] #dashboardPendingCount {
+    color: #f5c542;
+}
+
+:root[data-page="admin-dashboard"] #dashboardRejectedCount {
+    color: #ef4444;
+}
+
 :root:is(
     [data-page="customer-dashboard"],
     [data-page="admin-dashboard"]
