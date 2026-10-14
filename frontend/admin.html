@@ -879,77 +879,33 @@
                     </button>
                 </div>
 
-                <div class="transactions-grid">
-
-                    <div class="card">
-
-                        <h2>Member Transactions</h2>
-
-                        <div class="table-scroll">
-                            <table>
-
-                                <thead>
-
-                                    <tr>
-
-                                        <th scope="col">Transaction ID</th>
-                                        <th scope="col">Member</th>
-                                        <th scope="col">Amount</th>
-                                        <th scope="col">Reference</th>
-                                        <th scope="col">Status</th>
-
-                                    </tr>
-
-                                </thead>
-
-                                <tbody id="memberTransactionsTableBody">
-                                    <tr>
-                                        <td colspan="5" style="text-align:center;">
-                                            No member transactions available.
-                                        </td>
-                                    </tr>
-                                </tbody>
-
-                            </table>
-                        </div>
-
-                    </div>
-
-                    <div class="card">
-
-                        <h2>Guest / Walk-in Transactions</h2>
-
-                        <div class="table-scroll">
-                            <table>
-
-                                <thead>
-                                    <tr>
-                                        <th scope="col">Transaction ID</th>
-                                        <th scope="col">Guest</th>
-                                        <th scope="col">Check-In</th>
-                                        <th scope="col">Check-Out</th>
-                                        <th scope="col">Extension</th>
-                                        <th scope="col">Hours</th>
-                                        <th scope="col">Amount</th>
-                                        <th scope="col">Payment Method</th>
-                                        <th scope="col">Payment Status</th>
-                                        <th scope="col">Reference</th>
-                                        <th scope="col">Date</th>
-                                    </tr>
-                                </thead>
-
-                                <tbody id="guestTransactionsTableBody">
-                                    <tr>
-                                        <td colspan="11" style="text-align:center;">
-                                            No guest transactions available.
-                                        </td>
-                                    </tr>
-                                </tbody>
-
-                            </table>
-                        </div>
-
-                    </div>
+                <div class="card table-scroll transaction-table-scroll">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th scope="col">Transaction ID / Reference</th>
+                                <th scope="col">Customer / Guest</th>
+                                <th scope="col">Type</th>
+                                <th scope="col">Payment Description</th>
+                                <th scope="col">Related Visit</th>
+                                <th scope="col">Check-In</th>
+                                <th scope="col">Check-Out</th>
+                                <th scope="col">Extension</th>
+                                <th scope="col">Amount</th>
+                                <th scope="col">Method</th>
+                                <th scope="col">Payment Status</th>
+                                <th scope="col">Transaction Date</th>
+                                <th scope="col">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="transactionsTableBody">
+                            <tr>
+                                <td colspan="13" style="text-align:center;">
+                                    No transaction records available.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
 
             </div>
@@ -1046,20 +1002,36 @@
                 <div class="card manual-attendance-card">
                     <h3>Manual Member Check-In / Check-Out</h3>
                     <p class="subtitle">
-                        Use the member ID when a member cannot present a cellphone or QR code.
+                        Search by member name or ID, select the matching account, and record attendance without a cellphone or QR code.
                     </p>
-                    <label for="manualAttendanceMemberId">Member ID</label>
+                    <label for="manualAttendanceSearch">Search member</label>
                     <input
-                        id="manualAttendanceMemberId"
+                        id="manualAttendanceSearch"
                         type="text"
                         autocomplete="off"
-                        placeholder="Enter the member ID">
+                        placeholder="Enter a name or member ID"
+                        oninput="searchManualAttendanceMembers()"
+                        aria-controls="manualAttendanceSearchResults">
+                    <input id="manualAttendanceMemberId" type="hidden">
+                    <div
+                        id="manualAttendanceSearchResults"
+                        class="manual-attendance-results"
+                        role="listbox"
+                        aria-live="polite">
+                    </div>
+                    <p id="manualAttendanceSelectedMember" class="subtitle" aria-live="polite">
+                        Select a member before recording attendance.
+                    </p>
                     <div class="manual-attendance-actions">
                         <button class="red-button" type="button"
+                            id="manualMemberCheckInButton"
+                            disabled
                             onclick="submitManualAttendance('CHECK_IN')">
                             Check In Member
                         </button>
                         <button class="small-btn" type="button"
+                            id="manualMemberCheckOutButton"
+                            disabled
                             onclick="submitManualAttendance('CHECK_OUT')">
                             Check Out Member
                         </button>
@@ -1128,7 +1100,7 @@
                             type="button"
                             disabled
                             onclick="deleteSelectedGuestAttendance()">
-                            Delete selected guests
+                            Void selected guests
                         </button>
 
                     </div>
@@ -1145,7 +1117,7 @@
                                         id="selectAllAttendance"
                                         type="checkbox"
                                         disabled
-                                        aria-label="Select all guest attendance records"
+                                        aria-label="Select guest attendance records to void"
                                         onchange="toggleSelectAllRows('attendanceTableBody', 'selectAllAttendance', 'deleteSelectedAttendanceButton', 'attendanceSelectedCount', 'guest')">
                                 </th>
 
@@ -1157,21 +1129,12 @@
                                     Type
                                 </th>
 
-                                <th>
-                                    Check-In
-                                </th>
-
-                                <th>
-                                    Check-Out
-                                </th>
-
-                                <th>
-                                    Remaining / Status
-                                </th>
-
-                                <th>
-                                    Action
-                                </th>
+                                <th>Check-In</th>
+                                <th>Check-Out</th>
+                                <th>Duration</th>
+                                <th>Remaining Time</th>
+                                <th>Visit Status</th>
+                                <th>Available Actions</th>
 
                             </tr>
 
@@ -1183,7 +1146,7 @@
                             <tr>
 
                                 <td
-                                    colspan="7"
+                                    colspan="9"
                                     style="text-align:center;">
 
                                     No attendance data available yet.
@@ -1334,7 +1297,16 @@
 
                     </select>
 
+                    <label class="payment-confirmation">
+                        <input
+                            id="guestPaymentConfirmed"
+                            type="checkbox"
+                            required>
+                        Guest payment has been received and confirmed
+                    </label>
+
                     <button
+                        id="guestCheckInButton"
                         class="red-button"
                         type="submit">
 
@@ -1359,8 +1331,7 @@
 
                         <br><br>
 
-                        Payment method is required
-                        before the guest can be checked in.
+                        Confirm the received payment and method before check-in.
 
                         <br><br>
 

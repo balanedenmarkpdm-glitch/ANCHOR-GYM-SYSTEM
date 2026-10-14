@@ -37,69 +37,32 @@ const pool = new Pool({
     statement_timeout: 15000
 });
 
-let transactionPurgeInterval = null;
-
-async function purgeExpiredTransactions() {
-    try {
-        const result = await pool.query(`
-            WITH deleted_member_transactions AS (
-                DELETE FROM member_transactions
-                WHERE created_at <= NOW() - INTERVAL '240 hours'
-                RETURNING id
-            )
-            SELECT
-                (SELECT COUNT(*) FROM deleted_member_transactions)::int
-                    AS member_count
-        `);
-
-        const { member_count } = result.rows[0];
-        if (member_count) {
-            console.log(
-                `Automatically purged ${member_count} member transaction(s) older than 10 days; guest payment history is retained.`
-            );
-        }
-    } catch (error) {
-        console.error("Automatic transaction purge error:", error);
-    }
-}
-
-async function expireMemberships() {
-    try {
-        const result = await pool.query(`
-            UPDATE members
-            SET status = 'EXPIRED'
-            WHERE status = 'ACTIVE'
-              AND expiration_date IS NOT NULL
-              AND expiration_date <= (${GUEST_NOW_SQL})::date
-            RETURNING id
-        `);
-
-        if (result.rowCount > 0) {
-            console.log(
-                `Automatically expired ${result.rowCount} membership(s) whose countdown reached zero.`
-            );
-        }
-    } catch (error) {
-        console.error("Automatic membership expiration error:", error);
-    }
-}
-
-function startTransactionPurgeFallback() {
-    if (transactionPurgeInterval) {
-        return;
-    }
-
-    console.warn(
-        "pg_cron is unavailable; transaction retention will use a one-minute application sweep."
-    );
-    void purgeExpiredTransactions();
-    transactionPurgeInterval = setInterval(
-        purgeExpiredTransactions,
-        60 * 1000
-    );
-}
-
 async function ensureDashboardSchema() {
+    const cronAvailability = await pool.query(
+        "SELECT to_regclass('cron.job') IS NOT NULL AS available"
+    );
+    if (cronAvailability.rows[0].available) {
+        const retentionJobs = await pool.query(
+            "SELECT jobid FROM cron.job WHERE jobname = $1",
+            ["anchor-gym-transaction-retention"]
+        );
+        for (const job of retentionJobs.rows) {
+            await pool.query(
+                "SELECT cron.unschedule($1)",
+                [job.jobid]
+            );
+        }
+    }
+    await pool.query(`
+        CREATE OR REPLACE PROCEDURE public.purge_expired_transactions()
+        LANGUAGE plpgsql
+        AS $procedure$
+        BEGIN
+            NULL;
+        END;
+        $procedure$
+    `);
+
     await pool.query(`
         DO $$
         BEGIN
@@ -236,7 +199,8 @@ async function ensureDashboardSchema() {
     `);
     await pool.query(`
         ALTER TABLE attendance
-        ADD COLUMN IF NOT EXISTS expiration_time TIMESTAMPTZ
+        ADD COLUMN IF NOT EXISTS expiration_time TIMESTAMPTZ,
+        ADD COLUMN IF NOT EXISTS voided_at TIMESTAMPTZ
     `);
     await pool.query(`
         CREATE INDEX IF NOT EXISTS guest_transactions_created_at_idx
@@ -283,7 +247,6 @@ async function ensureDashboardSchema() {
                   AND (
                       pg_get_constraintdef(oid) ILIKE '%ACTIVE%'
                       OR pg_get_constraintdef(oid) ILIKE '%PENDING%'
-                      OR pg_get_constraintdef(oid) ILIKE '%EXPIRED%'
                       OR pg_get_constraintdef(oid) ILIKE '%SUSPENDED%'
                       OR pg_get_constraintdef(oid) ILIKE '%REVOKED%'
                   )
@@ -300,13 +263,15 @@ async function ensureDashboardSchema() {
     await pool.query(`
         UPDATE members
         SET status = CASE
-            WHEN UPPER(status) IN ('SUSPENDED', 'ARCHIVED') THEN 'REVOKED'
+            WHEN UPPER(status) IN ('SUSPENDED', 'ARCHIVED', 'REVOKED') THEN 'REVOKED'
+            WHEN UPPER(status) IN ('ACTIVE', 'APPROVED', 'EXPIRED') THEN 'ACTIVE'
+            WHEN UPPER(status) = 'PENDING' THEN 'PENDING'
             WHEN status IS NULL THEN 'PENDING'
-            ELSE UPPER(status)
+            ELSE 'PENDING'
         END
         WHERE status IS NULL
+           OR UPPER(status) NOT IN ('ACTIVE', 'APPROVED', 'EXPIRED', 'PENDING', 'REVOKED')
            OR status <> UPPER(status)
-           OR UPPER(status) IN ('SUSPENDED', 'ARCHIVED')
     `);
     await pool.query(`
         ALTER TABLE members
@@ -324,59 +289,12 @@ async function ensureDashboardSchema() {
             ) THEN
                 ALTER TABLE members
                 ADD CONSTRAINT members_lifecycle_status_check
-                CHECK (status IN ('ACTIVE', 'PENDING', 'EXPIRED', 'REVOKED'));
+                CHECK (status IN ('ACTIVE', 'PENDING', 'REVOKED'));
             END IF;
         END;
         $$;
     `);
 
-    try {
-        await pool.query("CREATE EXTENSION IF NOT EXISTS pg_cron");
-        await pool.query(`
-            CREATE OR REPLACE PROCEDURE public.purge_expired_transactions()
-            LANGUAGE plpgsql
-            AS $procedure$
-            BEGIN
-                DELETE FROM member_transactions
-                WHERE created_at <= NOW() - INTERVAL '240 hours';
-            END;
-            $procedure$
-        `);
-
-        const jobName = "anchor-gym-transaction-retention";
-        const existingJobs = await pool.query(
-            "SELECT jobid FROM cron.job WHERE jobname = $1",
-            [jobName]
-        );
-        for (const job of existingJobs.rows) {
-            await pool.query(
-                "SELECT cron.unschedule($1)",
-                [job.jobid]
-            );
-        }
-
-        await pool.query(
-            "SELECT cron.schedule($1, $2, $3)",
-            [
-                jobName,
-                "* * * * *",
-                "CALL public.purge_expired_transactions()"
-            ]
-        );
-
-        if (transactionPurgeInterval) {
-            clearInterval(transactionPurgeInterval);
-            transactionPurgeInterval = null;
-        }
-        console.log(
-            "pg_cron scheduled transaction retention every minute."
-        );
-    } catch (error) {
-        console.warn(
-            `Unable to enable pg_cron transaction retention (${error.message}).`
-        );
-        startTransactionPurgeFallback();
-    }
 }
 
 let customerProfilePhotoColumnReady = false;
@@ -714,11 +632,13 @@ async function getCurrentOccupancy(queryable = pool) {
             COUNT(DISTINCT CASE
                 WHEN UPPER(a.user_type) = 'MEMBER'
                  AND a.check_out IS NULL
+                 AND a.voided_at IS NULL
                 THEN 'member-user:' || m.user_id::text
             END)::int AS members_inside,
             COUNT(DISTINCT CASE
                 WHEN UPPER(a.user_type) = 'GUEST'
                  AND a.check_out IS NULL
+                 AND a.voided_at IS NULL
                 THEN COALESCE(
                     NULLIF(regexp_replace(g.phone, '[^0-9]', '', 'g'), ''),
                     'guest-id:' || a.guest_id::text
@@ -726,6 +646,7 @@ async function getCurrentOccupancy(queryable = pool) {
             END)::int AS guests_inside,
             COUNT(DISTINCT CASE
                 WHEN a.check_out IS NULL
+                 AND a.voided_at IS NULL
                  AND UPPER(a.user_type) IN ('MEMBER', 'GUEST')
                 THEN COALESCE(
                     NULLIF(regexp_replace(
@@ -739,7 +660,7 @@ async function getCurrentOccupancy(queryable = pool) {
                     ), ''),
                     CASE
                         WHEN UPPER(a.user_type) = 'MEMBER'
-                        THEN 'member-id:' || m.user_id::text
+                        THEN 'member-user:' || m.user_id::text
                         ELSE 'guest-id:' || a.guest_id::text
                     END
                 )
@@ -3645,6 +3566,7 @@ app.post(
 
             }
 
+            await ensurePausedDaysRemainingColumn();
             await client.query(
                 "BEGIN"
             );
@@ -3819,10 +3741,16 @@ app.get(
 
                         COUNT(*) FILTER (
                             WHERE UPPER(status) = 'ACTIVE'
+                              AND (
+                                  expiration_date IS NULL
+                                  OR expiration_date > (${GUEST_NOW_SQL})::date
+                              )
                         )::int AS active_members,
 
                         COUNT(*) FILTER (
-                            WHERE UPPER(status) = 'EXPIRED'
+                            WHERE UPPER(status) = 'ACTIVE'
+                              AND expiration_date IS NOT NULL
+                              AND expiration_date <= (${GUEST_NOW_SQL})::date
                         )::int AS expired_members,
 
                         COUNT(*) FILTER (
@@ -3863,6 +3791,7 @@ app.get(
                         ON g.id = a.guest_id
                     WHERE UPPER(a.user_type) = 'GUEST'
                       AND a.check_out IS NULL
+                      AND a.voided_at IS NULL
                       AND ${GUEST_CLOSING_SQL} <= ${GUEST_NOW_SQL}
                     `
                 );
@@ -4013,7 +3942,12 @@ app.get(
                         m.start_date,
                         m.expiration_date,
                         m.paused_days_remaining,
-                        m.status
+                        m.status,
+                        (
+                            UPPER(m.status) = 'ACTIVE'
+                            AND m.expiration_date IS NOT NULL
+                            AND m.expiration_date <= (${GUEST_NOW_SQL})::date
+                        ) AS membership_expired
                     FROM members m
                     JOIN users u
                         ON u.id = m.user_id
@@ -4137,6 +4071,7 @@ app.patch(
                 WHERE member_id = $1
                   AND UPPER(user_type) = 'MEMBER'
                   AND check_out IS NULL
+                  AND voided_at IS NULL
                 LIMIT 1
                 FOR UPDATE
                 `,
@@ -4397,6 +4332,7 @@ app.delete(
 
             }
 
+            await ensurePausedDaysRemainingColumn();
             await client.query(
                 "BEGIN"
             );
@@ -4466,6 +4402,7 @@ app.delete(
                     FROM attendance
                     WHERE member_id = $1
                       AND check_out IS NULL
+                      AND voided_at IS NULL
                     LIMIT 1
                     `,
                     [
@@ -4559,32 +4496,31 @@ app.delete(
                         member.membership_plan,
                         member.start_date,
                         member.expiration_date,
-                        member.status,
+                        "REVOKED",
                         member.qr_code,
                         reason
                     ]
                 );
 
-            await client.query(
-                `
-                UPDATE attendance
-                SET member_id = NULL
-                WHERE member_id = $1
-                `,
-                [
-                    memberId
-                ]
-            );
-
-            const deleteResult =
+            const archivedMemberResult =
                 await client.query(
                     `
-                    DELETE FROM members
+                    UPDATE members
+                    SET
+                        paused_days_remaining = GREATEST(
+                            COALESCE(
+                                expiration_date - (${GUEST_NOW_SQL})::date,
+                                0
+                            ),
+                            0
+                        ),
+                        status = 'REVOKED'
                     WHERE id = $1
                     RETURNING
                         id,
                         member_id,
-                        user_id
+                        user_id,
+                        status
                     `,
                     [
                         memberId
@@ -4594,8 +4530,8 @@ app.delete(
             await createNotification(
                 client,
                 member.user_id,
-                "Membership Removed",
-                `Your membership has been removed by the gym administrator. Reason: ${reason}`
+                "Membership Archived",
+                `Your membership was archived and its access revoked by the gym administrator. Reason: ${reason}`
             );
 
             await client.query(
@@ -4611,10 +4547,10 @@ app.delete(
                     true,
 
                 message:
-                    "Membership archived, removed, and customer notified successfully.",
+                    "Membership archived and access revoked. Membership and attendance history were preserved.",
 
                 member:
-                    deleteResult.rows[0],
+                    archivedMemberResult.rows[0],
 
                 archive:
                     archiveResult.rows[0]
@@ -4736,6 +4672,11 @@ app.get(
                     JOIN users u
                         ON u.id = m.user_id
                     WHERE UPPER(m.status) = 'REVOKED'
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM archived_members ar
+                          WHERE ar.original_member_id = m.id
+                      )
                     ORDER BY
                         archived_at DESC,
                         archive_id DESC
@@ -4973,24 +4914,39 @@ app.post(
                 existingMemberResult.rows.length >
                 0
             ) {
+                const existingMember = existingMemberResult.rows[0];
+                if (
+                    Number(existingMember.id) !==
+                    Number(archived.original_member_id)
+                ) {
+                    await client.query("ROLLBACK");
+                    transactionStarted = false;
+                    return res.status(409).json({
+                        success: false,
+                        message: "This customer already has a different membership."
+                    });
+                }
 
                 await client.query(
-                    "ROLLBACK"
+                    `
+                    UPDATE archived_members
+                    SET restored_at = CURRENT_TIMESTAMP, status = 'RESTORED'
+                    WHERE archive_id = $1
+                    `,
+                    [archiveId]
                 );
+                await client.query("COMMIT");
+                transactionStarted = false;
 
-                transactionStarted =
-                    false;
-
-                return res.status(
-                    400
-                ).json({
-
-                    success:
-                        false,
-
-                    message:
-                        "This customer already has a membership."
-
+                const membershipStatus = String(existingMember.status || "")
+                    .trim()
+                    .toUpperCase();
+                return res.json({
+                    success: true,
+                    message: membershipStatus === "REVOKED"
+                        ? "Archive record restored. The membership remains revoked; reactivate it separately if authorized."
+                        : "Archive record restored. Existing membership status and dates were preserved.",
+                    member: existingMember
                 });
 
             }
@@ -5025,45 +4981,15 @@ app.post(
 
             }
 
-            const dateResult =
-                await client.query(
-                    `
-                    SELECT
-                        CASE
-                            WHEN expiration_date IS NOT NULL
-                                 AND expiration_date >= CURRENT_DATE
-                            THEN COALESCE(
-                                start_date,
-                                CURRENT_DATE
-                            )
-                            ELSE CURRENT_DATE
-                        END AS start_date,
-
-                        CASE
-                            WHEN expiration_date IS NOT NULL
-                                 AND expiration_date >= CURRENT_DATE
-                            THEN expiration_date
-                            ELSE (
-                                CURRENT_DATE +
-                                INTERVAL '1 month'
-                            )::date
-                        END AS expiration_date
-
-                    FROM archived_members
-                    WHERE archive_id = $1
-                    `,
-                    [
-                        archiveId
-                    ]
-                );
-
-            const startDate =
-                dateResult.rows[0]
-                    .start_date;
-
-            const expirationDate =
-                dateResult.rows[0]
-                    .expiration_date;
+            const archivedStatus = String(archived.status || "")
+                .trim()
+                .toUpperCase();
+            const restoredStatus =
+                archivedStatus === "EXPIRED"
+                    ? "ACTIVE"
+                    : ["ACTIVE", "PENDING", "REVOKED"].includes(archivedStatus)
+                        ? archivedStatus
+                        : "PENDING";
 
             const newQrCode =
                 `ANCHOR-${crypto.randomUUID()}`;
@@ -5090,8 +5016,8 @@ app.post(
                         $4,
                         $5,
                         $6,
-                        'ACTIVE',
-                        $7
+                        $7,
+                        $8
                     )
                     RETURNING
                         id,
@@ -5111,8 +5037,9 @@ app.post(
                             "ONLINE",
                         archived.membership_plan ||
                             "Monthly",
-                        startDate,
-                        expirationDate,
+                        archived.start_date,
+                        archived.expiration_date,
+                        restoredStatus,
                         newQrCode
                     ]
                 );
@@ -5147,7 +5074,9 @@ app.post(
                     true,
 
                 message:
-                    "Membership restored successfully.",
+                    restoredStatus === "REVOKED"
+                        ? "Archived record restored. The membership remains revoked until separately reactivated."
+                        : "Archived record restored without changing its membership eligibility.",
 
                 member:
                     memberResult.rows[0]
@@ -5377,6 +5306,12 @@ app.get(
                         a.user_type,
                         a.check_in,
                         a.check_out,
+                        GREATEST(
+                            0,
+                            FLOOR(EXTRACT(EPOCH FROM (
+                                COALESCE(a.check_out, ${GUEST_NOW_SQL}) - a.check_in
+                            )))
+                        )::int AS duration_seconds,
                         a.expiration_time,
                         g.phone AS guest_phone,
                         g.visit_type,
@@ -5644,8 +5579,11 @@ app.get(
                         ON g.id =
                         a.guest_id
 
-                    WHERE $1 = 'all'
-                       OR UPPER(a.user_type) = $2
+                    WHERE a.voided_at IS NULL
+                      AND (
+                          $1 = 'all'
+                          OR UPPER(a.user_type) = $2
+                      )
 
                     ORDER BY
                         a.check_in DESC,
@@ -5755,6 +5693,7 @@ app.get(
                 WHERE a.id = $1
                   AND UPPER(a.user_type) = 'GUEST'
                   AND a.check_out IS NULL
+                  AND a.voided_at IS NULL
                 `,
                 [attendanceId]
             );
@@ -5954,6 +5893,7 @@ app.post(
                 WHERE a.id = $1
                   AND UPPER(a.user_type) = 'GUEST'
                   AND a.check_out IS NULL
+                  AND a.voided_at IS NULL
                 FOR UPDATE OF a
                 `,
                 [attendanceId]
@@ -6382,35 +6322,32 @@ app.post(
                     WHERE member_id = $1
                       AND UPPER(user_type) = 'MEMBER'
                       AND check_out IS NULL
+                      AND voided_at IS NULL
                     ORDER BY
                         check_in DESC,
                         id DESC
-                    LIMIT 1
                     FOR UPDATE
                     `,
                     [member.id]
                 );
 
+            if (openAttendanceResult.rows.length > 1) {
+                await client.query("ROLLBACK");
+                transactionStarted = false;
+                return res.status(409).json({
+                    success: false,
+                    message: "This member has multiple open visits. Resolve the visit from the Attendance table before scanning again.",
+                    open_visits: openAttendanceResult.rows
+                });
+            }
+
             if (
                 member.membership_expired &&
                 openAttendanceResult.rows.length === 0
             ) {
-
                 await client.query(
-                    `
-                    UPDATE members
-                    SET status = 'EXPIRED'
-                    WHERE id = $1
-                    `,
-                    [
-                        member.id
-                    ]
+                    "ROLLBACK"
                 );
-
-                await client.query(
-                    "COMMIT"
-                );
-
                 transactionStarted =
                     false;
 
@@ -6455,128 +6392,40 @@ app.post(
 
             }
 
-            const recentScanResult =
-                await client.query(
-                    `
-                    SELECT id
-                    FROM attendance
-                    WHERE member_id = $1
-                      AND UPPER(user_type) = 'MEMBER'
-                      AND GREATEST(
-                            check_in,
-                            COALESCE(check_out, check_in)
-                          ) >=
-                          ${GUEST_NOW_SQL} - INTERVAL '5 seconds'
-                    ORDER BY
-                        check_in DESC,
-                        id DESC
-                    LIMIT 1
-                    `,
-                    [
-                        member.id
-                    ]
-                );
-
-            if (
-                recentScanResult.rows.length >
-                0
-            ) {
-
-                await client.query(
-                    "ROLLBACK"
-                );
-
-                transactionStarted =
-                    false;
-
-                return res.status(
-                    429
-                ).json({
-
-                    success:
-                        false,
-
-                    message:
-                        "This member was scanned just now. Please wait 5 seconds before scanning again."
-
+            if (openAttendanceResult.rows.length > 0) {
+                await client.query("ROLLBACK");
+                transactionStarted = false;
+                return res.status(409).json({
+                    success: false,
+                    message: "This member already has an open visit. Select that visit in Attendance and record checkout only when they actually leave."
                 });
-
             }
 
-            let action;
+            const checkinResult = await client.query(
+                `
+                INSERT INTO attendance
+                (
+                    member_id,
+                    user_type
+                )
+                VALUES
+                (
+                    $1,
+                    'MEMBER'
+                )
+                RETURNING
+                    id,
+                    member_id,
+                    guest_id,
+                    user_type,
+                    check_in,
+                    check_out
+                `,
+                [member.id]
+            );
 
-            let attendance;
-
-            if (
-                openAttendanceResult.rows.length >
-                0
-            ) {
-
-                const activeAttendance =
-                    openAttendanceResult.rows[0];
-
-                const checkoutResult =
-                    await client.query(
-                        `
-                        UPDATE attendance
-                        SET
-                            check_out =
-                                ${GUEST_NOW_SQL}
-                        WHERE id = $1
-                        RETURNING
-                            id,
-                            member_id,
-                            guest_id,
-                            user_type,
-                            check_in,
-                            check_out
-                        `,
-                        [
-                            activeAttendance.id
-                        ]
-                    );
-
-                attendance =
-                    checkoutResult.rows[0];
-
-                action =
-                    "CHECKED_OUT";
-
-            } else {
-
-                const checkinResult =
-                    await client.query(
-                        `
-                        INSERT INTO attendance
-                        (
-                            member_id,
-                            user_type
-                        )
-                        VALUES
-                        (
-                            $1,
-                            'MEMBER'
-                        )
-                        RETURNING
-                            id,
-                            member_id,
-                            guest_id,
-                            user_type,
-                            check_in,
-                            check_out
-                        `,
-                        [
-                            member.id
-                        ]
-                    );
-
-                attendance =
-                    checkinResult.rows[0];
-
-                action =
-                    "CHECKED_IN";
-
-            }
+            const attendance = checkinResult.rows[0];
+            const action = "CHECKED_IN";
 
             const {
                 membersInside,
@@ -6703,6 +6552,80 @@ app.post(
     }
 );
 
+app.get(
+    "/api/admin/attendance/member-search",
+    async (req, res) => {
+        const query = String(req.query.q || "").trim();
+
+        if (query.length < 2 || query.length > 100) {
+            return res.json({
+                success: true,
+                members: []
+            });
+        }
+
+        try {
+            const result = await pool.query(
+                `
+                SELECT
+                    m.id,
+                    m.member_id,
+                    m.full_name,
+                    m.status,
+                    m.expiration_date,
+                    (
+                        UPPER(m.status) = 'ACTIVE'
+                        AND (
+                            m.expiration_date IS NULL
+                            OR m.expiration_date > (${GUEST_NOW_SQL})::date
+                        )
+                    ) AS membership_eligible,
+                    EXISTS (
+                        SELECT 1
+                        FROM attendance a
+                        WHERE a.member_id = m.id
+                          AND UPPER(a.user_type) = 'MEMBER'
+                          AND a.check_out IS NULL
+                          AND a.voided_at IS NULL
+                    ) AS currently_checked_in
+                FROM (
+                    SELECT
+                        m.id,
+                        m.member_id,
+                        u.full_name,
+                        m.status,
+                        m.expiration_date
+                    FROM members m
+                    JOIN users u
+                        ON u.id = m.user_id
+                    WHERE m.member_id::text ILIKE $1
+                       OR u.full_name ILIKE $1
+                    ORDER BY
+                        CASE WHEN m.member_id::text ILIKE $1 THEN 0 ELSE 1 END,
+                        u.full_name,
+                        m.id DESC
+                    LIMIT 20
+                ) m
+                ORDER BY m.full_name, m.id DESC
+                `,
+                [`%${query}%`]
+            );
+
+            return res.json({
+                success: true,
+                members: result.rows
+            });
+        } catch (error) {
+            console.error("Manual attendance member search error:", error);
+            return res.status(500).json({
+                success: false,
+                message: "Unable to search members for manual attendance.",
+                error: error.message
+            });
+        }
+    }
+);
+
 app.post(
     "/api/admin/attendance/manual",
     async (req, res) => {
@@ -6756,7 +6679,7 @@ app.post(
                     u.full_name,
                     (
                         m.expiration_date IS NULL OR
-                        m.expiration_date >= (${GUEST_NOW_SQL})::date
+                        m.expiration_date > (${GUEST_NOW_SQL})::date
                     ) AS membership_unexpired
                 FROM members m
                 JOIN users u
@@ -6784,13 +6707,13 @@ app.post(
 
             const openAttendanceResult = await client.query(
                 `
-                SELECT id
+                SELECT id, check_in
                 FROM attendance
                 WHERE member_id = $1
                   AND UPPER(user_type) = 'MEMBER'
                   AND check_out IS NULL
+                  AND voided_at IS NULL
                 ORDER BY check_in DESC, id DESC
-                LIMIT 1
                 FOR UPDATE
                 `,
                 [member.id]
@@ -6800,18 +6723,8 @@ app.post(
 
             if (action === "CHECK_IN") {
                 if (status !== "ACTIVE" || !member.membership_unexpired) {
-                    if (status === "ACTIVE" && !member.membership_unexpired) {
-                        await client.query(
-                            "UPDATE members SET status = 'EXPIRED' WHERE id = $1",
-                            [member.id]
-                        );
-                        await client.query("COMMIT");
-                        transactionStarted = false;
-                    } else {
-                        await client.query("ROLLBACK");
-                        transactionStarted = false;
-                    }
-
+                    await client.query("ROLLBACK");
+                    transactionStarted = false;
                     return res.status(400).json({
                         success: false,
                         message: "This member does not have an active membership."
@@ -6852,6 +6765,16 @@ app.post(
                     return res.status(404).json({
                         success: false,
                         message: "This member has no open attendance session to check out."
+                    });
+                }
+
+                if (openAttendanceResult.rows.length > 1) {
+                    await client.query("ROLLBACK");
+                    transactionStarted = false;
+                    return res.status(409).json({
+                        success: false,
+                        message: "This member has multiple open visits. Select the exact visit in the Attendance table to check out.",
+                        open_visits: openAttendanceResult.rows
                     });
                 }
 
@@ -6950,7 +6873,9 @@ app.post(
                 visit_type,
                 hours,
                 amount_paid,
-                payment_method
+                payment_method,
+                payment_confirmed,
+                idempotency_key
             } = req.body;
 
             const finalName =
@@ -7073,6 +6998,20 @@ app.post(
 
             }
 
+            const idempotencyKey = String(idempotency_key || "").trim();
+            if (payment_confirmed !== true) {
+                return res.status(402).json({
+                    success: false,
+                    message: "Confirm that the guest's payment was received before check-in."
+                });
+            }
+            if (!idempotencyKey || idempotencyKey.length > 120) {
+                return res.status(400).json({
+                    success: false,
+                    message: "A valid guest check-in request key is required."
+                });
+            }
+
             let finalHours =
                 null;
 
@@ -7159,6 +7098,43 @@ app.post(
             transactionStarted =
                 true;
 
+            await client.query(
+                "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+                [idempotencyKey]
+            );
+
+            const duplicateResult = await client.query(
+                `
+                SELECT
+                    gt.id AS transaction_id,
+                    gt.transaction_reference,
+                    gt.attendance_id,
+                    a.guest_id,
+                    a.user_type,
+                    a.check_in,
+                    a.check_out
+                FROM guest_transactions gt
+                LEFT JOIN attendance a
+                    ON a.id = gt.attendance_id
+                WHERE gt.idempotency_key = $1
+                FOR UPDATE OF gt
+                `,
+                [idempotencyKey]
+            );
+            if (duplicateResult.rows.length > 0) {
+                await client.query("COMMIT");
+                transactionStarted = false;
+                return res.json({
+                    success: true,
+                    duplicate: true,
+                    attendance: duplicateResult.rows[0],
+                    transaction: {
+                        id: duplicateResult.rows[0].transaction_id,
+                        reference: duplicateResult.rows[0].transaction_reference
+                    }
+                });
+            }
+
             const guestResult =
                 await client.query(
                     `
@@ -7202,6 +7178,8 @@ app.post(
 
             const guest =
                 guestResult.rows[0];
+            const transactionReference =
+                `GUEST-${crypto.randomUUID()}`;
 
             const attendanceResult =
                 await client.query(
@@ -7237,8 +7215,10 @@ app.post(
                     visit_type,
                     amount,
                     payment_method,
+                    transaction_reference,
                     attendance_id,
-                    payment_status
+                    payment_status,
+                    idempotency_key
                 )
                 VALUES
                 (
@@ -7248,7 +7228,9 @@ app.post(
                     $4,
                     $5,
                     $6,
-                    'CONFIRMED'
+                    $7,
+                    'CONFIRMED',
+                    $8
                 )
                 `,
                 [
@@ -7257,7 +7239,9 @@ app.post(
                     guest.visit_type,
                     guest.amount_paid,
                     guest.payment_method,
-                    attendanceResult.rows[0].id
+                    transactionReference,
+                    attendanceResult.rows[0].id,
+                    idempotencyKey
                 ]
             );
 
@@ -7409,6 +7393,7 @@ app.patch(
                     FROM attendance
                     WHERE id = $1
                       AND check_out IS NULL
+                      AND voided_at IS NULL
                     `,
                     [
                         attendanceId
@@ -7448,6 +7433,7 @@ app.patch(
                     WHERE
                         id = $1
                         AND check_out IS NULL
+                        AND voided_at IS NULL
 
                     RETURNING
                         id,
@@ -7567,15 +7553,19 @@ app.delete(
             const result =
                 await pool.query(
                     `
-                    DELETE FROM attendance
+                    UPDATE attendance
+                    SET voided_at = CURRENT_TIMESTAMP
                     WHERE id = $1
                       AND UPPER(user_type) = 'GUEST'
+                      AND check_out IS NOT NULL
+                      AND voided_at IS NULL
                     RETURNING
                         id,
                         guest_id,
                         user_type,
                         check_in,
-                        check_out
+                        check_out,
+                        voided_at
                     `,
                     [
                         attendanceId
@@ -7586,6 +7576,23 @@ app.delete(
                 result.rows.length ===
                 0
             ) {
+                const existingResult = await pool.query(
+                    `
+                    SELECT check_out, voided_at
+                    FROM attendance
+                    WHERE id = $1
+                      AND UPPER(user_type) = 'GUEST'
+                    `,
+                    [attendanceId]
+                );
+                if (existingResult.rows.length > 0) {
+                    return res.status(409).json({
+                        success: false,
+                        message: existingResult.rows[0].voided_at
+                            ? "This guest attendance record was already voided."
+                            : "Check out the guest before voiding this visit. The attendance history will be retained."
+                    });
+                }
 
                 return res.status(
                     404
@@ -7607,7 +7614,7 @@ app.delete(
                     true,
 
                 message:
-                    "Guest attendance record removed successfully.",
+                    "Guest attendance record voided. Its history and linked transactions were preserved.",
 
                 attendance:
                     result.rows[0]
@@ -7701,21 +7708,24 @@ app.get(
                 }
 
                 rangeCondition =
-                    "a.check_in >= $1::date AND a.check_in < ($2::date + INTERVAL '1 day')";
+                    "a.voided_at IS NULL AND a.check_in >= $1::date AND a.check_in < ($2::date + INTERVAL '1 day')";
                 reportParameters = [startDate, endDate];
             } else if (period === "daily") {
                 rangeCondition = `
-                    a.check_in >= DATE_TRUNC('day', ${GUEST_NOW_SQL})
+                    a.voided_at IS NULL
+                    AND a.check_in >= DATE_TRUNC('day', ${GUEST_NOW_SQL})
                     AND a.check_in < DATE_TRUNC('day', ${GUEST_NOW_SQL}) + INTERVAL '1 day'
                 `;
             } else if (period === "weekly") {
                 rangeCondition = `
-                    a.check_in >= DATE_TRUNC('week', ${GUEST_NOW_SQL})
+                    a.voided_at IS NULL
+                    AND a.check_in >= DATE_TRUNC('week', ${GUEST_NOW_SQL})
                     AND a.check_in < DATE_TRUNC('week', ${GUEST_NOW_SQL}) + INTERVAL '7 days'
                 `;
             } else {
                 rangeCondition = `
-                    a.check_in >= DATE_TRUNC('month', ${GUEST_NOW_SQL})
+                    a.voided_at IS NULL
+                    AND a.check_in >= DATE_TRUNC('month', ${GUEST_NOW_SQL})
                     AND a.check_in < DATE_TRUNC('month', ${GUEST_NOW_SQL}) + INTERVAL '1 month'
                 `;
             }
@@ -7778,6 +7788,28 @@ app.get(
                         : period === "monthly"
                             ? "Mon DD"
                             : "YYYY-MM-DD";
+            const chartInterval =
+                period === "daily"
+                    ? "1 hour"
+                    : period === "monthly"
+                        ? "1 week"
+                        : "1 day";
+            const chartStart =
+                period === "custom"
+                    ? "$1::date"
+                    : period === "monthly"
+                        ? `DATE_TRUNC('week', DATE_TRUNC('month', ${GUEST_NOW_SQL}))`
+                        : period === "weekly"
+                            ? `DATE_TRUNC('week', ${GUEST_NOW_SQL})`
+                            : `DATE_TRUNC('day', ${GUEST_NOW_SQL})`;
+            const chartEnd =
+                period === "custom"
+                    ? "$2::date"
+                    : period === "daily"
+                        ? `DATE_TRUNC('day', ${GUEST_NOW_SQL}) + INTERVAL '23 hours'`
+                        : period === "weekly"
+                            ? `DATE_TRUNC('week', ${GUEST_NOW_SQL}) + INTERVAL '6 days'`
+                            : `DATE_TRUNC('week', DATE_TRUNC('month', ${GUEST_NOW_SQL}) + INTERVAL '1 month' - INTERVAL '1 day')`;
 
             const detailResult = await pool.query(
                 `
@@ -7844,16 +7876,22 @@ app.get(
             const seriesResult = await pool.query(
                 `
                 SELECT
-                    DATE_TRUNC('${chartBucket}', a.check_in) AS bucket,
                     TO_CHAR(
-                        DATE_TRUNC('${chartBucket}', a.check_in),
+                        period.bucket,
                         '${chartLabel}'
                     ) AS label,
-                    COUNT(*)::int AS visits
-                FROM attendance a
-                WHERE ${rangeCondition}
-                GROUP BY DATE_TRUNC('${chartBucket}', a.check_in)
-                ORDER BY DATE_TRUNC('${chartBucket}', a.check_in)
+                    COUNT(a.id)::int AS visits
+                FROM GENERATE_SERIES(
+                    ${chartStart},
+                    ${chartEnd},
+                    INTERVAL '${chartInterval}'
+                ) AS period(bucket)
+                LEFT JOIN attendance a
+                    ON a.check_in >= period.bucket
+                   AND a.check_in < period.bucket + INTERVAL '${chartInterval}'
+                   AND ${rangeCondition}
+                GROUP BY period.bucket
+                ORDER BY period.bucket
                 `,
                 reportParameters
             );
@@ -7984,11 +8022,6 @@ app.use(
 
 async function startServer() {
     await ensureDashboardSchema();
-    await expireMemberships();
-    setInterval(
-        expireMemberships,
-        60 * 1000
-    );
 
     app.listen(
         PORT,

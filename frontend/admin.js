@@ -13,7 +13,11 @@ let transactionFilter = "all";
 let activeGuestExtensionId = null;
 let guestExtensionQuote = null;
 let guestExtensionRequestKey = null;
+let guestCheckInRequestKey = null;
+let guestCheckInSubmitting = false;
 let gymClosingTime = "22:00";
+let manualAttendanceMatches = [];
+let manualAttendanceSearchSequence = 0;
 
 const guestPhoneInput =
     document.getElementById(
@@ -1710,8 +1714,12 @@ async function loadMembers() {
         body.innerHTML =
             members
                 .map(
-                    member =>
-                        `
+                    member => {
+                        const displayStatus = member.membership_expired
+                            ? "EXPIRED"
+                            : getStatus(member.status);
+
+                        return `
                         <tr>
 
                             <td>
@@ -1765,15 +1773,9 @@ async function loadMembers() {
                             <td>
 
                                 <span
-                                    class="status ${getStatusClass(
-                                        member.status
-                                    )}">
+                                class="status ${getStatusClass(displayStatus)}">
 
-                                    ${escapeHtml(
-                                        getStatus(
-                                            member.status
-                                        )
-                                    )}
+                                ${escapeHtml(displayStatus)}
 
                                 </span>
 
@@ -1789,7 +1791,7 @@ async function loadMembers() {
                                                 onclick="restoreRevokedMember(${Number(member.id)})">
                                                 Restore
                                             </button>
-                                        `
+                                        `;
                                         : `
                                             <button
                                                 class="remove-button"
@@ -1803,6 +1805,7 @@ async function loadMembers() {
 
                         </tr>
                         `
+                    }
                 )
                 .join("");
 
@@ -1926,7 +1929,7 @@ async function revokeMember(
 
 async function restoreRevokedMember(memberId) {
 
-    if (!confirm("Restore this revoked membership and resume its remaining days?")) {
+    if (!    confirm("Reactivate this revoked membership and resume its remaining days?")) {
         return;
     }
 
@@ -2447,12 +2450,13 @@ async function loadArchivedMembers() {
                 .map(
                     member => {
 
+                        const isLiveRevokedMembership =
+                            member.record_type === "REVOKED";
                         const revoked =
-                            member.record_type === "REVOKED" ||
                             getStatus(member.status) === "REVOKED";
 
                         const restored =
-                            !revoked &&
+                            member.record_type === "ARCHIVED" &&
                             (
                                 Boolean(member.restored_at) ||
                                 getStatus(member.status) === "RESTORED"
@@ -2468,13 +2472,13 @@ async function loadArchivedMembers() {
 
 
                         const action =
-                            revoked
+                            isLiveRevokedMembership
                                 ? `
                                     <button
                                         class="restore-button"
                                         type="button"
                                         onclick="restoreRevokedMember(${Number(member.original_member_id)})">
-                                        Restore
+                                        Reactivate Membership
                                     </button>
                                 `
                                 : restored
@@ -2505,7 +2509,7 @@ async function loadArchivedMembers() {
 
                                 <td>
                                     ${
-                                        revoked
+                                        isLiveRevokedMembership
                                             ? ""
                                             : `
                                                 <input
@@ -2626,7 +2630,7 @@ async function restoreArchivedMember(
 
     const confirmed =
         confirm(
-            "Restore this archived membership?"
+            "Restore this archived record? If its membership is revoked, it will remain revoked until separately reactivated."
         );
 
 
@@ -2898,79 +2902,78 @@ async function loadTransactions(
                 `/api/admin/transactions?type=${encodeURIComponent(transactionFilter)}`
             );
 
-        const memberBody =
-            document.getElementById(
-                "memberTransactionsTableBody"
-            );
-
-        const guestBody =
-            document.getElementById(
-                "guestTransactionsTableBody"
-            );
-
         const memberTransactions =
             data.memberTransactions || [];
         const guestTransactions =
             data.guestTransactions || [];
-        const transactionCards =
-            document.querySelectorAll(".transactions-grid > .card");
+        const transactions = [
+            ...memberTransactions.map(transaction => ({
+                ...transaction,
+                person_type: "MEMBER",
+                person_name: transaction.full_name,
+                payment_description: "Membership Payment",
+                identifier: `M-${Number(transaction.id)}`,
+                reference: transaction.gcash_reference,
+                payment_status: transaction.status || "CONFIRMED"
+            })),
+            ...guestTransactions.map(transaction => {
+                const extensionType = String(transaction.extension_type || "").toUpperCase();
+                const hours = Number(transaction.additional_hours || 0);
+                const description = extensionType === "ALL_DAY"
+                    ? "All-Day Access"
+                    : extensionType === "EXTRA_HOURS"
+                        ? `Extra ${hours} Hour${hours === 1 ? "" : "s"}`
+                        : `Guest Entry Fee${transaction.visit_type ? ` · ${transaction.visit_type}` : ""}`;
 
-        if (transactionCards[0]) {
-            transactionCards[0].hidden = transactionFilter === "guest";
-        }
-        if (transactionCards[1]) {
-            transactionCards[1].hidden = transactionFilter === "member";
-        }
+                return {
+                    ...transaction,
+                    person_type: "GUEST",
+                    person_name: transaction.guest_name,
+                    payment_description: description,
+                    identifier: `G-${Number(transaction.id)}`,
+                    reference: transaction.transaction_reference,
+                    payment_status: transaction.payment_status || "CONFIRMED",
+                    extension_duration: extensionType === "EXTRA_HOURS"
+                        ? `${hours} hour${hours === 1 ? "" : "s"}`
+                        : extensionType === "ALL_DAY"
+                            ? "Through closing"
+                            : "-"
+                };
+            })
+        ].sort(
+            (left, right) =>
+                new Date(right.transaction_date || right.created_at).getTime() -
+                new Date(left.transaction_date || left.created_at).getTime()
+        );
+        const body = document.getElementById("transactionsTableBody");
 
-        if (memberBody) {
-            memberBody.innerHTML = memberTransactions.length
-                ? memberTransactions.map(transaction => `
+        if (body) {
+            body.innerHTML = transactions.length
+                ? transactions.map(transaction => `
                     <tr>
-                        <td>${Number(transaction.id)}</td>
-                        <td>${escapeHtml(transaction.full_name || "-")}</td>
-                        <td>₱${Number(transaction.amount || 0).toLocaleString()}</td>
-                        <td>${escapeHtml(transaction.gcash_reference || "-")}</td>
-                        <td>
-                            <span class="status ${getStatusClass(transaction.status)}">
-                                ${escapeHtml(getStatus(transaction.status) || "-")}
-                            </span>
-                        </td>
-                    </tr>
-                `).join("")
-                : `
-                    <tr>
-                        <td colspan="5" style="text-align:center;">
-                            No member transactions available.
-                        </td>
-                    </tr>
-                `;
-        }
-
-        if (guestBody) {
-            guestBody.innerHTML = guestTransactions.length
-                ? guestTransactions.map(transaction => `
-                    <tr>
-                        <td>${Number(transaction.id)}</td>
-                        <td>${escapeHtml(transaction.guest_name || "-")}</td>
+                        <td>${escapeHtml(transaction.identifier)}${transaction.reference ? `<br><small>${escapeHtml(transaction.reference)}</small>` : ""}</td>
+                        <td>${escapeHtml(transaction.person_name || "-")}</td>
+                        <td>${escapeHtml(transaction.person_type)}</td>
+                        <td>${escapeHtml(transaction.payment_description)}</td>
+                        <td>${transaction.attendance_id ? `Visit #${Number(transaction.attendance_id)}` : "No linked visit"}</td>
                         <td>${transaction.check_in ? formatDateTime(transaction.check_in) : "-"}</td>
                         <td>${transaction.check_out ? formatDateTime(transaction.check_out) : "-"}</td>
-                        <td>${escapeHtml(transaction.extension_type || transaction.visit_type || "Guest visit")}</td>
-                        <td>${transaction.additional_hours ? `${Number(transaction.additional_hours)} hour(s)` : "-"}</td>
+                        <td>${escapeHtml(transaction.extension_duration || "-")}</td>
                         <td>₱${Number(transaction.amount || 0).toLocaleString()}</td>
                         <td>${escapeHtml(transaction.payment_method || "-")}</td>
                         <td>
-                            <span class="status ${getStatusClass(transaction.payment_status || "CONFIRMED")}">
-                                ${escapeHtml(transaction.payment_status || "CONFIRMED")}
+                            <span class="status ${getStatusClass(transaction.payment_status)}">
+                                ${escapeHtml(getStatus(transaction.payment_status) || "-")}
                             </span>
                         </td>
-                        <td>${escapeHtml(transaction.transaction_reference || "-")}</td>
-                        <td>${formatDateTime(transaction.transaction_date)}</td>
+                        <td>${formatDateTime(transaction.transaction_date || transaction.created_at)}</td>
+                        <td>-</td>
                     </tr>
                 `).join("")
                 : `
                     <tr>
-                        <td colspan="11" style="text-align:center;">
-                            No guest transactions available.
+                        <td colspan="13" style="text-align:center;">
+                            No transaction records available.
                         </td>
                     </tr>
                 `;
@@ -3092,7 +3095,7 @@ async function loadAttendance(
             body.innerHTML = `
                 <tr>
                     <td
-                        colspan="7"
+                        colspan="9"
                         style="text-align:center;"
                     >
                         No attendance records found.
@@ -3130,6 +3133,12 @@ async function loadAttendance(
                             Boolean(
                                 record.check_out
                             );
+                        const visitStatus =
+                            isCheckedOut
+                                ? "CHECKED OUT"
+                                : isGuest && record.timed_out
+                                    ? "TIMED OUT"
+                                    : "CHECKED IN";
 
                         let remainingHtml =
                             "<span>-</span>";
@@ -3225,7 +3234,7 @@ async function loadAttendance(
                                         class="remove-button"
                                         onclick="removeGuestAttendance(${Number(record.id)})"
                                     >
-                                        Remove
+                                        Void Visit
                                     </button>
 
                                 </div>
@@ -3297,8 +3306,24 @@ async function loadAttendance(
                                         : "-"}
                                 </td>
 
+                                <td>
+                                    ${formatVisitDuration(record.duration_seconds)}
+                                </td>
+
                                 <td class="countdown-cell">
                                     ${remainingHtml}
+                                </td>
+
+                                <td>
+                                    <span class="${
+                                        visitStatus === "TIMED OUT"
+                                            ? "timed-out-label"
+                                            : visitStatus === "CHECKED OUT"
+                                                ? "visit-status"
+                                                : "status active"
+                                    }">
+                                        ${visitStatus}
+                                    </span>
                                 </td>
 
                                 <td>
@@ -3345,7 +3370,7 @@ async function deleteSelectedGuestAttendance() {
 
     const confirmed =
         confirm(
-            `Permanently delete ${selectedIds.length} selected guest attendance record(s)? Member attendance records cannot be deleted here.`
+            `Void ${selectedIds.length} selected checked-out guest attendance record(s)? Their history and linked payments will be retained.`
         );
 
     if (!confirmed) {
@@ -3386,15 +3411,15 @@ async function deleteSelectedGuestAttendance() {
     if (failedIds.length) {
 
         alert(
-            `${selectedIds.length - failedIds.length} guest attendance record(s) deleted. ` +
-            `Unable to delete record ID(s): ${failedIds.join(", ")}.`
+            `${selectedIds.length - failedIds.length} guest attendance record(s) voided. ` +
+            `Unable to void record ID(s): ${failedIds.join(", ")}.`
         );
 
         return;
     }
 
     alert(
-        `${selectedIds.length} guest attendance record(s) deleted successfully.`
+        `${selectedIds.length} guest attendance record(s) voided. Their history is retained.`
     );
 }
 
@@ -3701,12 +3726,10 @@ async function checkoutAttendance(attendanceId) {
 }
 
 async function submitManualAttendance(action) {
-    const memberId = document
-        .getElementById("manualAttendanceMemberId")
-        ?.value.trim();
+    const memberId = document.getElementById("manualAttendanceMemberId")?.value;
 
     if (!memberId) {
-        alert("Enter the member ID.");
+        alert("Search for and select the correct member first.");
         return;
     }
 
@@ -3715,6 +3738,15 @@ async function submitManualAttendance(action) {
         !confirm("Record this member's actual departure now?")
     ) {
         return;
+    }
+
+    const actionButton = document.getElementById(
+        action === "CHECK_IN"
+            ? "manualMemberCheckInButton"
+            : "manualMemberCheckOutButton"
+    );
+    if (actionButton) {
+        actionButton.disabled = true;
     }
 
     try {
@@ -3733,6 +3765,14 @@ async function submitManualAttendance(action) {
         );
 
         alert(data.message || "Attendance updated.");
+        document.getElementById("manualAttendanceSearch").value = "";
+        document.getElementById("manualAttendanceMemberId").value = "";
+        document.getElementById("manualAttendanceSelectedMember").textContent =
+            "Select a member before recording attendance.";
+        document.getElementById("manualAttendanceSearchResults").innerHTML = "";
+        manualAttendanceMatches = [];
+        document.getElementById("manualMemberCheckInButton").disabled = true;
+        document.getElementById("manualMemberCheckOutButton").disabled = true;
         await Promise.all([
             loadAttendance(),
             loadAdminDashboard(),
@@ -3741,7 +3781,96 @@ async function submitManualAttendance(action) {
     } catch (error) {
         console.error("Manual attendance error:", error);
         alert(error.message || "Unable to update attendance.");
+    } finally {
+        if (actionButton) {
+            const selectedMember = manualAttendanceMatches.find(
+                member => String(member.member_id) === String(memberId)
+            );
+            actionButton.disabled = !selectedMember || (
+                action === "CHECK_IN"
+                    ? !selectedMember.membership_eligible ||
+                        selectedMember.currently_checked_in
+                    : !selectedMember.currently_checked_in
+            );
+        }
     }
+}
+
+async function searchManualAttendanceMembers() {
+    const searchInput = document.getElementById("manualAttendanceSearch");
+    const results = document.getElementById("manualAttendanceSearchResults");
+    const selectedMemberInput = document.getElementById("manualAttendanceMemberId");
+    const selectedMemberLabel = document.getElementById("manualAttendanceSelectedMember");
+    const checkInButton = document.getElementById("manualMemberCheckInButton");
+    const checkOutButton = document.getElementById("manualMemberCheckOutButton");
+    const query = searchInput.value.trim();
+    const requestSequence = ++manualAttendanceSearchSequence;
+
+    selectedMemberInput.value = "";
+    selectedMemberLabel.textContent = "Select a member before recording attendance.";
+    checkInButton.disabled = true;
+    checkOutButton.disabled = true;
+    manualAttendanceMatches = [];
+
+    if (query.length < 2) {
+        results.innerHTML = query
+            ? `<p class="subtitle">Enter at least two characters to search.</p>`
+            : "";
+        return;
+    }
+
+    results.innerHTML = `<p class="subtitle">Searching members...</p>`;
+    try {
+        const data = await apiRequest(
+            `/api/admin/attendance/member-search?q=${encodeURIComponent(query)}`
+        );
+        if (requestSequence !== manualAttendanceSearchSequence) {
+            return;
+        }
+
+        manualAttendanceMatches = data.members || [];
+        results.innerHTML = manualAttendanceMatches.length
+            ? manualAttendanceMatches.map(member => `
+                <button
+                    type="button"
+                    class="manual-member-result"
+                    role="option"
+                    onclick="selectManualAttendanceMember(${Number(member.id)})">
+                    <strong>${escapeHtml(member.full_name || "Unnamed member")}</strong>
+                    <span>${escapeHtml(member.member_id || "-")}</span>
+                    <small>
+                        ${member.membership_eligible ? "Eligible" : "Not eligible"} ·
+                        ${member.currently_checked_in ? "Currently checked in" : "Not checked in"}
+                    </small>
+                </button>
+            `).join("")
+            : `<p class="subtitle">No matching members were found.</p>`;
+    } catch (error) {
+        if (requestSequence === manualAttendanceSearchSequence) {
+            results.innerHTML = `<p class="error-message">${escapeHtml(error.message || "Unable to search members.")}</p>`;
+        }
+    }
+}
+
+function selectManualAttendanceMember(memberId) {
+    const member = manualAttendanceMatches.find(
+        item => Number(item.id) === Number(memberId)
+    );
+    if (!member) {
+        return;
+    }
+
+    document.getElementById("manualAttendanceMemberId").value = member.member_id;
+    document.getElementById("manualAttendanceSearch").value =
+        `${member.full_name} (${member.member_id})`;
+    document.getElementById("manualAttendanceSearchResults").innerHTML = "";
+    document.getElementById("manualAttendanceSelectedMember").textContent =
+        `${member.full_name} · ${member.member_id} · ${member.membership_eligible ? "Eligible" : "Not eligible"} · ` +
+        `${member.currently_checked_in ? "Currently checked in" : "Not checked in"}`;
+    document.getElementById("manualMemberCheckInButton").disabled =
+        !member.membership_eligible || member.currently_checked_in;
+    document.getElementById("manualMemberCheckOutButton").disabled =
+        !member.currently_checked_in;
 }
 
 
@@ -3798,7 +3927,7 @@ async function removeGuestAttendance(
 // GUEST PRICING
 // =====================================
 
-function createGuestExtensionRequestKey() {
+function createIdempotencyKey() {
     if (window.crypto?.randomUUID) {
         return window.crypto.randomUUID();
     }
@@ -3818,7 +3947,7 @@ async function openGuestExtension(attendanceId) {
     }
 
     activeGuestExtensionId = Number(attendanceId);
-    guestExtensionRequestKey = createGuestExtensionRequestKey();
+    guestExtensionRequestKey = createIdempotencyKey();
     setText("extensionGuestName", record.full_name || "-");
     setText("extensionCheckIn", formatDateTime(record.check_in));
     setText("extensionCurrentExpiration", formatGuestEndLabel(
@@ -3855,7 +3984,7 @@ async function updateGuestExtensionQuote(resetRequestKey = false) {
     }
 
     if (resetRequestKey) {
-        guestExtensionRequestKey = createGuestExtensionRequestKey();
+        guestExtensionRequestKey = createIdempotencyKey();
     }
 
     const message = document.getElementById("extensionModalMessage");
@@ -4129,6 +4258,9 @@ function updateGuestPricing() {
 async function addGuest(
     event
 ) {
+    if (guestCheckInSubmitting) {
+        return;
+    }
 
     if (event) {
 
@@ -4171,6 +4303,8 @@ async function addGuest(
         document.getElementById(
             "guestPaymentMethod"
         )?.value;
+    const paymentConfirmed =
+        document.getElementById("guestPaymentConfirmed")?.checked === true;
 
 
     if (!fullName) {
@@ -4215,6 +4349,11 @@ async function addGuest(
 
     }
 
+    if (!paymentConfirmed) {
+        alert("Confirm that the guest's payment has been received.");
+        return;
+    }
+
 
     const selectedHours =
         visitType ===
@@ -4246,6 +4385,14 @@ async function addGuest(
 
     }
 
+    if (!guestCheckInRequestKey) {
+        guestCheckInRequestKey = createIdempotencyKey();
+    }
+    guestCheckInSubmitting = true;
+    const submitButton = document.getElementById("guestCheckInButton");
+    if (submitButton) {
+        submitButton.disabled = true;
+    }
 
     try {
 
@@ -4283,7 +4430,13 @@ async function addGuest(
                                 ),
 
                             payment_method:
-                                paymentMethod
+                                paymentMethod,
+
+                            payment_confirmed:
+                                paymentConfirmed,
+
+                            idempotency_key:
+                                guestCheckInRequestKey
 
                         })
                 }
@@ -4308,6 +4461,7 @@ async function addGuest(
 
         }
 
+        guestCheckInRequestKey = null;
 
         updateGuestPricing();
 
@@ -4336,6 +4490,12 @@ async function addGuest(
             error.message ||
             "Unable to record guest."
         );
+
+    } finally {
+        guestCheckInSubmitting = false;
+        if (submitButton) {
+            submitButton.disabled = false;
+        }
 
     }
 
@@ -4963,13 +5123,6 @@ async function loadReports(
 
     }
 
-    function formatVisitDuration(value) {
-        const seconds = Math.max(0, Number(value) || 0);
-        const hours = Math.floor(seconds / 3600);
-        const minutes = Math.floor((seconds % 3600) / 60);
-        return hours ? `${hours}h ${minutes}m` : `${minutes}m`;
-    }
-
 }
 
 
@@ -4997,23 +5150,21 @@ function updatePeakBars(
         label: String(item.label || ""),
         visits: Math.max(0, Number(item.visits) || 0)
     }));
-    const max =
-        Math.max(1, ...values.map(item => item.visits));
+    const maxVisits =
+        Math.max(0, ...values.map(item => item.visits));
+    const axisMax =
+        Math.max(4, Math.ceil(maxVisits / 4) * 4);
+    const interval =
+        axisMax / 4;
     const ticks =
-        Array.from(
-            { length: 5 },
-            (_, index) => Math.round(max * (4 - index) / 4)
-        );
+        Array.from({ length: 5 }, (_, index) => axisMax - interval * index);
 
     yAxis.innerHTML =
         ticks.map(value => `<span>${value}</span>`).join("");
 
-    chart.innerHTML =
-        values.map(item => {
-            const height =
-                item.visits === 0
-                    ? 0
-                    : Math.max(2, item.visits / max * 100);
+    chart.innerHTML = values.length
+        ? values.map(item => {
+            const height = item.visits / axisMax * 100;
 
             return `
                 <div
@@ -5025,7 +5176,8 @@ function updatePeakBars(
                     <span class="report-bar-label">${escapeHtml(item.label)}</span>
                 </div>
             `;
-        }).join("");
+        }).join("")
+        : `<div class="report-chart-empty">No attendance visits for this period.</div>`;
 
     const periodDescription = {
         daily: "hourly attendance for today",
@@ -5362,7 +5514,7 @@ function getStatusClass(
         "ARCHIVED"
     ) {
 
-        return "expired";
+        return "archived";
 
     }
 
@@ -5372,7 +5524,7 @@ function getStatusClass(
         "RESTORED"
     ) {
 
-        return "approved";
+        return "archived";
 
     }
 
@@ -5494,6 +5646,15 @@ function formatDate(
 // =====================================
 // FORMAT DATE TIME
 // =====================================
+
+function formatVisitDuration(value) {
+    const seconds = Math.max(0, Number(value) || 0);
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    return hours
+        ? `${hours}h ${minutes}m`
+        : `${minutes}m`;
+}
 
 function formatDateTime(
     value
