@@ -861,6 +861,24 @@
 
                 </p>
 
+                <div
+                    class="report-toggle transaction-filter"
+                    role="group"
+                    aria-label="Transaction type filter">
+                    <button type="button" data-transaction-filter="all"
+                        aria-pressed="true" onclick="loadTransactions('all')">
+                        All Transactions
+                    </button>
+                    <button type="button" data-transaction-filter="member"
+                        aria-pressed="false" onclick="loadTransactions('member')">
+                        Member Transactions
+                    </button>
+                    <button type="button" data-transaction-filter="guest"
+                        aria-pressed="false" onclick="loadTransactions('guest')">
+                        Guest Transactions
+                    </button>
+                </div>
+
                 <div class="transactions-grid">
 
                     <div class="card">
@@ -908,16 +926,21 @@
                                     <tr>
                                         <th scope="col">Transaction ID</th>
                                         <th scope="col">Guest</th>
-                                        <th scope="col">Visit Type</th>
+                                        <th scope="col">Check-In</th>
+                                        <th scope="col">Check-Out</th>
+                                        <th scope="col">Extension</th>
+                                        <th scope="col">Hours</th>
                                         <th scope="col">Amount</th>
                                         <th scope="col">Payment Method</th>
+                                        <th scope="col">Payment Status</th>
+                                        <th scope="col">Reference</th>
                                         <th scope="col">Date</th>
                                     </tr>
                                 </thead>
 
                                 <tbody id="guestTransactionsTableBody">
                                     <tr>
-                                        <td colspan="6" style="text-align:center;">
+                                        <td colspan="11" style="text-align:center;">
                                             No guest transactions available.
                                         </td>
                                     </tr>
@@ -988,7 +1011,7 @@
 
                     </div>
 
-                    <div class="card">
+                        <div class="card">
 
                         <p>
                             Guests Inside
@@ -1020,6 +1043,29 @@
 
                 </div>
 
+                <div class="card manual-attendance-card">
+                    <h3>Manual Member Check-In / Check-Out</h3>
+                    <p class="subtitle">
+                        Use the member ID when a member cannot present a cellphone or QR code.
+                    </p>
+                    <label for="manualAttendanceMemberId">Member ID</label>
+                    <input
+                        id="manualAttendanceMemberId"
+                        type="text"
+                        autocomplete="off"
+                        placeholder="Enter the member ID">
+                    <div class="manual-attendance-actions">
+                        <button class="red-button" type="button"
+                            onclick="submitManualAttendance('CHECK_IN')">
+                            Check In Member
+                        </button>
+                        <button class="small-btn" type="button"
+                            onclick="submitManualAttendance('CHECK_OUT')">
+                            Check Out Member
+                        </button>
+                    </div>
+                </div>
+
                 <div class="card">
 
                     <h3>
@@ -1029,10 +1075,10 @@
                     <p
                         id="qrScanStatus">
 
-                        Scan a member's QR code from
-                        8:00 AM to 10:00 PM Manila time.
-                        Members still inside are checked
-                        out automatically at closing.
+                        Scan a member's QR code during the
+                        configured gym opening hours.
+                        Record checkout only when the
+                        member actually leaves.
 
                     </p>
 
@@ -1064,6 +1110,14 @@
 
                     <div class="table-toolbar">
 
+                        <label for="attendanceTypeFilter">Show</label>
+                        <select id="attendanceTypeFilter"
+                            onchange="loadAttendance(this.value)">
+                            <option value="all">All Attendance</option>
+                            <option value="member">Members</option>
+                            <option value="guest">Guests / Walk-ins</option>
+                        </select>
+
                         <span id="attendanceSelectedCount">
                             0 selected
                         </span>
@@ -1079,6 +1133,7 @@
 
                     </div>
 
+                    <div class="table-scroll attendance-table-scroll">
                     <table>
 
                         <thead>
@@ -1107,7 +1162,11 @@
                                 </th>
 
                                 <th>
-                                    Remaining
+                                    Check-Out
+                                </th>
+
+                                <th>
+                                    Remaining / Status
                                 </th>
 
                                 <th>
@@ -1124,7 +1183,7 @@
                             <tr>
 
                                 <td
-                                    colspan="6"
+                                    colspan="7"
                                     style="text-align:center;">
 
                                     No attendance data available yet.
@@ -1136,6 +1195,7 @@
                         </tbody>
 
                     </table>
+                    </div>
 
                 </div>
 
@@ -1310,13 +1370,13 @@
                         <br><br>
 
                         Guest Visit automatically ends
-                        at the paid time or 10:00 PM,
+                        at the paid time or <span id="guestClosingTime">10:00 PM</span>,
                         whichever comes first.
 
                         <br><br>
 
                         Day Pass automatically ends
-                        at 10:00 PM.
+                        at <span id="guestDayPassClosingTime">10:00 PM</span>.
 
                     </div>
 
@@ -1348,7 +1408,7 @@
 
                 </p>
 
-                <div class="attendance-stats">
+                <div class="attendance-stats report-stats">
 
                     <div class="card">
 
@@ -1395,6 +1455,26 @@
 
                     </div>
 
+                    <div class="card">
+                        <p>Unique Visitors</p>
+                        <strong id="reportUniqueVisitors">0</strong>
+                    </div>
+
+                    <div class="card">
+                        <p>Member Visitor Count</p>
+                        <strong id="reportMemberVisitorCount">0</strong>
+                    </div>
+
+                    <div class="card">
+                        <p>Guest Visitor Count</p>
+                        <strong id="reportGuestVisitorCount">0</strong>
+                    </div>
+
+                    <div class="card">
+                        <p>Current Occupancy</p>
+                        <strong id="reportCurrentOccupancy">0</strong>
+                    </div>
+
                 </div>
 
                 <div class="card report">
@@ -1428,6 +1508,24 @@
                             onclick="loadReports('monthly')">
                             Monthly
                         </button>
+                        <button
+                            type="button"
+                            data-report-period="custom"
+                            aria-pressed="false"
+                            onclick="loadReports('custom')">
+                            Custom Date Range
+                        </button>
+                    </div>
+
+                    <div class="report-date-range" id="reportDateRange" hidden>
+                        <label for="reportStartDate">From</label>
+                        <input id="reportStartDate" type="date">
+                        <label for="reportEndDate">To</label>
+                        <input id="reportEndDate" type="date">
+                        <button type="button" class="small-btn"
+                            onclick="loadReports('custom')">
+                            Apply Range
+                        </button>
                     </div>
 
                     <div class="report-chart">
@@ -1459,6 +1557,33 @@
 
                     </p>
 
+                </div>
+
+                <div class="card">
+                    <h3>Attendance Details</h3>
+                    <div class="table-scroll report-table-scroll">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Visitor Name</th>
+                                    <th>Type</th>
+                                    <th>Visit Date</th>
+                                    <th>Check-In</th>
+                                    <th>Check-Out</th>
+                                    <th>Duration</th>
+                                    <th>Guest Time Purchased</th>
+                                    <th>Visit Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="reportAttendanceTableBody">
+                                <tr>
+                                    <td colspan="8" style="text-align:center;">
+                                        No attendance data available yet.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
 
             </div>
@@ -1605,6 +1730,54 @@
         </section>
 
     </main>
+
+    <div
+        id="guestExtensionModal"
+        class="modal-overlay"
+        hidden
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="guestExtensionTitle">
+        <form class="modal-card" onsubmit="submitGuestExtension(event)">
+            <h2 id="guestExtensionTitle">Extend Time / Upgrade to All-Day</h2>
+            <p><strong>Guest:</strong> <span id="extensionGuestName">-</span></p>
+            <p><strong>Check-in:</strong> <span id="extensionCheckIn">-</span></p>
+            <p><strong>Current expiration:</strong> <span id="extensionCurrentExpiration">-</span></p>
+            <p><strong>Remaining time:</strong> <span id="extensionRemainingTime">-</span></p>
+
+            <label for="extensionOption">Extension</label>
+            <select id="extensionOption" onchange="updateGuestExtensionQuote(true)">
+                <option value="EXTRA_HOURS:1">Add 1 Hour - ₱30</option>
+                <option value="EXTRA_HOURS:2">Add 2 Hours - ₱60</option>
+                <option value="EXTRA_HOURS:3">Add 3 Hours - ₱90</option>
+                <option value="ALL_DAY">Upgrade to All-Day</option>
+            </select>
+
+            <p><strong>Price:</strong> <span id="extensionPrice">-</span></p>
+            <p><strong>Remaining balance:</strong> <span id="extensionBalance">-</span></p>
+            <p><strong>Access through:</strong> <span id="extensionNewExpiration">-</span></p>
+
+            <label for="extensionPaymentMethod">Payment method</label>
+            <select id="extensionPaymentMethod">
+                <option value="">Select payment method</option>
+                <option value="CASH">Cash</option>
+                <option value="GCASH">GCash</option>
+            </select>
+            <label class="payment-confirmation">
+                <input id="extensionPaymentConfirmed" type="checkbox">
+                Payment has been received and confirmed
+            </label>
+            <p id="extensionModalMessage" role="status" aria-live="polite"></p>
+            <div class="modal-actions">
+                <button type="button" class="small-btn" onclick="closeGuestExtensionModal()">
+                    Cancel
+                </button>
+                <button id="confirmGuestExtensionButton" type="submit" class="red-button">
+                    Confirm Extension
+                </button>
+            </div>
+        </form>
+    </div>
 
 </div>
 

@@ -7,8 +7,13 @@ let countdownTimer = null;
 let qrScanner = null;
 let qrScanBusy = false;
 let lastScannedQr = null;
-let autoCheckoutInProgress = new Set();
 let reportPeriod = "daily";
+let attendanceRecords = [];
+let transactionFilter = "all";
+let activeGuestExtensionId = null;
+let guestExtensionQuote = null;
+let guestExtensionRequestKey = null;
+let gymClosingTime = "22:00";
 
 const guestPhoneInput =
     document.getElementById(
@@ -2868,13 +2873,29 @@ async function deleteSelectedArchivedMembers() {
 // TRANSACTIONS
 // =====================================
 
-async function loadTransactions() {
+async function loadTransactions(
+    filterType = transactionFilter
+) {
 
     try {
 
+        if (!["all", "member", "guest"].includes(filterType)) {
+            return;
+        }
+
+        transactionFilter = filterType;
+        document
+            .querySelectorAll("[data-transaction-filter]")
+            .forEach(button => {
+                button.setAttribute(
+                    "aria-pressed",
+                    String(button.dataset.transactionFilter === transactionFilter)
+                );
+            });
+
         const data =
             await apiRequest(
-                "/api/admin/transactions"
+                `/api/admin/transactions?type=${encodeURIComponent(transactionFilter)}`
             );
 
         const memberBody =
@@ -2891,6 +2912,15 @@ async function loadTransactions() {
             data.memberTransactions || [];
         const guestTransactions =
             data.guestTransactions || [];
+        const transactionCards =
+            document.querySelectorAll(".transactions-grid > .card");
+
+        if (transactionCards[0]) {
+            transactionCards[0].hidden = transactionFilter === "guest";
+        }
+        if (transactionCards[1]) {
+            transactionCards[1].hidden = transactionFilter === "member";
+        }
 
         if (memberBody) {
             memberBody.innerHTML = memberTransactions.length
@@ -2922,15 +2952,24 @@ async function loadTransactions() {
                     <tr>
                         <td>${Number(transaction.id)}</td>
                         <td>${escapeHtml(transaction.guest_name || "-")}</td>
-                        <td>${escapeHtml(transaction.visit_type || "-")}</td>
+                        <td>${transaction.check_in ? formatDateTime(transaction.check_in) : "-"}</td>
+                        <td>${transaction.check_out ? formatDateTime(transaction.check_out) : "-"}</td>
+                        <td>${escapeHtml(transaction.extension_type || transaction.visit_type || "Guest visit")}</td>
+                        <td>${transaction.additional_hours ? `${Number(transaction.additional_hours)} hour(s)` : "-"}</td>
                         <td>₱${Number(transaction.amount || 0).toLocaleString()}</td>
                         <td>${escapeHtml(transaction.payment_method || "-")}</td>
+                        <td>
+                            <span class="status ${getStatusClass(transaction.payment_status || "CONFIRMED")}">
+                                ${escapeHtml(transaction.payment_status || "CONFIRMED")}
+                            </span>
+                        </td>
+                        <td>${escapeHtml(transaction.transaction_reference || "-")}</td>
                         <td>${formatDateTime(transaction.transaction_date)}</td>
                     </tr>
                 `).join("")
                 : `
                     <tr>
-                        <td colspan="6" style="text-align:center;">
+                        <td colspan="11" style="text-align:center;">
                             No guest transactions available.
                         </td>
                     </tr>
@@ -2953,44 +2992,52 @@ async function loadTransactions() {
 // ATTENDANCE
 // =====================================
 
-async function loadAttendance() {
+async function loadAttendance(
+    filterType = document.getElementById("attendanceTypeFilter")?.value || "all"
+) {
 
     try {
 
+        if (!["all", "member", "guest"].includes(filterType)) {
+            return;
+        }
+
         const data =
             await apiRequest(
-                "/api/admin/attendance"
+                `/api/admin/attendance?type=${encodeURIComponent(filterType)}`
             );
+
+        if (data.closingTime) {
+        gymClosingTime = data.closingTime;
+        const closingLabel = formatConfiguredClosingTime(data.closingTime);
+        setText("guestClosingTime", closingLabel);
+        setText("guestDayPassClosingTime", closingLabel);
+        setText(
+            "qrScanStatus",
+            `Scan a member QR code from 8:00 AM to ${closingLabel} Manila time. Record checkout only when the member actually leaves.`
+        );
+        }
 
         const attendance =
             data.attendance ||
             [];
 
-        const membersInside =
-            attendance.filter(
-                record =>
-                    String(
-                        record.user_type ||
-                        ""
-                    ).toUpperCase() ===
-                    "MEMBER" &&
-                    !record.check_out
-            ).length;
+        attendanceRecords = attendance;
+        const membersInside = Number(data.membersInside || 0);
+        const guestsInside = Number(data.guestsInside || 0);
+        const occupancy = Number(data.currentOccupancy || 0);
+        const timedOutGuests = attendance.filter(
+            record =>
+                String(record.user_type || "").toUpperCase() === "GUEST" &&
+                !record.check_out &&
+                record.timed_out === true
+        ).length;
+        const filterSelect =
+            document.getElementById("attendanceTypeFilter");
 
-        const guestsInside =
-            attendance.filter(
-                record =>
-                    String(
-                        record.user_type ||
-                        ""
-                    ).toUpperCase() ===
-                    "GUEST" &&
-                    !record.check_out
-            ).length;
-
-        const occupancy =
-            membersInside +
-            guestsInside;
+        if (filterSelect) {
+            filterSelect.value = filterType;
+        }
 
         setText(
             "attendanceOccupancy",
@@ -3005,6 +3052,10 @@ async function loadAttendance() {
         setText(
             "attendanceGuestsInside",
             guestsInside
+        );
+        setText(
+            "attendanceTimedOutGuests",
+            timedOutGuests
         );
 
         setText(
@@ -3041,7 +3092,7 @@ async function loadAttendance() {
             body.innerHTML = `
                 <tr>
                     <td
-                        colspan="6"
+                        colspan="7"
                         style="text-align:center;"
                     >
                         No attendance records found.
@@ -3089,22 +3140,11 @@ async function loadAttendance() {
                         if (isGuest) {
 
                             if (isCheckedOut) {
-
-                                remainingHtml =
-                                    record.timed_out === true
-                                        ? `
-                                            <span class="timed-out-label">
-                                                TIMED OUT
-                                            </span>
-                                          `
-                                        : `
-                                            <span class="guest">
-                                                CHECKED OUT
-                                            </span>
-                                          `;
+                                remainingHtml = `
+                                    <span class="guest">CHECKED OUT</span>
+                                `;
 
                             } else {
-
                                 const remainingSeconds =
                                     Number(
                                         record.remaining_seconds
@@ -3114,7 +3154,7 @@ async function loadAttendance() {
                                     Number.isFinite(
                                         remainingSeconds
                                     ) &&
-                                    remainingSeconds >= 0
+                                    remainingSeconds > 0
                                 ) {
 
                                     remainingHtml = `
@@ -3135,7 +3175,7 @@ async function loadAttendance() {
                                         </span>
 
                                         <small class="countdown-note">
-                                            Ends ${escapeHtml(
+                                            CHECKED IN · Expires ${escapeHtml(
                                                 formatGuestEndLabel(
                                                     record.guest_end_time_epoch ||
                                                     record.guest_end_time
@@ -3145,11 +3185,13 @@ async function loadAttendance() {
                                     `;
 
                                 } else {
-
                                     remainingHtml = `
-                                        <span class="countdown countdown-warning">
-                                            Timer unavailable
+                                        <span class="timed-out-label">
+                                            TIMED OUT / OVERDUE
                                         </span>
+                                        <small class="countdown-note">
+                                            Still checked in; checkout not recorded
+                                        </small>
                                     `;
                                 }
                             }
@@ -3160,6 +3202,13 @@ async function loadAttendance() {
                                     ${
                                         !isCheckedOut
                                             ? `
+                                                <button
+                                                    type="button"
+                                                    class="small-btn"
+                                                    onclick="openGuestExtension(${Number(record.id)})"
+                                                >
+                                                    Extend Time / Upgrade to All-Day
+                                                </button>
                                                 <button
                                                     type="button"
                                                     class="small-btn"
@@ -3184,17 +3233,13 @@ async function loadAttendance() {
 
                         } else {
 
-                            remainingHtml =
-                                "<span>-</span>";
+                            remainingHtml = isCheckedOut
+                                ? `<span class="guest">CHECKED OUT</span>`
+                                : `<span class="countdown-active">CHECKED IN</span>`;
 
-                            actionHtml =
-                                isCheckedOut
-                                    ? `
-                                        <span class="guest">
-                                            CHECKED OUT
-                                        </span>
-                                      `
-                                    : `
+                            actionHtml = isCheckedOut
+                                ? ""
+                                : `
                                         <button
                                             type="button"
                                             class="small-btn"
@@ -3244,6 +3289,12 @@ async function loadAttendance() {
                                     ${formatDateTime(
                                         record.check_in
                                     )}
+                                </td>
+
+                                <td>
+                                    ${record.check_out
+                                        ? formatDateTime(record.check_out)
+                                        : "-"}
                                 </td>
 
                                 <td class="countdown-cell">
@@ -3314,10 +3365,6 @@ async function deleteSelectedGuestAttendance() {
                 }
             );
 
-            autoCheckoutInProgress.delete(
-                Number(attendanceId)
-            );
-
         } catch (error) {
 
             console.error(
@@ -3355,6 +3402,18 @@ async function deleteSelectedGuestAttendance() {
 // =====================================
 // GUEST COUNTDOWN HELPERS
 // =====================================
+
+function formatConfiguredClosingTime(value) {
+    const match = String(value || "").match(/^(\d{2}):(\d{2})$/);
+    if (!match) {
+        return "10:00 PM";
+    }
+
+    const hour = Number(match[1]);
+    const minute = Number(match[2]);
+    const displayHour = hour % 12 || 12;
+    return `${displayHour}:${String(minute).padStart(2, "0")} ${hour >= 12 ? "PM" : "AM"}`;
+}
 
 function formatGuestEndLabel(value) {
 
@@ -3541,7 +3600,7 @@ async function updateGuestCountdowns() {
             );
 
             element.textContent =
-                "00:00:00";
+                "TIMED OUT";
 
             const row =
                 element.closest("tr");
@@ -3555,37 +3614,7 @@ async function updateGuestCountdowns() {
 
             if (endLabel) {
                 endLabel.textContent =
-                    "Timed out";
-            }
-
-            if (
-                !autoCheckoutInProgress.has(
-                    attendanceId
-                )
-            ) {
-
-                autoCheckoutInProgress.add(
-                    attendanceId
-                );
-
-                try {
-
-                    await checkoutAttendance(
-                        attendanceId,
-                        true
-                    );
-
-                } catch (error) {
-
-                    console.error(
-                        "Automatic guest checkout error:",
-                        error
-                    );
-
-                    autoCheckoutInProgress.delete(
-                        attendanceId
-                    );
-                }
+                    "Overdue - guest still checked in";
             }
 
             continue;
@@ -3636,116 +3665,82 @@ function startCountdownTimer() {
 // CHECKOUT ATTENDANCE
 // =====================================
 
-async function checkoutAttendance(
-    attendanceId,
-    skipConfirmation = false
-) {
+async function checkoutAttendance(attendanceId) {
+    const confirmed = confirm(
+        "Record this person's actual departure now?"
+    );
 
-    if (!skipConfirmation) {
-
-        const confirmed =
-            confirm(
-                "Check out this person?"
-            );
-
-        if (!confirmed) {
-            return;
-        }
+    if (!confirmed) {
+        return;
     }
 
     try {
-
         const data =
             await apiRequest(
                 `/api/admin/attendance/${attendanceId}/checkout`,
                 {
                     method: "PATCH",
-
-                    headers: {
-                        "Content-Type":
-                            "application/json"
-                    },
-
-                    body: JSON.stringify({
-                        automatic:
-                            skipConfirmation
-                    })
                 }
             );
 
-        autoCheckoutInProgress.delete(
-            Number(attendanceId)
-        );
-
-        if (!skipConfirmation) {
-
-            alert(
-                data.message ||
-                "Checked out successfully."
-            );
-        }
+        alert(data.message || "Checked out successfully.");
 
         await Promise.all([
             loadAttendance(),
             loadAdminDashboard(),
             loadReports()
         ]);
-
     } catch (error) {
-
         console.error(
             "Checkout error:",
             error
         );
 
-        if (
-            error.message ===
-            "Active attendance record not found."
-        ) {
+        alert(error.message || "Unable to check out.");
+    }
+}
 
-            autoCheckoutInProgress.delete(
-                Number(attendanceId)
-            );
+async function submitManualAttendance(action) {
+    const memberId = document
+        .getElementById("manualAttendanceMemberId")
+        ?.value.trim();
 
-            await loadAttendance();
+    if (!memberId) {
+        alert("Enter the member ID.");
+        return;
+    }
 
-            if (!skipConfirmation) {
+    if (
+        action === "CHECK_OUT" &&
+        !confirm("Record this member's actual departure now?")
+    ) {
+        return;
+    }
 
-                alert(
-                    "This attendance record is no longer active. The attendance list has been refreshed."
-                );
-
+    try {
+        const data = await apiRequest(
+            "/api/admin/attendance/manual",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    member_id: memberId,
+                    action
+                })
             }
-
-            return;
-
-        }
-
-        if (skipConfirmation) {
-
-            autoCheckoutInProgress.delete(
-                Number(attendanceId)
-            );
-
-            try {
-
-                await loadAttendance();
-
-            } catch (refreshError) {
-
-                console.error(
-                    "Attendance refresh after automatic checkout error:",
-                    refreshError
-                );
-            }
-
-            return;
-        }
-
-        alert(
-            error.message ||
-            "Unable to check out."
         );
+
+        alert(data.message || "Attendance updated.");
+        await Promise.all([
+            loadAttendance(),
+            loadAdminDashboard(),
+            loadReports()
+        ]);
+    } catch (error) {
+        console.error("Manual attendance error:", error);
+        alert(error.message || "Unable to update attendance.");
     }
 }
 
@@ -3772,10 +3767,6 @@ async function removeGuestAttendance(
                     method: "DELETE"
                 }
             );
-
-        autoCheckoutInProgress.delete(
-            Number(attendanceId)
-        );
 
         alert(
             data.message ||
@@ -3806,6 +3797,244 @@ async function removeGuestAttendance(
 // =====================================
 // GUEST PRICING
 // =====================================
+
+function createGuestExtensionRequestKey() {
+    if (window.crypto?.randomUUID) {
+        return window.crypto.randomUUID();
+    }
+
+    return `guest-extension-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+async function openGuestExtension(attendanceId) {
+    const record = attendanceRecords.find(
+        item => Number(item.id) === Number(attendanceId)
+    );
+    const modal = document.getElementById("guestExtensionModal");
+
+    if (!record || !modal || record.check_out) {
+        alert("This guest visit is no longer active. Refresh attendance and try again.");
+        return;
+    }
+
+    activeGuestExtensionId = Number(attendanceId);
+    guestExtensionRequestKey = createGuestExtensionRequestKey();
+    setText("extensionGuestName", record.full_name || "-");
+    setText("extensionCheckIn", formatDateTime(record.check_in));
+    setText("extensionCurrentExpiration", formatGuestEndLabel(
+        record.guest_end_time_epoch || record.guest_end_time
+    ));
+    setText(
+        "extensionRemainingTime",
+        Number(record.remaining_seconds) > 0
+            ? formatCountdown(record.remaining_seconds)
+            : "EXPIRED / OVERDUE - guest remains checked in"
+    );
+    document.getElementById("extensionOption").value = "EXTRA_HOURS:1";
+    document.getElementById("extensionPaymentMethod").value = "";
+    document.getElementById("extensionPaymentConfirmed").checked = false;
+    document.getElementById("extensionModalMessage").textContent = "";
+    modal.hidden = false;
+
+    await updateGuestExtensionQuote();
+}
+
+function closeGuestExtensionModal() {
+    const modal = document.getElementById("guestExtensionModal");
+    if (modal) {
+        modal.hidden = true;
+    }
+    activeGuestExtensionId = null;
+    guestExtensionQuote = null;
+    guestExtensionRequestKey = null;
+}
+
+async function updateGuestExtensionQuote(resetRequestKey = false) {
+    if (!activeGuestExtensionId) {
+        return;
+    }
+
+    if (resetRequestKey) {
+        guestExtensionRequestKey = createGuestExtensionRequestKey();
+    }
+
+    const message = document.getElementById("extensionModalMessage");
+    const button = document.getElementById("confirmGuestExtensionButton");
+    const paymentMethod = document.getElementById("extensionPaymentMethod");
+    const paymentConfirmed = document.getElementById("extensionPaymentConfirmed");
+
+    if (message) {
+        message.textContent = "Loading current visit balance...";
+    }
+    if (button) {
+        button.disabled = true;
+    }
+
+    try {
+        const quote = await apiRequest(
+            `/api/admin/attendance/${activeGuestExtensionId}/extension-quote`
+        );
+        const [extensionType, hoursValue] =
+            document.getElementById("extensionOption").value.split(":");
+        const hours = hoursValue ? Number(hoursValue) : null;
+        const allDayOption = quote.options.find(
+            option => option.extension_type === "ALL_DAY"
+        );
+        const selectedOption = quote.options.find(
+            option =>
+                option.extension_type === extensionType &&
+                Number(option.additional_hours || 0) === Number(hours || 0)
+        );
+        const amount = selectedOption?.remaining_balance ??
+            selectedOption?.price ??
+            0;
+        const now = Date.now();
+        const currentExpiration = new Date(quote.current_expiration);
+        const previewExpiration = extensionType === "ALL_DAY"
+            ? new Date(
+                Math.max(
+                    currentExpiration.getTime(),
+                    new Date(quote.closing_time).getTime()
+                )
+            )
+            : new Date(
+                Math.max(currentExpiration.getTime(), now) +
+                Number(hours) * 60 * 60 * 1000
+            );
+
+        guestExtensionQuote = {
+            extensionType,
+            hours,
+            amount,
+            allDayOption
+        };
+
+        setText("extensionGuestName", quote.guest_name || "-");
+        setText("extensionCheckIn", formatDateTime(quote.check_in));
+        setText("extensionCurrentExpiration", formatDateTime(currentExpiration));
+        setText(
+            "extensionRemainingTime",
+            Number(quote.remaining_seconds) > 0
+                ? formatCountdown(quote.remaining_seconds)
+                : "EXPIRED / OVERDUE - guest remains checked in"
+        );
+        setText("extensionPrice", `₱${Number(selectedOption?.price || 0).toLocaleString()}`);
+        setText(
+            "extensionBalance",
+            `₱${Number(amount).toLocaleString()} due`
+        );
+        setText("extensionNewExpiration", formatDateTime(previewExpiration));
+
+        const requiresPayment = Number(amount) > 0;
+        if (paymentMethod) {
+            paymentMethod.disabled = !requiresPayment;
+        }
+        if (paymentConfirmed) {
+            paymentConfirmed.disabled = !requiresPayment;
+            if (!requiresPayment) {
+                paymentConfirmed.checked = false;
+            }
+        }
+        if (message) {
+            message.textContent = requiresPayment
+                ? "Review the amount and confirm receipt of payment before submitting."
+                : "No additional payment is due; previous confirmed payments cover the all-day rate.";
+        }
+    } catch (error) {
+        console.error("Guest extension quote error:", error);
+        if (message) {
+            message.textContent = error.message || "Unable to load extension price.";
+        }
+    } finally {
+        if (button) {
+            button.disabled = false;
+        }
+    }
+}
+
+async function submitGuestExtension(event) {
+    event.preventDefault();
+
+    if (!activeGuestExtensionId || !guestExtensionQuote) {
+        return;
+    }
+
+    const amount = Number(guestExtensionQuote.amount);
+    const method = document
+        .getElementById("extensionPaymentMethod")
+        .value;
+    const paymentConfirmed = document
+        .getElementById("extensionPaymentConfirmed")
+        .checked;
+
+    if (amount > 0 && (!method || !paymentConfirmed)) {
+        setText(
+            "extensionModalMessage",
+            "Select the payment method and confirm the payment was received."
+        );
+        return;
+    }
+
+    const summary =
+        `${guestExtensionQuote.extensionType === "ALL_DAY"
+            ? "Upgrade to All-Day"
+            : `Add ${guestExtensionQuote.hours} hour(s)`}\n` +
+        `Amount due: ₱${amount.toLocaleString()}\n` +
+        `Payment method: ${amount > 0 ? method : "Already paid"}\n` +
+        `Access through: ${document.getElementById("extensionNewExpiration").textContent}`;
+
+    if (!confirm(`Confirm guest extension?\n\n${summary}`)) {
+        return;
+    }
+
+    const button = document.getElementById("confirmGuestExtensionButton");
+    const message = document.getElementById("extensionModalMessage");
+    button.disabled = true;
+    if (message) {
+        message.textContent = "Saving confirmed extension...";
+    }
+
+    try {
+        const result = await apiRequest(
+            `/api/admin/attendance/${activeGuestExtensionId}/extend`,
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    extension_type: guestExtensionQuote.extensionType,
+                    additional_hours: guestExtensionQuote.hours,
+                    payment_method: method || null,
+                    payment_confirmed: paymentConfirmed,
+                    idempotency_key: guestExtensionRequestKey
+                })
+            }
+        );
+
+        if (message) {
+            message.textContent = result.duplicate
+                ? "This extension was already recorded."
+                : "Extension and payment recorded.";
+        }
+        closeGuestExtensionModal();
+        await Promise.all([
+            loadAttendance(),
+            loadAdminDashboard(),
+            loadReports(),
+            loadTransactions()
+        ]);
+    } catch (error) {
+        console.error("Guest extension submission error:", error);
+        if (message) {
+            message.textContent = error.message || "Unable to save extension.";
+        }
+    } finally {
+        if (button && !document.getElementById("guestExtensionModal").hidden) {
+            button.disabled = false;
+        }
+    }
+}
 
 function updateGuestPricing() {
 
@@ -4139,10 +4368,14 @@ function isWithinMemberQrHours() {
 
     const minutesSinceMidnight =
         hour * 60 + minute;
+    const [closingHour, closingMinute] =
+        gymClosingTime.split(":").map(Number);
+    const minutesUntilClose =
+        closingHour * 60 + closingMinute;
 
     return (
         minutesSinceMidnight >= 8 * 60 &&
-        minutesSinceMidnight < 22 * 60
+        minutesSinceMidnight < minutesUntilClose
     );
 
 }
@@ -4166,7 +4399,7 @@ async function scanCustomerQr() {
     if (!isWithinMemberQrHours()) {
 
         const message =
-            "Member QR check-in and check-out are available from 8:00 AM to 10:00 PM Manila time.";
+            `Member QR check-in and check-out are available from 8:00 AM to ${formatConfiguredClosingTime(gymClosingTime)} Manila time.`;
 
         const status =
             document.getElementById(
@@ -4322,7 +4555,7 @@ async function scanCustomerQr() {
                 if (!isWithinMemberQrHours()) {
 
                     const message =
-                        "Gym QR scanning is closed. Members still inside are checked out automatically at 10:00 PM Manila time.";
+                        `Gym QR scanning is closed at ${formatConfiguredClosingTime(gymClosingTime)}. Record checkout only when the member actually leaves.`;
 
                     if (status) {
                         status.textContent = message;
@@ -4561,12 +4794,19 @@ async function loadReports(
     period = reportPeriod
 ) {
 
-    if (!["daily", "weekly", "monthly"].includes(period)) {
+    if (!["daily", "weekly", "monthly", "custom"].includes(period)) {
         return;
     }
 
     const periodChanged = period !== reportPeriod;
     reportPeriod = period;
+    const dateRange = document.getElementById("reportDateRange");
+    const startDate = document.getElementById("reportStartDate")?.value || "";
+    const endDate = document.getElementById("reportEndDate")?.value || "";
+    if (dateRange) {
+        dateRange.hidden = period !== "custom";
+    }
+
     document
         .querySelectorAll("[data-report-period]")
         .forEach(button => {
@@ -4576,11 +4816,25 @@ async function loadReports(
             );
         });
 
+    if (period === "custom" && (!startDate || !endDate || startDate > endDate)) {
+        setText(
+            "reportMessage",
+            "Choose a valid start and end date, then apply the custom range."
+        );
+        return;
+    }
+
     try {
+
+        const query = new URLSearchParams({ period: reportPeriod });
+        if (period === "custom") {
+            query.set("startDate", startDate);
+            query.set("endDate", endDate);
+        }
 
         const data =
             await apiRequest(
-                `/api/admin/reports?period=${encodeURIComponent(reportPeriod)}`
+                `/api/admin/reports?${query.toString()}`
             );
 
 
@@ -4622,11 +4876,15 @@ async function loadReports(
             guestVisits
         );
 
+        setText("reportUniqueVisitors", Number(data.uniqueVisitors || 0));
+        setText("reportMemberVisitorCount", Number(data.memberVisitorCount || 0));
+        setText("reportGuestVisitorCount", Number(data.guestVisitorCount || 0));
+        setText("reportCurrentOccupancy", Number(data.currentOccupancy || 0));
 
         updatePeakBars(
             data.series || [],
             reportPeriod,
-            periodChanged
+            periodChanged || reportPeriod === "custom"
         );
 
 
@@ -4639,8 +4897,56 @@ async function loadReports(
         if (reportMessage) {
 
             reportMessage.textContent =
-                `Total recorded visits: ${totalVisits}`;
+                `${totalVisits} visit(s) in the selected period; ` +
+                `${Number(data.uniqueVisitors || 0)} unique visitor(s).`;
 
+        }
+
+        const reportBody = document.getElementById("reportAttendanceTableBody");
+        if (reportBody) {
+            const records = data.records || [];
+            if (records.length) {
+                let previousGroupLabel = null;
+                reportBody.innerHTML = records.reduce((rows, record) => {
+                    if (record.group_label !== previousGroupLabel) {
+                        previousGroupLabel = record.group_label;
+                        rows.push(`
+                            <tr class="report-group-row">
+                                <th colspan="8" scope="rowgroup">
+                                    ${escapeHtml(record.group_label || "Visits")}
+                                </th>
+                            </tr>
+                        `);
+                    }
+
+                    rows.push(`
+                        <tr>
+                            <td>${escapeHtml(record.visitor_name || "-")}</td>
+                            <td>${escapeHtml(record.user_type || "-")}</td>
+                            <td>${escapeHtml(formatDate(record.check_in))}</td>
+                            <td>${record.check_in ? formatDateTime(record.check_in) : "-"}</td>
+                            <td>${record.check_out ? formatDateTime(record.check_out) : "-"}</td>
+                            <td>${formatVisitDuration(record.duration_seconds)}</td>
+                            <td>${escapeHtml(record.guest_time_purchased || "-")}</td>
+                            <td>
+                                <span class="${record.visit_status === "TIMED OUT" ? "timed-out-label" : "visit-status"}">
+                                    ${escapeHtml(record.visit_status || "-")}
+                                </span>
+                            </td>
+                        </tr>
+                    `);
+
+                    return rows;
+                }, []).join("");
+            } else {
+                reportBody.innerHTML = `
+                    <tr>
+                        <td colspan="8" style="text-align:center;">
+                            No attendance records found for this period.
+                        </td>
+                    </tr>
+                `;
+            }
         }
 
 
@@ -4650,7 +4956,18 @@ async function loadReports(
             "Reports loading error:",
             error
         );
+        setText(
+            "reportMessage",
+            error.message || "Unable to load attendance reports."
+        );
 
+    }
+
+    function formatVisitDuration(value) {
+        const seconds = Math.max(0, Number(value) || 0);
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        return hours ? `${hours}h ${minutes}m` : `${minutes}m`;
     }
 
 }
@@ -4713,7 +5030,8 @@ function updatePeakBars(
     const periodDescription = {
         daily: "hourly attendance for today",
         weekly: "daily attendance for the current week",
-        monthly: "monthly attendance for the past 12 months"
+        monthly: "weekly attendance for the current month",
+        custom: "daily attendance for the selected date range"
     }[period];
 
     chart.setAttribute(
@@ -5156,6 +5474,9 @@ function formatDate(
     return date.toLocaleDateString(
         "en-US",
         {
+            timeZone:
+                "Asia/Manila",
+
             year:
                 "numeric",
 
@@ -5205,6 +5526,9 @@ function formatDateTime(
     return date.toLocaleString(
         "en-US",
         {
+            timeZone:
+                "Asia/Manila",
+
             year:
                 "numeric",
 

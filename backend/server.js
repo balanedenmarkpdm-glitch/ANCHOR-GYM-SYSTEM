@@ -46,23 +46,16 @@ async function purgeExpiredTransactions() {
                 DELETE FROM member_transactions
                 WHERE created_at <= NOW() - INTERVAL '240 hours'
                 RETURNING id
-            ),
-            deleted_guest_transactions AS (
-                DELETE FROM guest_transactions
-                WHERE created_at <= NOW() - INTERVAL '240 hours'
-                RETURNING id
             )
             SELECT
                 (SELECT COUNT(*) FROM deleted_member_transactions)::int
-                    AS member_count,
-                (SELECT COUNT(*) FROM deleted_guest_transactions)::int
-                    AS guest_count
+                    AS member_count
         `);
 
-        const { member_count, guest_count } = result.rows[0];
-        if (member_count || guest_count) {
+        const { member_count } = result.rows[0];
+        if (member_count) {
             console.log(
-                `Automatically purged ${member_count} member and ${guest_count} guest transaction(s) older than 10 days.`
+                `Automatically purged ${member_count} member transaction(s) older than 10 days; guest payment history is retained.`
             );
         }
     } catch (error) {
@@ -173,6 +166,15 @@ async function ensureDashboardSchema() {
         ALTER COLUMN payment_status SET NOT NULL
     `);
     await pool.query(`
+        ALTER TABLE guest_transactions
+        ADD COLUMN IF NOT EXISTS idempotency_key TEXT
+    `);
+    await pool.query(`
+        CREATE UNIQUE INDEX IF NOT EXISTS guest_transactions_idempotency_key_idx
+        ON guest_transactions (idempotency_key)
+        WHERE idempotency_key IS NOT NULL
+    `);
+    await pool.query(`
         CREATE TABLE IF NOT EXISTS guest_visit_extensions (
             id BIGSERIAL PRIMARY KEY,
             attendance_id BIGINT NOT NULL,
@@ -185,9 +187,10 @@ async function ensureDashboardSchema() {
             previous_expiration TIMESTAMPTZ,
             new_expiration TIMESTAMPTZ,
             transaction_reference TEXT,
+            guest_transaction_id BIGINT,
+            idempotency_key TEXT,
             payment_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            UNIQUE (attendance_id, extension_type, additional_hours, payment_status)
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
     `);
     await pool.query(`
@@ -201,7 +204,35 @@ async function ensureDashboardSchema() {
         ADD COLUMN IF NOT EXISTS additional_hours INTEGER,
         ADD COLUMN IF NOT EXISTS extension_type TEXT,
         ADD COLUMN IF NOT EXISTS attendance_id BIGINT,
-        ADD COLUMN IF NOT EXISTS guest_id BIGINT
+        ADD COLUMN IF NOT EXISTS guest_id BIGINT,
+        ADD COLUMN IF NOT EXISTS guest_transaction_id BIGINT,
+        ADD COLUMN IF NOT EXISTS idempotency_key TEXT
+    `);
+    await pool.query(`
+        DO $$
+        DECLARE
+            duplicate_guard RECORD;
+        BEGIN
+            FOR duplicate_guard IN
+                SELECT conname
+                FROM pg_constraint
+                WHERE conrelid = 'guest_visit_extensions'::regclass
+                  AND contype = 'u'
+                  AND pg_get_constraintdef(oid) =
+                      'UNIQUE (attendance_id, extension_type, additional_hours, payment_status)'
+            LOOP
+                EXECUTE format(
+                    'ALTER TABLE guest_visit_extensions DROP CONSTRAINT %I',
+                    duplicate_guard.conname
+                );
+            END LOOP;
+        END;
+        $$
+    `);
+    await pool.query(`
+        CREATE UNIQUE INDEX IF NOT EXISTS guest_visit_extensions_idempotency_key_idx
+        ON guest_visit_extensions (idempotency_key)
+        WHERE idempotency_key IS NOT NULL
     `);
     await pool.query(`
         ALTER TABLE attendance
@@ -212,8 +243,31 @@ async function ensureDashboardSchema() {
         ON guest_transactions (created_at)
     `);
     await pool.query(`
+        CREATE INDEX IF NOT EXISTS guest_transactions_attendance_idx
+        ON guest_transactions (attendance_id)
+    `);
+    await pool.query(`
         CREATE INDEX IF NOT EXISTS guest_visit_extensions_attendance_idx
         ON guest_visit_extensions (attendance_id)
+    `);
+    await pool.query(`
+        UPDATE guest_transactions gt
+        SET attendance_id = (
+            SELECT a.id
+            FROM attendance a
+            WHERE a.guest_id = gt.guest_id
+            ORDER BY ABS(EXTRACT(EPOCH FROM (
+                (a.check_in AT TIME ZONE 'Asia/Manila') - gt.transaction_date
+            ))), a.id
+            LIMIT 1
+        )
+        WHERE gt.attendance_id IS NULL
+          AND gt.extension_type IS NULL
+          AND EXISTS (
+              SELECT 1
+              FROM attendance a
+              WHERE a.guest_id = gt.guest_id
+          )
     `);
     await pool.query(`
         DO $$
@@ -284,8 +338,6 @@ async function ensureDashboardSchema() {
             AS $procedure$
             BEGIN
                 DELETE FROM member_transactions
-                WHERE created_at <= NOW() - INTERVAL '240 hours';
-                DELETE FROM guest_transactions
                 WHERE created_at <= NOW() - INTERVAL '240 hours';
             END;
             $procedure$
@@ -553,6 +605,19 @@ function normalizePhilippinePhone(value) {
 const GUEST_TIMER_TEST_MODE =
     process.env.GUEST_TIMER_TEST_MODE === "true";
 
+const GYM_CLOSING_TIME =
+    process.env.GYM_CLOSING_TIME || "22:00";
+
+if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(GYM_CLOSING_TIME)) {
+    throw new Error("GYM_CLOSING_TIME must use 24-hour HH:MM format.");
+}
+
+const [GYM_CLOSING_HOUR, GYM_CLOSING_MINUTE] =
+    GYM_CLOSING_TIME.split(":").map(Number);
+
+const GYM_CLOSING_INTERVAL =
+    `${GYM_CLOSING_HOUR} hours ${GYM_CLOSING_MINUTE} minutes`;
+
 // =====================================
 // GUEST CLOSING SQL
 // =====================================
@@ -579,7 +644,7 @@ const GUEST_DAY_CLOSING_SQL = `
     date_trunc(
         'day',
         a.check_in
-    ) + INTERVAL '22 hours'
+    ) + INTERVAL '${GYM_CLOSING_INTERVAL}'
 `;
 
 const GUEST_TEST_CLOSING_SQL = `
@@ -590,28 +655,44 @@ const GUEST_TEST_CLOSING_SQL = `
             date_trunc(
                 'day',
                 a.check_in
-            ) + INTERVAL '22 hours'
+            ) + INTERVAL '${GYM_CLOSING_INTERVAL}'
         )
 
         THEN
             date_trunc(
                 'day',
                 a.check_in
-            ) + INTERVAL '46 hours'
+            ) + INTERVAL '24 hours' + INTERVAL '${GYM_CLOSING_INTERVAL}'
 
         ELSE
             date_trunc(
                 'day',
                 a.check_in
-            ) + INTERVAL '22 hours'
+            ) + INTERVAL '${GYM_CLOSING_INTERVAL}'
 
     END
 `;
 
-const GUEST_CLOSING_SQL =
+const GUEST_INITIAL_CLOSING_SQL =
     GUEST_TIMER_TEST_MODE
         ? GUEST_TEST_CLOSING_SQL
         : GUEST_DAY_CLOSING_SQL;
+
+const GUEST_INITIAL_EXPIRATION_SQL = `
+    CASE
+        WHEN UPPER(g.visit_type) = 'DAY PASS'
+        THEN ${GUEST_INITIAL_CLOSING_SQL}
+        WHEN g.hours IS NOT NULL
+        THEN LEAST(
+            a.check_in + (g.hours * INTERVAL '1 hour'),
+            ${GUEST_INITIAL_CLOSING_SQL}
+        )
+        ELSE ${GUEST_INITIAL_CLOSING_SQL}
+    END
+`;
+
+const GUEST_CLOSING_SQL =
+    `COALESCE(a.expiration_time, ${GUEST_INITIAL_EXPIRATION_SQL})`;
 
 // =====================================
 // CURRENT MANILA TIME
@@ -626,6 +707,61 @@ const GUEST_CLOSING_SQL =
 //
 const GUEST_NOW_SQL =
     `(CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Manila')`;
+
+async function getCurrentOccupancy(queryable = pool) {
+    const result = await queryable.query(`
+        SELECT
+            COUNT(DISTINCT CASE
+                WHEN UPPER(a.user_type) = 'MEMBER'
+                 AND a.check_out IS NULL
+                THEN 'member-user:' || m.user_id::text
+            END)::int AS members_inside,
+            COUNT(DISTINCT CASE
+                WHEN UPPER(a.user_type) = 'GUEST'
+                 AND a.check_out IS NULL
+                THEN COALESCE(
+                    NULLIF(regexp_replace(g.phone, '[^0-9]', '', 'g'), ''),
+                    'guest-id:' || a.guest_id::text
+                )
+            END)::int AS guests_inside,
+            COUNT(DISTINCT CASE
+                WHEN a.check_out IS NULL
+                 AND UPPER(a.user_type) IN ('MEMBER', 'GUEST')
+                THEN COALESCE(
+                    NULLIF(regexp_replace(
+                        CASE
+                            WHEN UPPER(a.user_type) = 'MEMBER' THEN NULL
+                            ELSE g.phone
+                        END,
+                        '[^0-9]',
+                        '',
+                        'g'
+                    ), ''),
+                    CASE
+                        WHEN UPPER(a.user_type) = 'MEMBER'
+                        THEN 'member-id:' || m.user_id::text
+                        ELSE 'guest-id:' || a.guest_id::text
+                    END
+                )
+            END)::int AS occupancy
+        FROM attendance a
+        LEFT JOIN members m
+            ON m.id = a.member_id
+        LEFT JOIN users u
+            ON u.id = m.user_id
+        LEFT JOIN guests g
+            ON g.id = a.guest_id
+    `);
+
+    const membersInside = Number(result.rows[0].members_inside || 0);
+    const guestsInside = Number(result.rows[0].guests_inside || 0);
+
+    return {
+        membersInside,
+        guestsInside,
+        occupancy: Number(result.rows[0].occupancy || 0)
+    };
+}
 
 pool.on("error", (error) => {
     console.error(
@@ -3715,23 +3851,7 @@ app.get(
                 );
 
             const attendanceResult =
-                await pool.query(
-                    `
-                    SELECT
-
-                        COUNT(*) FILTER (
-                            WHERE UPPER(user_type) = 'MEMBER'
-                              AND check_out IS NULL
-                        )::int AS members_inside,
-
-                        COUNT(*) FILTER (
-                            WHERE UPPER(user_type) = 'GUEST'
-                              AND check_out IS NULL
-                        )::int AS guests_inside
-
-                    FROM attendance
-                    `
-                );
+                await getCurrentOccupancy();
 
             const timedOutGuestsResult =
                 await pool.query(
@@ -3742,20 +3862,8 @@ app.get(
                     JOIN guests g
                         ON g.id = a.guest_id
                     WHERE UPPER(a.user_type) = 'GUEST'
-                      AND a.check_out IS NOT NULL
-                      AND
-                      (
-                          CASE
-                              WHEN UPPER(g.visit_type) = 'DAY PASS'
-                              THEN ${GUEST_CLOSING_SQL}
-                              WHEN g.hours IS NOT NULL
-                              THEN LEAST(
-                                  a.check_in + (g.hours * INTERVAL '1 hour'),
-                                  ${GUEST_CLOSING_SQL}
-                              )
-                              ELSE ${GUEST_CLOSING_SQL}
-                          END
-                      ) <= ${GUEST_NOW_SQL}
+                      AND a.check_out IS NULL
+                      AND ${GUEST_CLOSING_SQL} <= ${GUEST_NOW_SQL}
                     `
                 );
 
@@ -3808,19 +3916,8 @@ app.get(
                     0
                 );
 
-            const membersInside =
-                Number(
-                    attendanceResult.rows[0]
-                        .members_inside ||
-                    0
-                );
-
-            const guestsInside =
-                Number(
-                    attendanceResult.rows[0]
-                        .guests_inside ||
-                    0
-                );
+            const membersInside = attendanceResult.membersInside;
+            const guestsInside = attendanceResult.guestsInside;
 
             const timedOutGuests =
                 Number(
@@ -3829,9 +3926,7 @@ app.get(
                     0
                 );
 
-            const occupancy =
-                membersInside +
-                guestsInside;
+            const occupancy = attendanceResult.occupancy;
 
             res.json({
 
@@ -5132,6 +5227,14 @@ app.get(
         try {
 
             const filterType = String(req.query.type || "all").trim().toLowerCase();
+
+            if (!["all", "member", "guest"].includes(filterType)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Transaction type must be all, member, or guest."
+                });
+            }
+
             const memberWhere = filterType === "guest" ? "FALSE" : "TRUE";
             const guestWhere = filterType === "member" ? "FALSE" : "TRUE";
 
@@ -5165,23 +5268,28 @@ app.get(
                 pool.query(
                     `
                     SELECT
-                        id,
-                        guest_id,
-                        guest_name,
-                        visit_type,
-                        amount,
-                        payment_method,
-                        transaction_date,
-                        created_at,
-                        payment_status,
-                        extension_type,
-                        additional_hours,
-                        attendance_id,
-                        previous_expiration,
-                        new_expiration
-                    FROM guest_transactions
+                        gt.id,
+                        gt.guest_id,
+                        gt.guest_name,
+                        gt.visit_type,
+                        gt.amount,
+                        gt.payment_method,
+                        gt.transaction_date,
+                        gt.created_at,
+                        gt.payment_status,
+                        gt.extension_type,
+                        gt.additional_hours,
+                        gt.attendance_id,
+                        gt.previous_expiration,
+                        gt.new_expiration,
+                        gt.transaction_reference,
+                        a.check_in,
+                        a.check_out
+                    FROM guest_transactions gt
+                    LEFT JOIN attendance a
+                        ON a.id = gt.attendance_id
                     WHERE ${guestWhere}
-                    ORDER BY transaction_date DESC, id DESC
+                    ORDER BY gt.transaction_date DESC, gt.id DESC
                     `
                 )
             ]);
@@ -5250,6 +5358,14 @@ app.get(
     async (req, res) => {
 
         try {
+            const filterType = String(req.query.type || "all").trim().toLowerCase();
+
+            if (!["all", "member", "guest"].includes(filterType)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Attendance type must be all, member, or guest."
+                });
+            }
 
             const result =
                 await pool.query(
@@ -5261,6 +5377,10 @@ app.get(
                         a.user_type,
                         a.check_in,
                         a.check_out,
+                        a.expiration_time,
+                        g.phone AS guest_phone,
+                        g.visit_type,
+                        g.hours AS guest_hours,
 
                         CASE
 
@@ -5294,6 +5414,9 @@ app.get(
                             THEN
 
                                 CASE
+
+                                    WHEN a.expiration_time IS NOT NULL
+                                    THEN a.expiration_time
 
                                     WHEN UPPER(
                                         g.visit_type
@@ -5343,6 +5466,9 @@ app.get(
                                         (
                                             CASE
 
+                                                WHEN a.expiration_time IS NOT NULL
+                                                THEN a.expiration_time
+
                                                 WHEN UPPER(
                                                     g.visit_type
                                                 ) = 'DAY PASS'
@@ -5369,7 +5495,7 @@ app.get(
                                                     ${GUEST_CLOSING_SQL}
 
                                             END
-                                        ) AT TIME ZONE 'Asia/Manila'
+                                        )
                                     )
                                 ) * 1000
 
@@ -5401,6 +5527,9 @@ app.get(
                                                 (
 
                                                     CASE
+
+                                                        WHEN a.expiration_time IS NOT NULL
+                                                        THEN a.expiration_time
 
                                                         WHEN UPPER(
                                                             g.visit_type
@@ -5460,6 +5589,9 @@ app.get(
 
                                 CASE
 
+                                    WHEN a.expiration_time IS NOT NULL
+                                    THEN a.expiration_time
+
                                     WHEN UPPER(
                                         g.visit_type
                                     ) = 'DAY PASS'
@@ -5512,13 +5644,20 @@ app.get(
                         ON g.id =
                         a.guest_id
 
+                    WHERE $1 = 'all'
+                       OR UPPER(a.user_type) = $2
+
                     ORDER BY
                         a.check_in DESC,
                         a.id DESC
-
-                    LIMIT 100
-                    `
+                    `,
+                    [
+                        filterType,
+                        filterType.toUpperCase()
+                    ]
                 );
+
+            const occupancy = await getCurrentOccupancy();
 
             res.json({
 
@@ -5526,7 +5665,19 @@ app.get(
                     true,
 
                 attendance:
-                    result.rows
+                    result.rows,
+
+                membersInside:
+                    occupancy.membersInside,
+
+                guestsInside:
+                    occupancy.guestsInside,
+
+                currentOccupancy:
+                    occupancy.occupancy,
+
+                closingTime:
+                    GYM_CLOSING_TIME
 
             });
 
@@ -5562,6 +5713,506 @@ app.get(
 
         }
 
+    }
+);
+
+app.get(
+    "/api/admin/attendance/:id/extension-quote",
+    async (req, res) => {
+        const attendanceId = Number(req.params.id);
+
+        if (!Number.isSafeInteger(attendanceId) || attendanceId <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid attendance ID."
+            });
+        }
+
+        try {
+            const visitResult = await pool.query(
+                `
+                SELECT
+                    a.id,
+                    a.check_in,
+                    a.check_out,
+                    g.id AS guest_id,
+                    g.full_name,
+                    g.amount_paid,
+                    (
+                        COALESCE(
+                            a.expiration_time AT TIME ZONE 'Asia/Manila',
+                            ${GUEST_INITIAL_EXPIRATION_SQL}
+                        ) AT TIME ZONE 'Asia/Manila'
+                    ) AS current_expiration,
+                    (${GUEST_NOW_SQL} AT TIME ZONE 'Asia/Manila') AS now_manila,
+                    (
+                        date_trunc('day', ${GUEST_NOW_SQL})
+                        + INTERVAL '${GYM_CLOSING_INTERVAL}'
+                    ) AT TIME ZONE 'Asia/Manila' AS closing_today
+                FROM attendance a
+                JOIN guests g
+                    ON g.id = a.guest_id
+                WHERE a.id = $1
+                  AND UPPER(a.user_type) = 'GUEST'
+                  AND a.check_out IS NULL
+                `,
+                [attendanceId]
+            );
+
+            if (visitResult.rows.length === 0) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Active guest visit not found."
+                });
+            }
+
+            const visit = visitResult.rows[0];
+            const paidResult = await pool.query(
+                `
+                SELECT COALESCE(SUM(amount), 0)::numeric AS paid
+                FROM guest_transactions
+                WHERE payment_status = 'CONFIRMED'
+                  AND (
+                      attendance_id = $1
+                      OR (attendance_id IS NULL AND guest_id = $2)
+                  )
+                `,
+                [attendanceId, visit.guest_id]
+            );
+            const paidTowardVisit = Math.max(
+                Number(paidResult.rows[0].paid || 0),
+                Number(visit.amount_paid || 0)
+            );
+            const now = new Date(visit.now_manila);
+            const closingToday = new Date(visit.closing_today);
+            const currentExpiration = new Date(visit.current_expiration);
+            const closingExpiration = new Date(
+                closingToday.getTime() +
+                (closingToday.getTime() <= now.getTime()
+                    ? 24 * 60 * 60 * 1000
+                    : 0)
+            );
+
+            return res.json({
+                success: true,
+                closing_time_config: GYM_CLOSING_TIME,
+                attendance_id: Number(visit.id),
+                guest_name: visit.full_name,
+                check_in: visit.check_in,
+                current_expiration: currentExpiration,
+                remaining_seconds: Math.max(
+                    0,
+                    Math.floor((currentExpiration.getTime() - now.getTime()) / 1000)
+                ),
+                closing_time: closingExpiration,
+                options: [
+                    { extension_type: "EXTRA_HOURS", additional_hours: 1, price: 30 },
+                    { extension_type: "EXTRA_HOURS", additional_hours: 2, price: 60 },
+                    { extension_type: "EXTRA_HOURS", additional_hours: 3, price: 90 },
+                    {
+                        extension_type: "ALL_DAY",
+                        additional_hours: null,
+                        price: 100,
+                        remaining_balance: Math.max(0, 100 - paidTowardVisit)
+                    }
+                ]
+            });
+        } catch (error) {
+            console.error("Guest extension quote error:", error);
+            return res.status(500).json({
+                success: false,
+                message: "Unable to load the guest extension quote.",
+                error: error.message
+            });
+        }
+    }
+);
+
+app.post(
+    "/api/admin/attendance/:id/extend",
+    async (req, res) => {
+        const attendanceId = Number(req.params.id);
+        const extensionType = String(req.body?.extension_type || "")
+            .trim()
+            .toUpperCase();
+        const additionalHours =
+            req.body?.additional_hours === undefined
+                ? null
+                : Number(req.body.additional_hours);
+        const idempotencyKey = String(req.body?.idempotency_key || "").trim();
+        const paymentMethod = String(req.body?.payment_method || "")
+            .trim()
+            .toUpperCase();
+        const paymentConfirmed = req.body?.payment_confirmed === true;
+
+        if (!Number.isSafeInteger(attendanceId) || attendanceId <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid attendance ID."
+            });
+        }
+
+        if (
+            extensionType !== "EXTRA_HOURS" &&
+            extensionType !== "ALL_DAY"
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Choose additional hours or an all-day upgrade."
+            });
+        }
+
+        if (
+            extensionType === "EXTRA_HOURS" &&
+            ![1, 2, 3].includes(additionalHours)
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Additional time must be 1, 2, or 3 hours."
+            });
+        }
+
+        if (!idempotencyKey || idempotencyKey.length > 120) {
+            return res.status(400).json({
+                success: false,
+                message: "A valid payment request key is required."
+            });
+        }
+
+        const client = await pool.connect();
+        let transactionStarted = false;
+
+        try {
+            await client.query("BEGIN");
+            transactionStarted = true;
+
+            const duplicateResult = await client.query(
+                `
+                SELECT
+                    e.attendance_id,
+                    e.extension_type,
+                    e.additional_hours,
+                    e.amount,
+                    e.new_expiration,
+                    e.guest_transaction_id
+                FROM guest_visit_extensions e
+                WHERE e.idempotency_key = $1
+                `,
+                [idempotencyKey]
+            );
+
+            if (duplicateResult.rows.length > 0) {
+                const duplicate = duplicateResult.rows[0];
+                if (
+                    Number(duplicate.attendance_id) !== attendanceId ||
+                    duplicate.extension_type !== extensionType ||
+                    Number(duplicate.additional_hours || 0) !==
+                        Number(additionalHours || 0)
+                ) {
+                    await client.query("ROLLBACK");
+                    transactionStarted = false;
+                    return res.status(409).json({
+                        success: false,
+                        message: "This payment request key was already used for a different extension."
+                    });
+                }
+
+                await client.query("COMMIT");
+                transactionStarted = false;
+                return res.json({
+                    success: true,
+                    duplicate: true,
+                    amount: Number(duplicate.amount),
+                    new_expiration: duplicate.new_expiration,
+                    transaction_id: duplicate.guest_transaction_id
+                });
+            }
+
+            const visitResult = await client.query(
+                `
+                SELECT
+                    a.id,
+                    a.guest_id,
+                    a.check_in,
+                    a.expiration_time,
+                    g.full_name,
+                    g.amount_paid,
+                    (
+                        COALESCE(
+                            a.expiration_time AT TIME ZONE 'Asia/Manila',
+                            ${GUEST_INITIAL_EXPIRATION_SQL}
+                        ) AT TIME ZONE 'Asia/Manila'
+                    ) AS current_expiration,
+                    (${GUEST_NOW_SQL} AT TIME ZONE 'Asia/Manila') AS now_manila,
+                    (
+                        date_trunc('day', ${GUEST_NOW_SQL})
+                        + INTERVAL '${GYM_CLOSING_INTERVAL}'
+                    ) AT TIME ZONE 'Asia/Manila' AS closing_today
+                FROM attendance a
+                JOIN guests g
+                    ON g.id = a.guest_id
+                WHERE a.id = $1
+                  AND UPPER(a.user_type) = 'GUEST'
+                  AND a.check_out IS NULL
+                FOR UPDATE OF a
+                `,
+                [attendanceId]
+            );
+
+            if (visitResult.rows.length === 0) {
+                await client.query("ROLLBACK");
+                transactionStarted = false;
+                return res.status(404).json({
+                    success: false,
+                    message: "Active guest visit not found. Checked-out visits cannot be extended."
+                });
+            }
+
+            const visit = visitResult.rows[0];
+            const now = new Date(visit.now_manila);
+            const currentExpiration = new Date(visit.current_expiration);
+            const closingToday = new Date(visit.closing_today);
+
+            if (
+                Number.isNaN(now.getTime()) ||
+                Number.isNaN(currentExpiration.getTime()) ||
+                Number.isNaN(closingToday.getTime())
+            ) {
+                throw new Error("Unable to determine the guest visit expiration time.");
+            }
+
+            let amount;
+            let newExpiration;
+
+            if (extensionType === "EXTRA_HOURS") {
+                amount = additionalHours * 30;
+                newExpiration = new Date(
+                    Math.max(currentExpiration.getTime(), now.getTime()) +
+                    additionalHours * 60 * 60 * 1000
+                );
+            } else {
+                const closingTime = new Date(
+                    closingToday.getTime() +
+                    (closingToday.getTime() <= now.getTime()
+                        ? 24 * 60 * 60 * 1000
+                        : 0)
+                );
+                newExpiration = new Date(
+                    Math.max(
+                        currentExpiration.getTime(),
+                        closingTime.getTime()
+                    )
+                );
+
+                const paidResult = await client.query(
+                    `
+                    SELECT COALESCE(SUM(amount), 0)::numeric AS paid
+                    FROM guest_transactions
+                    WHERE payment_status = 'CONFIRMED'
+                      AND (
+                          attendance_id = $1
+                          OR (
+                              attendance_id IS NULL
+                              AND guest_id = $2
+                          )
+                      )
+                    `,
+                    [attendanceId, visit.guest_id]
+                );
+                const linkedPayment = Number(paidResult.rows[0].paid || 0);
+                const basePayment = Number(visit.amount_paid || 0);
+                const paidTowardVisit = Math.max(linkedPayment, basePayment);
+                amount = Math.max(0, 100 - paidTowardVisit);
+            }
+
+            if (amount > 0) {
+                if (!paymentConfirmed) {
+                    await client.query("ROLLBACK");
+                    transactionStarted = false;
+                    return res.status(402).json({
+                        success: false,
+                        message: "Confirm that the guest's payment was received before extending access."
+                    });
+                }
+
+                if (!["CASH", "GCASH"].includes(paymentMethod)) {
+                    await client.query("ROLLBACK");
+                    transactionStarted = false;
+                    return res.status(400).json({
+                        success: false,
+                        message: "Select CASH or GCASH as the confirmed payment method."
+                    });
+                }
+            }
+
+            const transactionReference =
+                amount > 0 ? `EXT-${crypto.randomUUID()}` : null;
+            let transactionId = null;
+
+            if (amount > 0) {
+                const paymentResult = await client.query(
+                    `
+                    INSERT INTO guest_transactions (
+                        guest_id,
+                        guest_name,
+                        visit_type,
+                        amount,
+                        payment_method,
+                        transaction_reference,
+                        attendance_id,
+                        extension_type,
+                        additional_hours,
+                        payment_status,
+                        previous_expiration,
+                        new_expiration,
+                        idempotency_key
+                    )
+                    VALUES (
+                        $1, $2, $3, $4, $5, $6, $7, $8, $9,
+                        'CONFIRMED', $10, $11, $12
+                    )
+                    RETURNING id
+                    `,
+                    [
+                        visit.guest_id,
+                        visit.full_name,
+                        extensionType === "ALL_DAY"
+                            ? "DAY PASS UPGRADE"
+                            : "TIME EXTENSION",
+                        amount,
+                        paymentMethod,
+                        transactionReference,
+                        attendanceId,
+                        extensionType,
+                        additionalHours,
+                        currentExpiration,
+                        newExpiration,
+                        idempotencyKey
+                    ]
+                );
+                transactionId = paymentResult.rows[0].id;
+            }
+
+            await client.query(
+                `
+                INSERT INTO guest_visit_extensions (
+                    attendance_id,
+                    guest_id,
+                    extension_type,
+                    additional_hours,
+                    amount,
+                    payment_status,
+                    previous_expiration,
+                    new_expiration,
+                    transaction_reference,
+                    guest_transaction_id,
+                    idempotency_key,
+                    payment_date
+                )
+                VALUES (
+                    $1, $2, $3, $4, $5, 'CONFIRMED',
+                    $6, $7, $8, $9, $10, CURRENT_TIMESTAMP
+                )
+                `,
+                [
+                    attendanceId,
+                    visit.guest_id,
+                    extensionType,
+                    additionalHours,
+                    amount,
+                    currentExpiration,
+                    newExpiration,
+                    transactionReference,
+                    transactionId,
+                    idempotencyKey
+                ]
+            );
+
+            await client.query(
+                `
+                UPDATE attendance
+                SET expiration_time = $2
+                WHERE id = $1
+                  AND check_out IS NULL
+                `,
+                [attendanceId, newExpiration]
+            );
+
+            await client.query("COMMIT");
+            transactionStarted = false;
+
+            return res.json({
+                success: true,
+                amount,
+                extension_type: extensionType,
+                additional_hours: additionalHours,
+                payment_status: "CONFIRMED",
+                remaining_balance: extensionType === "ALL_DAY" ? 0 : null,
+                previous_expiration: currentExpiration,
+                new_expiration: newExpiration,
+                transaction_reference: transactionReference,
+                transaction_id: transactionId
+            });
+        } catch (error) {
+            if (transactionStarted) {
+                try {
+                    await client.query("ROLLBACK");
+                } catch (rollbackError) {
+                    console.error("Guest extension rollback error:", rollbackError);
+                }
+            }
+
+            if (error.code === "23505" && idempotencyKey) {
+                try {
+                    const duplicate = await pool.query(
+                        `
+                        SELECT
+                            attendance_id,
+                            extension_type,
+                            additional_hours,
+                            amount,
+                            new_expiration,
+                            guest_transaction_id
+                        FROM guest_visit_extensions
+                        WHERE idempotency_key = $1
+                        `,
+                        [idempotencyKey]
+                    );
+                    if (duplicate.rows.length > 0) {
+                        const existing = duplicate.rows[0];
+                        if (
+                            Number(existing.attendance_id) === attendanceId &&
+                            existing.extension_type === extensionType &&
+                            Number(existing.additional_hours || 0) ===
+                                Number(additionalHours || 0)
+                        ) {
+                            return res.json({
+                                success: true,
+                                duplicate: true,
+                                amount: Number(existing.amount),
+                                new_expiration: existing.new_expiration,
+                                transaction_id: existing.guest_transaction_id
+                            });
+                        }
+                    }
+                } catch (duplicateLookupError) {
+                    console.error(
+                        "Guest extension idempotency lookup error:",
+                        duplicateLookupError
+                    );
+                }
+            }
+
+            console.error("Guest extension error:", error);
+            return res.status(500).json({
+                success: false,
+                message: "Unable to extend the guest visit.",
+                error: error.message,
+                code: error.code || null
+            });
+        } finally {
+            client.release();
+        }
     }
 );
 
@@ -5623,7 +6274,7 @@ app.post(
                             date_trunc(
                                 'day',
                                 ${GUEST_NOW_SQL}
-                            ) + INTERVAL '22 hours'
+                            ) + INTERVAL '${GYM_CLOSING_INTERVAL}'
                         AS is_open
                     `
                 );
@@ -5648,7 +6299,7 @@ app.post(
                         false,
 
                     message:
-                        "Member QR check-in and check-out are available from 8:00 AM to 10:00 PM Manila time."
+                        `Member QR check-in and check-out are available from 8:00 AM to ${GYM_CLOSING_TIME} Manila time.`
 
                 });
 
@@ -5927,42 +6578,11 @@ app.post(
 
             }
 
-            const occupancyResult =
-                await client.query(
-                    `
-                    SELECT
-
-                        COUNT(*) FILTER (
-                            WHERE UPPER(user_type) = 'MEMBER'
-                              AND check_out IS NULL
-                        )::int AS members_inside,
-
-                        COUNT(*) FILTER (
-                            WHERE UPPER(user_type) = 'GUEST'
-                              AND check_out IS NULL
-                        )::int AS guests_inside
-
-                    FROM attendance
-                    `
-                );
-
-            const membersInside =
-                Number(
-                    occupancyResult.rows[0]
-                        .members_inside ||
-                    0
-                );
-
-            const guestsInside =
-                Number(
-                    occupancyResult.rows[0]
-                        .guests_inside ||
-                    0
-                );
-
-            const occupancy =
-                membersInside +
-                guestsInside;
+            const {
+                membersInside,
+                guestsInside,
+                occupancy
+            } = await getCurrentOccupancy(client);
 
             await client.query(
                 "COMMIT"
@@ -6092,16 +6712,26 @@ app.post(
 
         try {
 
-            const userId = Number(req.body?.user_id);
+            const memberIdentifier = String(
+                req.body?.member_id || req.body?.user_id || ""
+            ).trim();
+            const userId =
+                req.body?.user_id === undefined
+                    ? null
+                    : Number(req.body.user_id);
             const action = String(req.body?.action || "")
                 .trim()
                 .toUpperCase()
                 .replace(/[\s-]+/g, "_");
 
-            if (!Number.isSafeInteger(userId) || userId <= 0) {
+            if (
+                !memberIdentifier ||
+                (userId !== null &&
+                    (!Number.isSafeInteger(userId) || userId <= 0))
+            ) {
                 return res.status(400).json({
                     success: false,
-                    message: "A valid user_id is required."
+                    message: "A valid member ID is required."
                 });
             }
 
@@ -6131,12 +6761,13 @@ app.post(
                 FROM members m
                 JOIN users u
                     ON u.id = m.user_id
-                WHERE m.user_id = $1
+                WHERE m.member_id::text = $1
+                   OR ($2::bigint IS NOT NULL AND m.user_id = $2)
                 ORDER BY m.id DESC
                 LIMIT 1
                 FOR UPDATE OF m
                 `,
-                [userId]
+                [memberIdentifier, userId]
             );
 
             if (memberResult.rows.length === 0) {
@@ -6243,27 +6874,11 @@ app.post(
                 attendance = checkoutResult.rows[0];
             }
 
-            const occupancyResult = await client.query(
-                `
-                SELECT
-                    COUNT(*) FILTER (
-                        WHERE UPPER(user_type) = 'MEMBER'
-                          AND check_out IS NULL
-                    )::int AS members_inside,
-                    COUNT(*) FILTER (
-                        WHERE UPPER(user_type) = 'GUEST'
-                          AND check_out IS NULL
-                    )::int AS guests_inside
-                FROM attendance
-                `
-            );
-
-            const membersInside = Number(
-                occupancyResult.rows[0].members_inside || 0
-            );
-            const guestsInside = Number(
-                occupancyResult.rows[0].guests_inside || 0
-            );
+            const {
+                membersInside,
+                guestsInside,
+                occupancy
+            } = await getCurrentOccupancy(client);
 
             await client.query("COMMIT");
             transactionStarted = false;
@@ -6283,7 +6898,7 @@ app.post(
                 attendance,
                 membersInside,
                 guestsInside,
-                occupancy: membersInside + guestsInside,
+                occupancy,
                 capacity: 120
             });
 
@@ -6588,34 +7203,6 @@ app.post(
             const guest =
                 guestResult.rows[0];
 
-            await client.query(
-                `
-                INSERT INTO guest_transactions
-                (
-                    guest_id,
-                    guest_name,
-                    visit_type,
-                    amount,
-                    payment_method
-                )
-                VALUES
-                (
-                    $1,
-                    $2,
-                    $3,
-                    $4,
-                    $5
-                )
-                `,
-                [
-                    guest.id,
-                    guest.full_name,
-                    guest.visit_type,
-                    guest.amount_paid,
-                    guest.payment_method
-                ]
-            );
-
             const attendanceResult =
                 await client.query(
                     `
@@ -6640,6 +7227,39 @@ app.post(
                         guest.id
                     ]
                 );
+
+            await client.query(
+                `
+                INSERT INTO guest_transactions
+                (
+                    guest_id,
+                    guest_name,
+                    visit_type,
+                    amount,
+                    payment_method,
+                    attendance_id,
+                    payment_status
+                )
+                VALUES
+                (
+                    $1,
+                    $2,
+                    $3,
+                    $4,
+                    $5,
+                    $6,
+                    'CONFIRMED'
+                )
+                `,
+                [
+                    guest.id,
+                    guest.full_name,
+                    guest.visit_type,
+                    guest.amount_paid,
+                    guest.payment_method,
+                    attendanceResult.rows[0].id
+                ]
+            );
 
             await client.query(
                 "COMMIT"
@@ -6731,18 +7351,9 @@ app.post(
 // CHECK OUT ATTENDANCE
 // =====================================
 //
-// MANUAL CHECKOUT:
-//
-// Admin can manually check out.
-//
-// AUTOMATIC CHECKOUT:
-//
-// This is ONLY allowed when the server
-// determines that the guest timer has
-// actually reached zero.
-//
-// This protection prevents admin.js from
-// accidentally checking out a guest early.
+// Expiration is not evidence of departure.
+// Only an administrator's actual checkout
+// action records check_out.
 //
 app.patch(
     "/api/admin/attendance/:id/checkout",
@@ -6780,6 +7391,13 @@ app.patch(
                 req.body.automatic ===
                 true;
 
+            if (automatic) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Attendance can only be checked out after an administrator records the person's actual departure."
+                });
+            }
+
             // ---------------------------------
             // GET CURRENT ATTENDANCE + TIMER
             // ---------------------------------
@@ -6787,141 +7405,10 @@ app.patch(
             const targetResult =
                 await pool.query(
                     `
-                    SELECT
-
-                        a.id,
-
-                        a.member_id,
-
-                        a.guest_id,
-
-                        a.user_type,
-
-                        a.check_in,
-
-                        a.check_out,
-
-                        CASE
-
-                            WHEN UPPER(
-                                a.user_type
-                            ) = 'GUEST'
-
-                            AND g.id IS NOT NULL
-
-                            THEN
-
-                                CASE
-
-                                    WHEN UPPER(
-                                        g.visit_type
-                                    ) = 'DAY PASS'
-
-                                    THEN
-                                        ${GUEST_CLOSING_SQL}
-
-                                    WHEN g.hours IS NOT NULL
-
-                                    THEN
-                                        LEAST(
-
-                                            a.check_in +
-                                            (
-                                                g.hours *
-                                                INTERVAL '1 hour'
-                                            ),
-
-                                            ${GUEST_CLOSING_SQL}
-
-                                        )
-
-                                    ELSE
-                                        ${GUEST_CLOSING_SQL}
-
-                                END
-
-                            ELSE
-                                NULL
-
-                        END AS guest_end_time,
-
-                        CASE
-
-                            WHEN UPPER(
-                                a.user_type
-                            ) = 'GUEST'
-
-                            AND g.id IS NOT NULL
-
-                            THEN
-
-                                GREATEST(
-
-                                    0,
-
-                                    FLOOR(
-
-                                        EXTRACT(
-                                            EPOCH FROM
-                                            (
-
-                                                (
-
-                                                    CASE
-
-                                                        WHEN UPPER(
-                                                            g.visit_type
-                                                        ) = 'DAY PASS'
-
-                                                        THEN
-                                                            ${GUEST_CLOSING_SQL}
-
-                                                        WHEN g.hours IS NOT NULL
-
-                                                        THEN
-                                                            LEAST(
-
-                                                                a.check_in +
-                                                                (
-                                                                    g.hours *
-                                                                    INTERVAL '1 hour'
-                                                                ),
-
-                                                                ${GUEST_CLOSING_SQL}
-
-                                                            )
-
-                                                        ELSE
-                                                            ${GUEST_CLOSING_SQL}
-
-                                                    END
-
-                                                )
-
-                                                -
-                                                ${GUEST_NOW_SQL}
-
-                                            )
-                                        )
-
-                                    )
-
-                                )::int
-
-                            ELSE
-                                NULL
-
-                        END AS guest_remaining_seconds
-
-                    FROM attendance a
-
-                    LEFT JOIN guests g
-                        ON g.id =
-                        a.guest_id
-
-                    WHERE
-                        a.id = $1
-                        AND a.check_out IS NULL
+                    SELECT id
+                    FROM attendance
+                    WHERE id = $1
+                      AND check_out IS NULL
                     `,
                     [
                         attendanceId
@@ -6947,70 +7434,6 @@ app.patch(
 
             }
 
-            const target =
-                targetResult.rows[0];
-
-            const isGuest =
-                String(
-                    target.user_type ||
-                    ""
-                )
-                    .toUpperCase() ===
-                "GUEST";
-
-            // =================================
-            // AUTOMATIC CHECKOUT PROTECTION
-            // =================================
-            //
-            // If the browser says:
-            //
-            // "Timer reached zero"
-            //
-            // but the SERVER says:
-            //
-            // "There is still time"
-            //
-            // DO NOT CHECK OUT.
-            //
-            if (
-                automatic &&
-                isGuest
-            ) {
-
-                const remainingSeconds =
-                    Number(
-                        target.guest_remaining_seconds
-                    );
-
-                if (
-                    Number.isFinite(
-                        remainingSeconds
-                    ) &&
-                    remainingSeconds > 0
-                ) {
-
-                    return res.status(
-                        409
-                    ).json({
-
-                        success:
-                            false,
-
-                        message:
-                            "Guest visit has not expired yet.",
-
-                        remaining_seconds:
-                            remainingSeconds,
-
-                        guest_end_time:
-                            target.guest_end_time
-
-                    });
-
-                }
-
-            }
-
             // =================================
             // UPDATE CHECKOUT
             // =================================
@@ -7020,23 +7443,7 @@ app.patch(
                     `
                     UPDATE attendance
                     SET
-                        check_out =
-                            CASE
-
-                                WHEN
-                                    $2 = TRUE
-                                    AND $3 = TRUE
-                                    AND $4::timestamp IS NOT NULL
-                                    AND $4::timestamp <=
-                                        ${GUEST_NOW_SQL}
-
-                                THEN
-                                    $4::timestamp
-
-                                ELSE
-                                    CURRENT_TIMESTAMP
-
-                            END
+                        check_out = ${GUEST_NOW_SQL}
 
                     WHERE
                         id = $1
@@ -7051,14 +7458,7 @@ app.patch(
                         check_out
                     `,
                     [
-                        attendanceId,
-
-                        automatic,
-
-                        isGuest,
-
-                        target.guest_end_time ||
-                            null
+                        attendanceId
                     ]
                 );
 
@@ -7087,10 +7487,7 @@ app.patch(
                     true,
 
                 message:
-                    automatic &&
-                    isGuest
-                        ? "Guest visit timed out and was checked out automatically."
-                        : "Checked out successfully.",
+                    "Checked out successfully.",
 
                 attendance:
                     result.rows[0]
@@ -7253,203 +7650,6 @@ app.delete(
 );
 
 // =====================================
-// AUTOMATIC GUEST CHECKOUT
-// =====================================
-//
-// SERVER-SIDE BACKUP TIMER.
-//
-// This means the guest will still be
-// automatically checked out even if the
-// admin browser is closed.
-//
-// The server checks every 30 seconds.
-//
-// The IMPORTANT part is:
-//
-//     expired.end_time <= GUEST_NOW_SQL
-//
-// A late-night guest in TEST MODE will
-// therefore not be considered expired
-// until the correct next-day time.
-//
-async function autoCheckoutExpiredGuests() {
-
-    try {
-
-        const result =
-            await pool.query(
-                `
-                WITH expired AS (
-
-                    SELECT
-
-                        a.id,
-
-                        CASE
-
-                            WHEN UPPER(
-                                g.visit_type
-                            ) = 'DAY PASS'
-
-                            THEN
-                                ${GUEST_CLOSING_SQL}
-
-                            WHEN g.hours IS NOT NULL
-
-                            THEN
-                                LEAST(
-
-                                    a.check_in +
-                                    (
-                                        g.hours *
-                                        INTERVAL '1 hour'
-                                    ),
-
-                                    ${GUEST_CLOSING_SQL}
-
-                                )
-
-                            ELSE
-                                ${GUEST_CLOSING_SQL}
-
-                        END AS end_time
-
-                    FROM attendance a
-
-                    JOIN guests g
-                        ON g.id =
-                        a.guest_id
-
-                    WHERE
-
-                        UPPER(
-                            a.user_type
-                        ) = 'GUEST'
-
-                        AND a.check_out IS NULL
-
-                )
-
-                UPDATE attendance a
-
-                SET
-                    check_out =
-                        expired.end_time
-
-                FROM expired
-
-                WHERE
-
-                    a.id =
-                    expired.id
-
-                    AND expired.end_time <=
-                        ${GUEST_NOW_SQL}
-
-                RETURNING
-
-                    a.id,
-
-                    a.guest_id,
-
-                    a.check_out
-                `
-            );
-
-        if (
-            result.rows.length >
-            0
-        ) {
-
-            console.log(
-                `Automatically checked out ${result.rows.length} expired guest visit(s).`
-            );
-
-        }
-
-    } catch (error) {
-
-        console.error(
-            "Automatic guest checkout error:",
-            error
-        );
-
-    }
-
-}
-
-async function autoCheckoutMembersAtClosing() {
-
-    try {
-
-        const result =
-            await pool.query(
-                `
-                UPDATE attendance a
-                SET check_out =
-                    date_trunc(
-                        'day',
-                        a.check_in
-                    ) + INTERVAL '22 hours'
-                WHERE UPPER(a.user_type) = 'MEMBER'
-                  AND a.check_out IS NULL
-                  AND
-                  (
-                      ${GUEST_NOW_SQL} >=
-                          date_trunc(
-                              'day',
-                              ${GUEST_NOW_SQL}
-                          ) + INTERVAL '22 hours'
-                      OR a.check_in <
-                          date_trunc(
-                              'day',
-                              ${GUEST_NOW_SQL}
-                          )
-                  )
-                RETURNING a.id
-                `
-            );
-
-        if (
-            result.rows.length >
-            0
-        ) {
-
-            console.log(
-                `Automatically checked out ${result.rows.length} member visit(s) at gym closing.`
-            );
-
-        }
-
-    } catch (error) {
-
-        console.error(
-            "Automatic member checkout error:",
-            error
-        );
-
-    }
-
-}
-
-// =====================================
-// START AUTOMATIC TIMER
-// =====================================
-
-autoCheckoutExpiredGuests();
-autoCheckoutMembersAtClosing();
-
-setInterval(
-    autoCheckoutExpiredGuests,
-    30 * 1000
-);
-
-setInterval(
-    autoCheckoutMembersAtClosing,
-    30 * 1000
-);
-
-// =====================================
 // REPORTS
 // =====================================
 
@@ -7463,117 +7663,219 @@ app.get(
                     .trim()
                     .toLowerCase();
 
-            if (!["daily", "weekly", "monthly"].includes(period)) {
+            if (!["daily", "weekly", "monthly", "custom"].includes(period)) {
                 return res.status(400).json({
                     success: false,
-                    message: "Report period must be daily, weekly, or monthly."
+                    message: "Report period must be daily, weekly, monthly, or custom."
                 });
             }
 
-            const totalVisitsResult =
-                await pool.query(
-                    `
-                    SELECT
-                        COUNT(*)::int AS total_visits
-                    FROM attendance
-                    `
-                );
+            let rangeCondition;
+            let reportParameters = [];
+            let startDate;
+            let endDate;
 
-            const memberVisitsResult =
-                await pool.query(
-                    `
-                    SELECT
-                        COUNT(*)::int AS member_visits
-                    FROM attendance
-                    WHERE UPPER(user_type) = 'MEMBER'
-                    `
-                );
+            if (period === "custom") {
+                startDate = String(req.query.startDate || "");
+                endDate = String(req.query.endDate || "");
+                const isValidDate = value => {
+                    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+                        return false;
+                    }
+                    const date = new Date(`${value}T00:00:00.000Z`);
+                    return (
+                        !Number.isNaN(date.getTime()) &&
+                        date.toISOString().slice(0, 10) === value
+                    );
+                };
 
-            const guestVisitsResult =
-                await pool.query(
-                    `
-                    SELECT
-                        COUNT(*)::int AS guest_visits
-                    FROM attendance
-                    WHERE UPPER(user_type) = 'GUEST'
-                    `
-                );
+                if (
+                    !isValidDate(startDate) ||
+                    !isValidDate(endDate) ||
+                    startDate > endDate
+                ) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Custom reports require valid startDate and endDate values in YYYY-MM-DD format."
+                    });
+                }
 
-            const seriesQueries = {
-                daily: `
-                    SELECT
-                        TO_CHAR(period.bucket, 'FMHH12 AM') AS label,
-                        COUNT(a.id)::int AS visits
-                    FROM GENERATE_SERIES(
-                        DATE_TRUNC('day', NOW()) + INTERVAL '8 hours',
-                        DATE_TRUNC('day', NOW()) + INTERVAL '21 hours',
-                        INTERVAL '1 hour'
-                    ) AS period(bucket)
-                    LEFT JOIN attendance a
-                        ON a.check_in >= period.bucket
-                       AND a.check_in < period.bucket + INTERVAL '1 hour'
-                    GROUP BY period.bucket
-                    ORDER BY period.bucket
-                `,
-                weekly: `
-                    SELECT
-                        TO_CHAR(period.bucket, 'Dy MM/DD') AS label,
-                        COUNT(a.id)::int AS visits
-                    FROM GENERATE_SERIES(
-                        DATE_TRUNC('week', NOW()),
-                        DATE_TRUNC('week', NOW()) + INTERVAL '6 days',
-                        INTERVAL '1 day'
-                    ) AS period(bucket)
-                    LEFT JOIN attendance a
-                        ON a.check_in >= period.bucket
-                       AND a.check_in < period.bucket + INTERVAL '1 day'
-                    GROUP BY period.bucket
-                    ORDER BY period.bucket
-                `,
-                monthly: `
-                    SELECT
-                        TO_CHAR(period.bucket, 'Mon YYYY') AS label,
-                        COUNT(a.id)::int AS visits
-                    FROM GENERATE_SERIES(
-                        DATE_TRUNC('month', NOW()) - INTERVAL '11 months',
-                        DATE_TRUNC('month', NOW()),
-                        INTERVAL '1 month'
-                    ) AS period(bucket)
-                    LEFT JOIN attendance a
-                        ON a.check_in >= period.bucket
-                       AND a.check_in < period.bucket + INTERVAL '1 month'
-                    GROUP BY period.bucket
-                    ORDER BY period.bucket
+                rangeCondition =
+                    "a.check_in >= $1::date AND a.check_in < ($2::date + INTERVAL '1 day')";
+                reportParameters = [startDate, endDate];
+            } else if (period === "daily") {
+                rangeCondition = `
+                    a.check_in >= DATE_TRUNC('day', ${GUEST_NOW_SQL})
+                    AND a.check_in < DATE_TRUNC('day', ${GUEST_NOW_SQL}) + INTERVAL '1 day'
+                `;
+            } else if (period === "weekly") {
+                rangeCondition = `
+                    a.check_in >= DATE_TRUNC('week', ${GUEST_NOW_SQL})
+                    AND a.check_in < DATE_TRUNC('week', ${GUEST_NOW_SQL}) + INTERVAL '7 days'
+                `;
+            } else {
+                rangeCondition = `
+                    a.check_in >= DATE_TRUNC('month', ${GUEST_NOW_SQL})
+                    AND a.check_in < DATE_TRUNC('month', ${GUEST_NOW_SQL}) + INTERVAL '1 month'
+                `;
+            }
+
+            const summaryResult = await pool.query(
                 `
-            };
+                SELECT
+                    COUNT(*)::int AS total_visits,
+                    COUNT(*) FILTER (
+                        WHERE UPPER(a.user_type) = 'MEMBER'
+                    )::int AS member_visits,
+                    COUNT(*) FILTER (
+                        WHERE UPPER(a.user_type) = 'GUEST'
+                    )::int AS guest_visits,
+                    COUNT(DISTINCT CASE
+                        WHEN UPPER(a.user_type) = 'MEMBER'
+                        THEN 'member-user:' || m.user_id::text
+                        WHEN UPPER(a.user_type) = 'GUEST'
+                        THEN COALESCE(
+                            NULLIF(regexp_replace(g.phone, '[^0-9]', '', 'g'), ''),
+                            'guest-id:' || a.guest_id::text
+                        )
+                    END)::int AS unique_visitors,
+                    COUNT(DISTINCT CASE
+                        WHEN UPPER(a.user_type) = 'MEMBER'
+                        THEN 'member-user:' || m.user_id::text
+                    END)::int AS member_visitor_count,
+                    COUNT(DISTINCT CASE
+                        WHEN UPPER(a.user_type) = 'GUEST'
+                        THEN COALESCE(
+                            NULLIF(regexp_replace(g.phone, '[^0-9]', '', 'g'), ''),
+                            'guest-id:' || a.guest_id::text
+                        )
+                    END)::int AS guest_visitor_count
+                FROM attendance a
+                LEFT JOIN members m
+                    ON m.id = a.member_id
+                LEFT JOIN users u
+                    ON u.id = m.user_id
+                LEFT JOIN guests g
+                    ON g.id = a.guest_id
+                WHERE ${rangeCondition}
+                `,
+                reportParameters
+            );
 
-            const seriesResult = await pool.query(seriesQueries[period]);
+            const chartBucket =
+                period === "daily"
+                    ? "hour"
+                    : period === "weekly"
+                        ? "day"
+                        : period === "monthly"
+                            ? "week"
+                            : "day";
+            const chartLabel =
+                period === "daily"
+                    ? "FMHH12 AM"
+                    : period === "weekly"
+                        ? "Dy MM/DD"
+                        : period === "monthly"
+                            ? "Mon DD"
+                            : "YYYY-MM-DD";
 
-            res.json({
+            const detailResult = await pool.query(
+                `
+                SELECT
+                    a.id,
+                    TO_CHAR(
+                        DATE_TRUNC('${chartBucket}', a.check_in),
+                        '${chartLabel}'
+                    ) AS group_label,
+                    CASE
+                        WHEN UPPER(a.user_type) = 'MEMBER' THEN u.full_name
+                        WHEN UPPER(a.user_type) = 'GUEST' THEN g.full_name
+                        ELSE 'Unknown'
+                    END AS visitor_name,
+                    UPPER(a.user_type) AS user_type,
+                    a.check_in,
+                    a.check_out,
+                    GREATEST(
+                        0,
+                        FLOOR(EXTRACT(EPOCH FROM (
+                            COALESCE(a.check_out, ${GUEST_NOW_SQL}) - a.check_in
+                        )))
+                    )::int AS duration_seconds,
+                    CASE
+                        WHEN UPPER(a.user_type) <> 'GUEST' THEN NULL
+                        WHEN EXISTS (
+                            SELECT 1
+                            FROM guest_visit_extensions e
+                            WHERE e.attendance_id = a.id
+                              AND e.extension_type = 'ALL_DAY'
+                              AND e.payment_status = 'CONFIRMED'
+                        ) THEN 'All-day access'
+                        WHEN UPPER(g.visit_type) = 'DAY PASS' THEN 'All-day pass'
+                        ELSE (
+                            COALESCE(g.hours, 0) + COALESCE((
+                                SELECT SUM(e.additional_hours)
+                                FROM guest_visit_extensions e
+                                WHERE e.attendance_id = a.id
+                                  AND e.extension_type = 'EXTRA_HOURS'
+                                  AND e.payment_status = 'CONFIRMED'
+                            ), 0)
+                        )::text || ' hour(s)'
+                    END AS guest_time_purchased,
+                    CASE
+                        WHEN a.check_out IS NOT NULL THEN 'CHECKED OUT'
+                        WHEN UPPER(a.user_type) = 'GUEST'
+                         AND ${GUEST_CLOSING_SQL} <= ${GUEST_NOW_SQL}
+                        THEN 'TIMED OUT'
+                        ELSE 'CHECKED IN'
+                    END AS visit_status
+                FROM attendance a
+                LEFT JOIN members m
+                    ON m.id = a.member_id
+                LEFT JOIN users u
+                    ON u.id = m.user_id
+                LEFT JOIN guests g
+                    ON g.id = a.guest_id
+                WHERE ${rangeCondition}
+                ORDER BY a.check_in DESC, a.id DESC
+                `,
+                reportParameters
+            );
 
-                success:
-                    true,
+            const seriesResult = await pool.query(
+                `
+                SELECT
+                    DATE_TRUNC('${chartBucket}', a.check_in) AS bucket,
+                    TO_CHAR(
+                        DATE_TRUNC('${chartBucket}', a.check_in),
+                        '${chartLabel}'
+                    ) AS label,
+                    COUNT(*)::int AS visits
+                FROM attendance a
+                WHERE ${rangeCondition}
+                GROUP BY DATE_TRUNC('${chartBucket}', a.check_in)
+                ORDER BY DATE_TRUNC('${chartBucket}', a.check_in)
+                `,
+                reportParameters
+            );
+            const occupancy = await getCurrentOccupancy();
+            const summary = summaryResult.rows[0];
 
-                totalVisits:
-                    totalVisitsResult.rows[0]
-                        .total_visits ||
-                    0,
-
-                memberVisits:
-                    memberVisitsResult.rows[0]
-                        .member_visits ||
-                    0,
-
-                guestVisits:
-                    guestVisitsResult.rows[0]
-                        .guest_visits ||
-                    0,
-
+            return res.json({
+                success: true,
                 period,
-
-                series:
-                    seriesResult.rows
-
+                startDate: startDate || null,
+                endDate: endDate || null,
+                totalVisits: Number(summary.total_visits || 0),
+                memberVisits: Number(summary.member_visits || 0),
+                guestVisits: Number(summary.guest_visits || 0),
+                uniqueVisitors: Number(summary.unique_visitors || 0),
+                memberVisitorCount: Number(summary.member_visitor_count || 0),
+                guestVisitorCount: Number(summary.guest_visitor_count || 0),
+                currentOccupancy: occupancy.occupancy,
+                membersInside: occupancy.membersInside,
+                guestsInside: occupancy.guestsInside,
+                series: seriesResult.rows,
+                records: detailResult.rows
             });
 
         } catch (error) {
@@ -7706,8 +8008,8 @@ async function startServer() {
 
         console.log(
             GUEST_TIMER_TEST_MODE
-                ? "Late-night test mode: 10:00 PM next-day closing for check-ins at/after 10:00 PM."
-                : "Normal guest mode: 10:00 PM same-day closing."
+                ? `Late-night test mode: ${GYM_CLOSING_TIME} next-day closing for check-ins at/after closing.`
+                : `Normal guest mode: ${GYM_CLOSING_TIME} same-day closing.`
         );
 
         }
