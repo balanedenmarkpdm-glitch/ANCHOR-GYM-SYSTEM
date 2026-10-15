@@ -1371,18 +1371,24 @@ app.post(
             });
         }
 
-        const resendApiKey =
-            String(process.env.RESEND_API_KEY || "").trim();
+        const gmailClientId =
+            String(process.env.GOOGLE_CLIENT_ID || "").trim();
+        const gmailClientSecret =
+            String(process.env.GOOGLE_CLIENT_SECRET || "").trim();
+        const gmailRefreshToken =
+            String(process.env.GMAIL_REFRESH_TOKEN || "").trim();
         const emailFrom =
             String(process.env.EMAIL_FROM || "").trim();
 
         if (
-            !resendApiKey ||
-            !emailFrom
+            !gmailClientId ||
+            !gmailClientSecret ||
+            !gmailRefreshToken ||
+            !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailFrom)
         ) {
             return res.status(503).json({
                 success: false,
-                message: "Password reset email is not configured. Set RESEND_API_KEY and a verified EMAIL_FROM sender on the backend."
+                message: "Password reset email is not configured. Set GMAIL_REFRESH_TOKEN and EMAIL_FROM on the backend; use the Gmail address authorized for sending."
             });
         }
 
@@ -1473,27 +1479,72 @@ app.post(
                         .replace(/>/g, "&gt;")
                         .replace(/"/g, "&quot;");
 
+                const gmailClient =
+                    new OAuth2Client(
+                        gmailClientId,
+                        gmailClientSecret
+                    );
+                gmailClient.setCredentials({
+                    refresh_token: gmailRefreshToken
+                });
+
+                const accessToken =
+                    await gmailClient.getAccessToken();
+
+                if (!accessToken.token) {
+                    throw new Error(
+                        "Gmail did not provide an API access token."
+                    );
+                }
+
+                const messageBoundary =
+                    `anchor-${crypto.randomBytes(16).toString("hex")}`;
+                const emailHtml =
+                    `<p>We received a request to reset your ANCHOR password.</p>` +
+                    `<p><a href="${escapedUrl}">Reset your password</a></p>` +
+                    `<p>This link expires in 30 minutes. If you did not request this, you can ignore this email.</p>`;
+                const rawMessage =
+                    [
+                        `From: ${emailFrom}`,
+                        `To: ${recipient}`,
+                        "Subject: Reset your ANCHOR Gym System password",
+                        "MIME-Version: 1.0",
+                        `Content-Type: multipart/alternative; boundary="${messageBoundary}"`,
+                        "",
+                        `--${messageBoundary}`,
+                        "Content-Type: text/plain; charset=UTF-8",
+                        "Content-Transfer-Encoding: 8bit",
+                        "",
+                        `We received a request to reset your ANCHOR password. Use this link within 30 minutes: ${resetUrl}`,
+                        "",
+                        "If you did not request this, you can ignore this email.",
+                        "",
+                        `--${messageBoundary}`,
+                        "Content-Type: text/html; charset=UTF-8",
+                        "Content-Transfer-Encoding: 8bit",
+                        "",
+                        emailHtml,
+                        "",
+                        `--${messageBoundary}--`
+                    ].join("\r\n");
+                const gmailRaw =
+                    Buffer.from(rawMessage)
+                        .toString("base64")
+                        .replace(/\+/g, "-")
+                        .replace(/\//g, "_")
+                        .replace(/=+$/g, "");
+
                 const emailResponse =
                     await fetch(
-                        "https://api.resend.com/emails",
+                        "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
                         {
                             method: "POST",
                             headers: {
-                                Authorization: `Bearer ${resendApiKey}`,
+                                Authorization: `Bearer ${accessToken.token}`,
                                 "Content-Type": "application/json"
                             },
                             body: JSON.stringify({
-                                from: emailFrom,
-                                to: [recipient],
-                                subject: "Reset your ANCHOR Gym System password",
-                                text:
-                                    `We received a request to reset your ANCHOR password. ` +
-                                    `Use this link within 30 minutes: ${resetUrl}\n\n` +
-                                    "If you did not request this, you can ignore this email.",
-                                html:
-                                    `<p>We received a request to reset your ANCHOR password.</p>` +
-                                    `<p><a href="${escapedUrl}">Reset your password</a></p>` +
-                                    `<p>This link expires in 30 minutes. If you did not request this, you can ignore this email.</p>`
+                                raw: gmailRaw
                             }),
                             signal: AbortSignal.timeout(15000)
                         }
@@ -1501,7 +1552,7 @@ app.post(
 
                 if (!emailResponse.ok) {
                     const error =
-                        new Error("Email provider rejected the reset email request.");
+                        new Error("Gmail API rejected the reset email request.");
                     error.statusCode =
                         emailResponse.status;
                     throw error;
@@ -1548,16 +1599,19 @@ app.post(
 
             if (providerStatus === 401) {
                 failureMessage =
-                    "Resend rejected the API key. Verify RESEND_API_KEY on the backend.";
-            } else if (providerStatus === 403 || providerStatus === 422) {
+                    "Gmail authorization failed. Re-authorize the Gmail account and update GMAIL_REFRESH_TOKEN.";
+            } else if (providerStatus === 403) {
                 failureMessage =
-                    "Resend rejected the sender address. Verify EMAIL_FROM and confirm its domain or sender is verified in Resend.";
+                    "Gmail denied permission to send. Enable the Gmail API and authorize the account with the gmail.send permission.";
+            } else if (providerStatus === 400) {
+                failureMessage =
+                    "Gmail rejected the sender or message. Confirm EMAIL_FROM matches the Gmail account authorized to send.";
             } else if (providerStatus === 429) {
                 failureMessage =
-                    "Resend rate-limited the request. Please wait a few minutes and try again.";
+                    "Gmail rate-limited the request. Please wait a few minutes and try again.";
             } else if (providerStatus >= 500) {
                 failureMessage =
-                    "Resend is temporarily unavailable. Please try again later.";
+                    "Gmail is temporarily unavailable. Please try again later.";
             } else if (
                 error && typeof error === "object" &&
                 error.name === "TimeoutError"
