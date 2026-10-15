@@ -107,6 +107,8 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(authJs, /The request took too long\. Please try again\./);
     assert.match(authJs, /\/api\/auth\/verify-reset-code/);
     assert.match(authJs, /\/api\/auth\/reset-password/);
+    assert.match(authJs, /previewOriginPattern/);
+    assert.match(authJs, /https:\/\/anchor-gym-system\.vercel\.app\/login\.html/);
     assert.match(resetPasswordHtml, /id="verifyResetCodeForm"/);
     assert.match(resetPasswordHtml, /id="resendResetCode"/);
     assert.match(authJs, /anchorPasswordResetEmail/);

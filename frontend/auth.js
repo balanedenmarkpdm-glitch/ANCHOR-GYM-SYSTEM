@@ -386,6 +386,19 @@ async function initializeGoogleLogin() {
             function() {
                 setGoogleLoginMessage("");
 
+                const previewOriginPattern =
+                    /^anchor-gym-system-[a-z0-9-]+-brunheart\.vercel\.app$/;
+                if (
+                    previewOriginPattern.test(
+                        window.location.hostname.toLowerCase()
+                    )
+                ) {
+                    window.location.replace(
+                        "https://anchor-gym-system.vercel.app/login.html"
+                    );
+                    return;
+                }
+
                 try {
                     googleCodeClient.requestCode();
                 } catch (error) {
