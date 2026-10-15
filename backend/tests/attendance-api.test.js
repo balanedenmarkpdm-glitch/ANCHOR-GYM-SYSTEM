@@ -137,6 +137,7 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(adminHtml, /member-attendance-table/);
     assert.match(adminHtml, /id="attendanceMembersPreviousPage"/);
     assert.match(adminHtml, /id="attendanceMembersNextPage"/);
+    assert.match(adminCss, /\.attendance-members-card\s*\{[^}]*padding:\s*18px/s);
     assert.match(adminCss, /\.attendance-members-card > h3::after/);
     assert.match(adminCss, /\.member-attendance-table \.status::before/);
     assert.match(adminCss, /\.member-attendance-state\.inside::before/);
@@ -145,7 +146,10 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(adminHtml, /class="chart-scroll"/);
     assert.match(adminHtml, /class="table-scroll report-table-scroll"/);
     assert.match(adminHtml, /class="table-scroll attendance-table-scroll"/);
+    assert.match(attendancePage, /class="card attendance-records-card"/);
+    assert.match(attendancePage, /class="attendance-records-table"/);
     assert.match(adminHtml, /class="table-scroll attendance-members-table-scroll"/);
+    assert.match(adminHtml, /class="table-toolbar attendance-filter-toolbar"[\s\S]*?id="attendanceTypeFilter"/);
     assert.match(transactionPage, /id="transactionTypeFilter"/);
     assert.match(transactionPage, /class="transactions-table"/);
     assert.match(transactionPage, /Plan \/ Access Type/);
@@ -167,6 +171,10 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     );
     assert.match(memberPage, /Contact Information/);
     assert.match(memberPage, /Plan &amp; Amount/);
+    assert.match(adminCss, /#guests #guestForm input::placeholder[\s\S]*?color:\s*var\(--color-placeholder\)/);
+    assert.match(adminCss, /#guests #guestForm > label\s*\{\s*color:\s*var\(--color-placeholder\)/);
+    assert.match(adminCss, /#guestForm \.payment-confirmation\s*\{[^}]*align-items:\s*center[^}]*color:\s*var\(--color-placeholder\)/s);
+    assert.match(adminCss, /#guestForm \.payment-confirmation input\[type="checkbox"\]\s*\{[^}]*min-height:\s*18px/s);
     assert.match(adminJs, /<span>Monthly<\/span>\s*<small>₱800<\/small>/);
     assert.match(memberPage, /id="archived-members"/);
     assert.match(memberPage, /id="selectAllMembers"/);
@@ -175,7 +183,10 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(memberPage, /id="membersPageStatus"/);
     assert.match(memberPage, /id="membersPreviousPage"/);
     assert.match(memberPage, /id="membersNextPage"/);
-    assert.match(memberPage, /id="archiveSelectedMembersButton"[\s\S]*?Archive selected/);
+    assert.match(memberPage, /id="revokeSelectedMembersButton"[\s\S]*?Revoke selected/);
+    assert.match(adminJs, /async function revokeSelectedMembers/);
+    assert.match(adminJs, /`\/api\/admin\/members\/\$\{memberId\}\/revoke`[\s\S]*?method:\s*"PATCH"/);
+    assert.match(adminHtml, /id="revokeSelectedMembersButton"[\s\S]*?attendance-button-icon[\s\S]*?Revoke selected/);
     assert.match(adminJs, /data-selectable="member"/);
     assert.match(memberPage, /id="selectAllArchivedMembers"/);
     assert.match(memberPage, /class="archived-members-list-table"/);
@@ -183,9 +194,11 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(memberPage, /id="archivedMembersPreviousPage"/);
     assert.match(memberPage, /id="archivedMembersNextPage"/);
     assert.doesNotMatch(memberPage, /restoreSelectedArchivedMembersButton|Restore archived/);
-    assert.match(memberPage, /id="reactivateSelectedRevokedMembersButton"[\s\S]*?Reactivate revoked/);
+    assert.match(memberPage, /id="reactivateSelectedRevokedMembersButton"[\s\S]*?Reactivate selected/);
     assert.doesNotMatch(adminJs, /async function restoreSelectedArchivedMembers/);
     assert.match(adminJs, /async function reactivateSelectedRevokedMembers/);
+    assert.match(adminJs, /class="remove-button membership-action-button"[\s\S]*?attendance-button-icon[\s\S]*?Revoke/);
+    assert.match(adminJs, /class="restore-button membership-action-button"[\s\S]*?attendance-button-icon[\s\S]*?Reactivate/);
     assert.match(adminJs, /data-selectable="revoked"/);
     assert.match(adminJs, /getSelectedRevokedMemberIds\(\)/);
     assert.match(adminJs, /onclick="restoreArchivedMember\(\$\{Number\(member\.archive_id\)\}\)"/);
@@ -194,7 +207,12 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(adminJs, /function applyMemberTablePagination\(tableName\)/);
     assert.match(adminJs, /function changeMemberTablePage\(tableName, change\)/);
     assert.match(adminCss, /\.members-list-table \.remove-button/);
-    assert.match(portalTheme, /\.members-list-table \.remove-button/);
+    assert.match(adminCss, /\.member-list-toolbar #revokeSelectedMembersButton\s*\{[^}]*background:\s*#DC2626[^}]*color:\s*#ffffff/s);
+    assert.match(adminCss, /\.members-list-table \.membership-action-button,[\s\S]*?\.member-attendance-table \.attendance-actions \.attendance-checkout-button\s*\{[^}]*width:\s*118px[^}]*min-height:\s*34px[^}]*font-size:\s*11px/s);
+    assert.match(adminHtml, /id="reactivateSelectedRevokedMembersButton"[\s\S]*?attendance-button-icon[\s\S]*?Reactivate selected/);
+    assert.match(portalTheme, /\.members-list-table \.membership-action-button\.remove-button[\s\S]*?background:\s*#dc2626/);
+    assert.match(portalTheme, /\.member-list-toolbar #revokeSelectedMembersButton\s*\{[^}]*background:\s*#dc2626[^}]*color:\s*#ffffff/s);
+    assert.match(portalTheme, /\.members-list-table \.membership-action-button\.restore-button[\s\S]*?background:\s*#16a34a/);
     assert.doesNotMatch(adminHtml, /<button\s+onclick="showPage\('archived-members'/);
     assert.doesNotMatch(attendancePage, /<th[^>]*>\s*Check-Out\s*<\/th>/i);
     assert.match(memberAttendanceRenderer, /checkoutAttendance\(\$\{Number\(visit\.id\)\}\)/);
@@ -203,6 +221,8 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(memberAttendanceRenderer, /member-attendance-state inside/);
     assert.match(memberAttendanceRenderer, /member-attendance-state not-inside/);
     assert.match(adminCss, /\.attendance-checkin-button,\s*\.attendance-checkout-button\s*\{[^}]*flex:\s*0 0 120px/s);
+    assert.match(portalTheme, /\.attendance-actions \.attendance-checkin-button\s*\{[^}]*background:\s*#16a34a[^}]*color:\s*#ffffff/s);
+    assert.match(portalTheme, /\.attendance-actions \.attendance-checkout-button\s*\{[^}]*background:\s*#dc2626[^}]*color:\s*#ffffff/s);
     assert.match(attendanceRenderer, /TIME OUT/);
     assert.match(attendanceRenderer, /class="attendance-action-link"/);
     assert.doesNotMatch(attendanceRenderer, /TIMED OUT \/ OVERDUE/);
@@ -211,8 +231,28 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(adminJs, /async function viewScreenshot/);
     assert.match(adminJs, /headers: token\s*\?/);
     assert.match(backendServer, /\/api\/admin\/applications\/' \|\| a\.id \|\| '\/screenshot/);
+    assert.match(customerJs, /displayMembership\(\s*data\.membership\s*\|\|\s*null\s*\)/);
+    assert.match(
+        customerJs.match(/function displayNoMembership\(\)[\s\S]*?function setMembershipActiveStyle/)?.[0] || "",
+        /displayNoQR\(\)/
+    );
+    assert.match(
+        customerJs.match(/function displayNoQR\(\)[\s\S]*?\/\/ SUBMIT APPLICATION/)?.[0] || "",
+        /qrContainer\.innerHTML\s*=\s*"—"/
+    );
+    assert.match(
+        customerJs.match(/function displayQR\([\s\S]*?\/\/ NO QR/)?.[0] || "",
+        /status\s*!==\s*"ACTIVE"[\s\S]*?displayNoQR\(\)/
+    );
     assert.match(portalTheme, /\.chart-scroll\s*\{[^}]*overflow-x:\s*auto/s);
     assert.match(adminCss, /\.attendance-table-scroll,\s*\.report-table-scroll,\s*\.attendance-members-table-scroll,\s*\.applications-table-scroll\s*\{[^}]*max-height:[^}]*overflow-y:\s*auto/s);
+    assert.match(adminCss, /\.attendance-filter-toolbar\s*\{[^}]*align-items:\s*center[^}]*padding-inline:\s*0/s);
+    assert.match(adminCss, /\.attendance-records-table th,\s*\.attendance-records-table td\s*\{[^}]*padding:\s*14px 12px/s);
+    assert.match(adminCss, /#attendance \.attendance-records-card\s*\{[^}]*padding:\s*18px/s);
+    assert.match(adminCss, /#attendance \.attendance-records-card\s*\{\s*overflow:\s*hidden\s*;/);
+    assert.match(adminCss, /\.attendance-records-table\s*\{[^}]*table-layout:\s*fixed/s);
+    assert.match(adminCss, /\.attendance-records-table th:nth-child\(7\)\s*\{\s*width:\s*11%/);
+    assert.match(adminCss, /@media \(max-width:\s*700px\)\s*\{[\s\S]*?\.attendance-records-card\s*\{[^}]*padding:\s*14px[\s\S]*?\.attendance-members-card\s*\{[^}]*padding:\s*14px/s);
     assert.match(portalTheme, /html\[data-portal="admin"\]\s+\.approve[\s\S]*?#16A34A/);
     assert.match(portalTheme, /html\[data-portal="admin"\]\s+\.reject[\s\S]*?#DC2626/);
     assert.match(adminJs, /for \(let value = axisMaximum; value >= 0; value -= step\)/);
@@ -650,6 +690,51 @@ if (!integrationEnabled) {
         );
         assert.equal(revokedCustomerDashboard.response.status, 200);
         assert.equal(revokedCustomerDashboard.body.membership, null);
+
+        const activeCustomerDashboard = await api(
+            `/api/customer/${activeUserId}`
+        );
+        assert.equal(activeCustomerDashboard.response.status, 200);
+        assert.equal(activeCustomerDashboard.body.membership.status, "ACTIVE");
+        assert.equal(
+            activeCustomerDashboard.body.membership.qr_code,
+            "TEST-QR-ACTIVE"
+        );
+
+        const revoke = await api(
+            `/api/admin/members/${activeMemberId}/revoke`,
+            {
+                method: "PATCH",
+                body: JSON.stringify({ reason: "Dashboard reset test" })
+            }
+        );
+        assert.equal(revoke.response.status, 200, revoke.body.message);
+
+        const revokedDashboard = await api(
+            `/api/customer/${activeUserId}`
+        );
+        assert.equal(revokedDashboard.response.status, 200);
+        assert.equal(revokedDashboard.body.membership, null);
+
+        const restore = await api(
+            `/api/admin/members/${activeMemberId}/restore`,
+            { method: "POST", body: JSON.stringify({}) }
+        );
+        assert.equal(restore.response.status, 200, restore.body.message);
+
+        const restoredDashboard = await api(
+            `/api/customer/${activeUserId}`
+        );
+        assert.equal(restoredDashboard.response.status, 200);
+        assert.equal(restoredDashboard.body.membership.status, "ACTIVE");
+        assert.equal(
+            restoredDashboard.body.membership.qr_code,
+            "TEST-QR-ACTIVE"
+        );
+        assert.match(
+            restoredDashboard.body.membership.qr_image,
+            /^data:image\/png;base64,/
+        );
 
         for (const memberId of [
             pendingMemberId,

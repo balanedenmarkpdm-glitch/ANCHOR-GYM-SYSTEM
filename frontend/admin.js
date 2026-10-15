@@ -1798,7 +1798,7 @@ async function loadMembers() {
             updateBulkSelection(
                 "membersTableBody",
                 "selectAllMembers",
-                "archiveSelectedMembersButton",
+                "revokeSelectedMembersButton",
                 "membersSelectedCount"
             );
 
@@ -1825,7 +1825,7 @@ async function loadMembers() {
                                         member.member_id ||
                                         "member"
                                     )}"
-                                    onchange="updateBulkSelection('membersTableBody', 'selectAllMembers', 'archiveSelectedMembersButton', 'membersSelectedCount')">
+                                    onchange="updateBulkSelection('membersTableBody', 'selectAllMembers', 'revokeSelectedMembersButton', 'membersSelectedCount')">
                             </td>
 
                             <td>
@@ -1896,17 +1896,27 @@ async function loadMembers() {
                                     getStatus(member.status) === "REVOKED"
                                         ? `
                                             <button
-                                                class="restore-button"
+                                                class="restore-button membership-action-button"
                                                 type="button"
                                                 onclick="restoreRevokedMember(${Number(member.id)})">
-                                                Reactivate Membership
+                                                <svg class="attendance-button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                                    <path d="M14 7 9 12l5 5"></path>
+                                                    <path d="M9 12h12"></path>
+                                                    <path d="M11 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h6"></path>
+                                                </svg>
+                                                Reactivate
                                             </button>
                                         `
                                         : `
                                             <button
-                                                class="remove-button"
+                                                class="remove-button membership-action-button"
                                                 type="button"
                                                 onclick="revokeMember(${Number(member.id)})">
+                                                <svg class="attendance-button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                                    <path d="M10 17 15 12 10 7"></path>
+                                                    <path d="M15 12H3"></path>
+                                                    <path d="M13 4h6a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"></path>
+                                                </svg>
                                                 Revoke
                                             </button>
                                         `
@@ -1926,7 +1936,7 @@ async function loadMembers() {
         updateBulkSelection(
             "membersTableBody",
             "selectAllMembers",
-            "archiveSelectedMembersButton",
+            "revokeSelectedMembersButton",
             "membersSelectedCount"
         );
 
@@ -2062,7 +2072,7 @@ async function restoreRevokedMember(memberId) {
 
 }
 
-async function archiveSelectedMembers() {
+async function revokeSelectedMembers() {
 
     const selectedIds =
         getSelectedRecordIds(
@@ -2075,11 +2085,11 @@ async function archiveSelectedMembers() {
 
     const reason =
         await askForReason(
-            "Reason for Removing Members",
+            "Reason for Revoking Members",
             [
                 "Membership violation",
                 "Expired membership",
-                "Customer requested removal",
+                "Customer requested revocation",
                 "False or invalid information",
                 "Repeated rule violation",
                 "Payment issue",
@@ -2094,7 +2104,7 @@ async function archiveSelectedMembers() {
 
     const confirmed =
         confirm(
-            `Archive ${selectedIds.length} selected member(s)?\n\nReason: ${reason}`
+            `Revoke ${selectedIds.length} selected membership(s)?\n\nReason: ${reason}`
         );
 
     if (!confirmed) {
@@ -2108,9 +2118,9 @@ async function archiveSelectedMembers() {
         try {
 
             await apiRequest(
-                `/api/admin/members/${memberId}`,
+                `/api/admin/members/${memberId}/revoke`,
                 {
-                    method: "DELETE",
+                    method: "PATCH",
                     headers: {
                         "Content-Type": "application/json"
                     },
@@ -2123,7 +2133,7 @@ async function archiveSelectedMembers() {
         } catch (error) {
 
             console.error(
-                `Unable to archive selected member ${memberId}:`,
+                `Unable to revoke selected member ${memberId}:`,
                 error
             );
 
@@ -2144,16 +2154,15 @@ async function archiveSelectedMembers() {
     if (failedIds.length) {
 
         alert(
-            `${selectedIds.length - failedIds.length} member(s) archived. ` +
-            `Unable to archive member ID(s): ${failedIds.join(", ")}. ` +
-            "A member currently inside the gym cannot be removed until checked out."
+            `${selectedIds.length - failedIds.length} membership(s) revoked. ` +
+            `Unable to revoke member ID(s): ${failedIds.join(", ")}.`
         );
 
         return;
     }
 
     alert(
-        `${selectedIds.length} member(s) archived successfully.`
+        `${selectedIds.length} membership(s) revoked successfully.`
     );
 }
 
@@ -2194,7 +2203,7 @@ function filterTableRows(
         updateBulkSelection(
             "membersTableBody",
             "selectAllMembers",
-            "archiveSelectedMembersButton",
+            "revokeSelectedMembersButton",
             "membersSelectedCount"
         );
     }
@@ -2221,7 +2230,7 @@ function changeMemberTablePage(tableName, change) {
         updateBulkSelection(
             "membersTableBody",
             "selectAllMembers",
-            "archiveSelectedMembersButton",
+            "revokeSelectedMembersButton",
             "membersSelectedCount"
         );
     } else {
@@ -2662,10 +2671,15 @@ async function loadArchivedMembers() {
                             revoked
                                 ? `
                                     <button
-                                        class="restore-button"
+                                        class="restore-button membership-action-button"
                                         type="button"
                                         onclick="restoreRevokedMember(${Number(member.original_member_id)})">
-                                        Reactivate Membership
+                                        <svg class="attendance-button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                            <path d="M14 7 9 12l5 5"></path>
+                                            <path d="M9 12h12"></path>
+                                            <path d="M11 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h6"></path>
+                                        </svg>
+                                        Reactivate
                                     </button>
                                 `
                                 : restored
@@ -3989,7 +4003,7 @@ function toggleGuestExtensionPaymentReference() {
         group.hidden = method !== "GCASH";
     }
     if (reference) {
-        reference.required = method === "GCASH";
+        reference.required = false;
         if (method !== "GCASH") {
             reference.value = "";
         }
@@ -4300,7 +4314,7 @@ function updateGuestPricing() {
     if (hoursGroup) {
 
         hoursGroup.style.display =
-            "block";
+            "flex";
 
     }
 
@@ -4428,11 +4442,6 @@ async function addGuest(
 
     }
 
-    if (paymentMethod === "GCASH" && !paymentReference) {
-        alert("Enter the GCash reference after verifying the payment.");
-        return;
-    }
-
     if (!paymentConfirmed) {
         alert("Confirm that payment was received or verified before checking in the guest.");
         return;
@@ -4462,7 +4471,9 @@ async function addGuest(
             `Confirm payment of ₱${calculatedAmount.toLocaleString()} for ${fullName}'s ${visitType}.\n\n` +
             `Method: ${paymentMethod}` +
             (paymentMethod === "GCASH"
-                ? `\nGCash reference: ${paymentReference}`
+                ? paymentReference
+                    ? `\nGCash reference: ${paymentReference}`
+                    : "\nGCash payment verified: confirmed"
                 : "\nCash received: confirmed") +
             "\n\nRecord the paid guest visit?"
         );

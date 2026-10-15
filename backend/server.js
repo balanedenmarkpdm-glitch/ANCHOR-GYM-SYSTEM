@@ -7491,6 +7491,7 @@ app.post(
 
             if (
                 finalPaymentMethod === "GCASH" &&
+                paymentReference &&
                 (paymentReference.length < 6 || paymentReference.length > 100)
             ) {
                 return res.status(400).json({
@@ -7633,11 +7634,11 @@ app.post(
             }
 
             const transactionReference =
-                finalPaymentMethod === "GCASH"
+                finalPaymentMethod === "GCASH" && paymentReference
                     ? paymentReference
                     : `GUEST-${crypto.randomUUID()}`;
 
-            if (finalPaymentMethod === "GCASH") {
+            if (finalPaymentMethod === "GCASH" && paymentReference) {
                 await client.query(
                     "SELECT pg_advisory_xact_lock(hashtext($1))",
                     [`gcash-reference:${paymentReference.toLowerCase()}`]

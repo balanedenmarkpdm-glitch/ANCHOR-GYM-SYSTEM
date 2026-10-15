@@ -258,6 +258,30 @@ html[data-portal="admin"] .pending-row button.reject {
     color: #ffffff;
 }
 
+:root[data-page="admin-dashboard"] .attendance-checkin-button {
+    background-color: #16A34A;
+    border-color: #16A34A;
+    color: #ffffff;
+}
+
+:root[data-page="admin-dashboard"] .attendance-checkin-button:hover:not(:disabled) {
+    background-color: #15803D;
+    border-color: #15803D;
+    color: #ffffff;
+}
+
+:root[data-page="admin-dashboard"] .attendance-checkout-button {
+    background-color: #DC2626;
+    border-color: #DC2626;
+    color: #ffffff;
+}
+
+:root[data-page="admin-dashboard"] .attendance-checkout-button:hover:not(:disabled) {
+    background-color: #b91c1c;
+    border-color: #b91c1c;
+    color: #ffffff;
+}
+
 html[data-portal="admin"] .reject:hover,
 html[data-portal="admin"] .pending-row button.reject:hover {
     background-color: #B91C1C;
@@ -2133,32 +2157,86 @@ textarea:focus-visible {
     color: #94a3b8;
 }
 
-:root[data-page="admin-dashboard"] .members-list-table .remove-button,
-:root[data-page="admin-dashboard"] .members-list-toolbar #archiveSelectedMembersButton {
+:root[data-page="admin-dashboard"] .members-list-table .membership-action-button.remove-button {
     border: 1px solid #dc2626;
-    background: transparent;
-    color: #ef4444;
+    background: #dc2626;
+    color: #ffffff;
 }
 
-:root[data-page="admin-dashboard"] .members-list-table .remove-button:hover:not(:disabled),
-:root[data-page="admin-dashboard"] .members-list-toolbar #archiveSelectedMembersButton:hover:not(:disabled) {
+:root[data-page="admin-dashboard"] .member-list-toolbar #revokeSelectedMembersButton {
+    border: 1px solid #dc2626;
+    background: #dc2626;
+    color: #ffffff;
+}
+
+:root[data-page="admin-dashboard"] .members-list-table .membership-action-button.remove-button:hover:not(:disabled) {
     border-color: #dc2626;
-    background: rgb(220 38 38 / 12%);
-    color: #ef4444;
+    background: #b91c1c;
+    color: #ffffff;
 }
 
-:root[data-page="admin-dashboard"] .members-list-table .restore-button,
-:root[data-page="admin-dashboard"] .archived-members-list-table .restore-button,
+:root[data-page="admin-dashboard"] .member-list-toolbar #revokeSelectedMembersButton:hover:not(:disabled) {
+    border-color: #dc2626;
+    background: #b91c1c;
+    color: #ffffff;
+}
+
+:root[data-page="admin-dashboard"] .members-list-table .membership-action-button.restore-button,
+:root[data-page="admin-dashboard"] .archived-members-list-table .membership-action-button.restore-button,
 :root[data-page="admin-dashboard"] .member-list-toolbar #reactivateSelectedRevokedMembersButton {
     border: 1px solid #16a34a;
-    background: transparent;
-    color: #22c55e;
+    background: #16a34a;
+    color: #ffffff;
 }
 
-:root[data-page="admin-dashboard"] .members-list-table .restore-button:hover:not(:disabled),
-:root[data-page="admin-dashboard"] .archived-members-list-table .restore-button:hover:not(:disabled),
+:root[data-page="admin-dashboard"] .members-list-table .membership-action-button.restore-button:hover:not(:disabled),
+:root[data-page="admin-dashboard"] .archived-members-list-table .membership-action-button.restore-button:hover:not(:disabled),
 :root[data-page="admin-dashboard"] .member-list-toolbar #reactivateSelectedRevokedMembersButton:hover:not(:disabled) {
     border-color: #16a34a;
-    background: rgb(22 163 74 / 12%);
-    color: #22c55e;
+    background: #15803d;
+    color: #ffffff;
+}
+
+:root[data-page="admin-dashboard"] .member-list-toolbar #reactivateSelectedRevokedMembersButton .attendance-button-icon {
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+}
+
+:root[data-page="admin-dashboard"] .member-list-toolbar #revokeSelectedMembersButton .attendance-button-icon {
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+}
+
+:root[data-page="admin-dashboard"] .attendance-actions .attendance-checkin-button {
+    border: 1px solid #16a34a;
+    background: #16a34a;
+    color: #ffffff;
+}
+
+:root[data-page="admin-dashboard"] .attendance-actions .attendance-checkin-button:hover:not(:disabled) {
+    border-color: #15803d;
+    background: #15803d;
+    color: #ffffff;
+}
+
+:root[data-page="admin-dashboard"] .attendance-actions .attendance-checkout-button {
+    border: 1px solid #dc2626;
+    background: #dc2626;
+    color: #ffffff;
+}
+
+:root[data-page="admin-dashboard"] .attendance-actions .attendance-checkout-button:hover:not(:disabled) {
+    border-color: #b91c1c;
+    background: #b91c1c;
+    color: #ffffff;
 }

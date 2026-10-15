@@ -649,12 +649,17 @@
                     </span>
 
                     <button
-                        id="archiveSelectedMembersButton"
-                        class="remove-button"
+                        id="revokeSelectedMembersButton"
+                        class="remove-button membership-action-button"
                         type="button"
                         disabled
-                        onclick="archiveSelectedMembers()">
-                        Archive selected
+                        onclick="revokeSelectedMembers()">
+                        <svg class="attendance-button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                            <path d="M10 17 15 12 10 7"></path>
+                            <path d="M15 12H3"></path>
+                            <path d="M13 4h6a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"></path>
+                        </svg>
+                        Revoke selected
                     </button>
 
                 </div>
@@ -673,7 +678,7 @@
                                         type="checkbox"
                                         disabled
                                         aria-label="Select all visible members"
-                                        onchange="toggleSelectAllRows('membersTableBody', 'selectAllMembers', 'archiveSelectedMembersButton', 'membersSelectedCount')">
+                                        onchange="toggleSelectAllRows('membersTableBody', 'selectAllMembers', 'revokeSelectedMembersButton', 'membersSelectedCount')">
                                 </th>
 
                                 <th>
@@ -769,7 +774,12 @@
                             type="button"
                             disabled
                             onclick="reactivateSelectedRevokedMembers()">
-                            Reactivate revoked
+                            <svg class="attendance-button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <path d="M14 7 9 12l5 5"></path>
+                                <path d="M9 12h12"></path>
+                                <path d="M11 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h6"></path>
+                            </svg>
+                            Reactivate selected
                         </button>
                     </div>
                     <div class="table-scroll archived-members-table-scroll">
@@ -1090,9 +1100,9 @@
                     </div>
                 </div>
 
-                <div class="card">
+                <div class="card attendance-records-card">
 
-                    <div class="table-toolbar">
+                    <div class="table-toolbar attendance-filter-toolbar">
 
                         <label for="attendanceTypeFilter">Show</label>
                         <select id="attendanceTypeFilter"
@@ -1105,7 +1115,7 @@
                     </div>
 
                     <div class="table-scroll attendance-table-scroll">
-                    <table>
+                    <table class="attendance-records-table">
 
                         <thead>
 
@@ -1303,14 +1313,14 @@
 
                     <div id="guestPaymentReferenceGroup" hidden>
                         <label for="guestPaymentReference">
-                            GCash Reference
+                            GCash Reference (Optional)
                         </label>
                         <input
                             id="guestPaymentReference"
                             type="text"
                             maxlength="100"
                             autocomplete="off"
-                            placeholder="Enter verified GCash reference">
+                            placeholder="Enter GCash reference if available">
                     </div>
 
                     <label class="payment-confirmation">

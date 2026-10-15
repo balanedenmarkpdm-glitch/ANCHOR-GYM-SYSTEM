@@ -497,6 +497,33 @@ table {
     min-width: 900px;
 }
 
+.attendance-records-table {
+    width: 100%;
+    table-layout: fixed;
+}
+
+.attendance-records-table th,
+.attendance-records-table td {
+    padding: 14px 12px;
+    border-bottom: 1px solid var(--color-border);
+    font-size: 11px;
+    vertical-align: middle;
+}
+
+.attendance-records-table th {
+    color: var(--color-muted);
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.attendance-records-table th:nth-child(1) { width: 16%; }
+.attendance-records-table th:nth-child(2) { width: 10%; }
+.attendance-records-table th:nth-child(3) { width: 18%; }
+.attendance-records-table th:nth-child(4) { width: 14%; }
+.attendance-records-table th:nth-child(5) { width: 17%; }
+.attendance-records-table th:nth-child(6) { width: 14%; }
+.attendance-records-table th:nth-child(7) { width: 11%; }
+
 .applications-table-scroll table {
     min-width: 920px;
 }
@@ -797,6 +824,7 @@ table {
 
 .attendance-members-card {
     margin-bottom: 18px;
+    padding: 18px;
 }
 
 .attendance-members-card > h3 {
@@ -1876,17 +1904,27 @@ button,
     white-space: nowrap;
 }
 
-.member-list-toolbar #archiveSelectedMembersButton {
+.member-list-toolbar #revokeSelectedMembersButton {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
     border: 1px solid #DC2626;
-    background: transparent;
-    color: #ef4444;
+    background: #DC2626;
+    color: #ffffff;
 }
 
-.member-list-toolbar #archiveSelectedMembersButton:hover:not(:disabled) {
-    background: rgb(220 38 38 / 12%);
+.member-list-toolbar #revokeSelectedMembersButton:hover:not(:disabled) {
+    border-color: #b91c1c;
+    background: #b91c1c;
+    color: #ffffff;
 }
 
 .member-list-toolbar #reactivateSelectedRevokedMembersButton {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
     border: 1px solid #16A34A;
     background: transparent;
     color: #22c55e;
@@ -2000,6 +2038,22 @@ button,
     font-size: 10px;
 }
 
+.members-list-table .membership-action-button,
+.archived-members-list-table .membership-action-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    width: 118px;
+    min-width: 118px;
+    min-height: 34px;
+    padding: 6px 10px;
+    border-radius: 5px;
+    font-size: 11px;
+    line-height: 1;
+    white-space: nowrap;
+}
+
 .members-list-table .status,
 .archived-members-list-table .status {
     width: fit-content;
@@ -2083,6 +2137,17 @@ button,
 
 .transaction-filter {
     margin: 16px 0;
+}
+
+.attendance-filter-toolbar {
+    align-items: center;
+    min-height: 64px;
+    padding-inline: 0;
+}
+
+#attendance .attendance-records-card {
+    overflow: hidden;
+    padding: 18px;
 }
 
 .transaction-filter select {
@@ -2371,6 +2436,19 @@ button,
     font-weight: bold;
 }
 
+#guests #guestForm > label {
+    color: var(--color-placeholder);
+}
+
+#guestForm #guestHoursGroup {
+    display: flex;
+    flex-direction: column;
+}
+
+#guestForm #guestHoursGroup label {
+    color: var(--color-placeholder);
+}
+
 
 .form input,
 .form select {
@@ -2386,6 +2464,36 @@ button,
     border: 1px solid var(--color-border);
 
     border-radius: 7px;
+}
+
+#guests #guestForm input::placeholder,
+#guests #guestForm textarea::placeholder {
+    color: var(--color-placeholder);
+    opacity: 1;
+}
+
+#guestForm #guestHours {
+    align-self: flex-start;
+    width: max-content;
+    max-width: 100%;
+}
+
+#guestForm .payment-confirmation {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin: 14px 0 18px;
+    color: var(--color-placeholder);
+    line-height: 1.4;
+}
+
+#guestForm .payment-confirmation input[type="checkbox"] {
+    flex: 0 0 18px;
+    width: 18px;
+    height: 18px;
+    min-height: 18px;
+    margin: 0;
+    padding: 0;
 }
 
 
@@ -3135,6 +3243,14 @@ svg {
 }
 
 @media (max-width: 700px) {
+    #attendance .attendance-records-card {
+        padding: 14px;
+    }
+
+    .attendance-members-card {
+        padding: 14px;
+    }
+
     .attendance-member-toolbar {
         grid-template-columns: minmax(0, 1fr) 140px;
         gap: 10px;
@@ -3327,6 +3443,28 @@ svg {
         flex-basis: 78px;
         width: 78px;
     }
+}
+
+.members-list-table .membership-action-button,
+.archived-members-list-table .membership-action-button,
+.member-list-toolbar #revokeSelectedMembersButton,
+.member-attendance-table .attendance-actions .attendance-checkin-button,
+.member-attendance-table .attendance-actions .attendance-checkout-button {
+    box-sizing: border-box;
+    display: inline-flex;
+    flex: 0 0 118px;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    width: 118px;
+    min-width: 118px;
+    max-width: 118px;
+    min-height: 34px;
+    padding: 6px 10px;
+    border-radius: 5px;
+    font-size: 11px;
+    line-height: 1;
+    white-space: nowrap;
 }
 
 button,
