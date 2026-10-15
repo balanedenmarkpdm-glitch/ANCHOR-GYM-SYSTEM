@@ -751,15 +751,6 @@
                         Restore selected
                     </button>
 
-                    <button
-                        id="deleteSelectedArchivedMembersButton"
-                        class="remove-button"
-                        type="button"
-                        disabled
-                        onclick="deleteSelectedArchivedMembers()">
-                        Delete restored history
-                    </button>
-
                 </div>
 
                 <div class="card">
@@ -879,33 +870,35 @@
                     </button>
                 </div>
 
-                <div class="card table-scroll transaction-table-scroll">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th scope="col">Transaction ID / Reference</th>
-                                <th scope="col">Customer / Guest</th>
-                                <th scope="col">Type</th>
-                                <th scope="col">Payment Description</th>
-                                <th scope="col">Related Visit</th>
-                                <th scope="col">Check-In</th>
-                                <th scope="col">Check-Out</th>
-                                <th scope="col">Extension</th>
-                                <th scope="col">Amount</th>
-                                <th scope="col">Method</th>
-                                <th scope="col">Payment Status</th>
-                                <th scope="col">Transaction Date</th>
-                                <th scope="col">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody id="transactionsTableBody">
-                            <tr>
-                                <td colspan="13" style="text-align:center;">
-                                    No transaction records available.
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+                <div class="card">
+                    <div class="table-scroll transaction-table-scroll">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th scope="col">Transaction / Reference</th>
+                                    <th scope="col">Customer</th>
+                                    <th scope="col">Type</th>
+                                    <th scope="col">Payment Description</th>
+                                    <th scope="col">Related Visit</th>
+                                    <th scope="col">Check-In</th>
+                                    <th scope="col">Check-Out</th>
+                                    <th scope="col">Extension</th>
+                                    <th scope="col">Amount</th>
+                                    <th scope="col">Method</th>
+                                    <th scope="col">Payment Status</th>
+                                    <th scope="col">Transaction Date</th>
+                                    <th scope="col">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="transactionsTableBody">
+                                <tr>
+                                    <td colspan="13" style="text-align:center;">
+                                        No transactions available.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
 
             </div>
@@ -997,44 +990,40 @@
 
                     </div>
 
+                    <div class="card">
+                        <p>People with Multiple Open Visits</p>
+                        <strong id="attendanceDuplicateOpenPeople">0</strong>
+                    </div>
+
                 </div>
 
+                <p id="attendanceTimeoutAlert"
+                    class="attendance-timeout-alert"
+                    role="status"
+                    aria-live="polite">
+                </p>
+
                 <div class="card manual-attendance-card">
-                    <h3>Manual Member Check-In / Check-Out</h3>
+                    <h3>Manual Member Attendance</h3>
                     <p class="subtitle">
-                        Search by member name or ID, select the matching account, and record attendance without a cellphone or QR code.
+                        Search by member name or ID when a member cannot present a cellphone or QR code.
                     </p>
-                    <label for="manualAttendanceSearch">Search member</label>
-                    <input
-                        id="manualAttendanceSearch"
-                        type="text"
-                        autocomplete="off"
-                        placeholder="Enter a name or member ID"
-                        oninput="searchManualAttendanceMembers()"
-                        aria-controls="manualAttendanceSearchResults">
-                    <input id="manualAttendanceMemberId" type="hidden">
-                    <div
-                        id="manualAttendanceSearchResults"
+                    <form id="manualMemberSearchForm"
+                        class="manual-attendance-search"
+                        onsubmit="searchManualMembers(event)">
+                        <label for="manualAttendanceSearch">Member name or ID</label>
+                        <input
+                            id="manualAttendanceSearch"
+                            type="search"
+                            autocomplete="off"
+                            minlength="2"
+                            placeholder="Enter at least two characters"
+                            required>
+                        <button class="small-btn" type="submit">Search Members</button>
+                    </form>
+                    <div id="manualAttendanceResults"
                         class="manual-attendance-results"
-                        role="listbox"
                         aria-live="polite">
-                    </div>
-                    <p id="manualAttendanceSelectedMember" class="subtitle" aria-live="polite">
-                        Select a member before recording attendance.
-                    </p>
-                    <div class="manual-attendance-actions">
-                        <button class="red-button" type="button"
-                            id="manualMemberCheckInButton"
-                            disabled
-                            onclick="submitManualAttendance('CHECK_IN')">
-                            Check In Member
-                        </button>
-                        <button class="small-btn" type="button"
-                            id="manualMemberCheckOutButton"
-                            disabled
-                            onclick="submitManualAttendance('CHECK_OUT')">
-                            Check Out Member
-                        </button>
                     </div>
                 </div>
 
@@ -1090,19 +1079,6 @@
                             <option value="guest">Guests / Walk-ins</option>
                         </select>
 
-                        <span id="attendanceSelectedCount">
-                            0 selected
-                        </span>
-
-                        <button
-                            id="deleteSelectedAttendanceButton"
-                            class="remove-button"
-                            type="button"
-                            disabled
-                            onclick="deleteSelectedGuestAttendance()">
-                            Void selected guests
-                        </button>
-
                     </div>
 
                     <div class="table-scroll attendance-table-scroll">
@@ -1113,15 +1089,6 @@
                             <tr>
 
                                 <th>
-                                    <input
-                                        id="selectAllAttendance"
-                                        type="checkbox"
-                                        disabled
-                                        aria-label="Select guest attendance records to void"
-                                        onchange="toggleSelectAllRows('attendanceTableBody', 'selectAllAttendance', 'deleteSelectedAttendanceButton', 'attendanceSelectedCount', 'guest')">
-                                </th>
-
-                                <th>
                                     Name
                                 </th>
 
@@ -1129,12 +1096,29 @@
                                     Type
                                 </th>
 
-                                <th>Check-In</th>
-                                <th>Check-Out</th>
-                                <th>Duration</th>
-                                <th>Remaining Time</th>
-                                <th>Visit Status</th>
-                                <th>Available Actions</th>
+                                <th>
+                                    Check-In
+                                </th>
+
+                                <th>
+                                    Check-Out
+                                </th>
+
+                                <th>
+                                    Visit Duration
+                                </th>
+
+                                <th>
+                                    Remaining Time
+                                </th>
+
+                                <th>
+                                    Visit Status
+                                </th>
+
+                                <th>
+                                    Action
+                                </th>
 
                             </tr>
 
@@ -1146,7 +1130,7 @@
                             <tr>
 
                                 <td
-                                    colspan="9"
+                                    colspan="8"
                                     style="text-align:center;">
 
                                     No attendance data available yet.
@@ -1281,6 +1265,7 @@
 
                     <select
                         id="guestPaymentMethod"
+                        onchange="toggleGuestPaymentReference()"
                         required>
 
                         <option value="">
@@ -1297,16 +1282,27 @@
 
                     </select>
 
+                    <div id="guestPaymentReferenceGroup" hidden>
+                        <label for="guestPaymentReference">
+                            GCash Reference
+                        </label>
+                        <input
+                            id="guestPaymentReference"
+                            type="text"
+                            maxlength="100"
+                            autocomplete="off"
+                            placeholder="Enter verified GCash reference">
+                    </div>
+
                     <label class="payment-confirmation">
                         <input
                             id="guestPaymentConfirmed"
                             type="checkbox"
                             required>
-                        Guest payment has been received and confirmed
+                        Payment received / GCash payment verified
                     </label>
 
                     <button
-                        id="guestCheckInButton"
                         class="red-button"
                         type="submit">
 
@@ -1331,7 +1327,8 @@
 
                         <br><br>
 
-                        Confirm the received payment and method before check-in.
+                        Payment method is required
+                        before the guest can be checked in.
 
                         <br><br>
 
@@ -1729,14 +1726,25 @@
             <p><strong>Access through:</strong> <span id="extensionNewExpiration">-</span></p>
 
             <label for="extensionPaymentMethod">Payment method</label>
-            <select id="extensionPaymentMethod">
+            <select
+                id="extensionPaymentMethod"
+                onchange="toggleGuestExtensionPaymentReference()">
                 <option value="">Select payment method</option>
                 <option value="CASH">Cash</option>
                 <option value="GCASH">GCash</option>
             </select>
+            <div id="extensionPaymentReferenceGroup" hidden>
+                <label for="extensionPaymentReference">Verified GCash reference</label>
+                <input
+                    id="extensionPaymentReference"
+                    type="text"
+                    maxlength="100"
+                    autocomplete="off"
+                    placeholder="Enter verified GCash reference">
+            </div>
             <label class="payment-confirmation">
                 <input id="extensionPaymentConfirmed" type="checkbox">
-                Payment has been received and confirmed
+                Payment received / GCash payment verified
             </label>
             <p id="extensionModalMessage" role="status" aria-live="polite"></p>
             <div class="modal-actions">

@@ -1,4 +1,4 @@
-﻿require("dotenv").config();
+require("dotenv").config();
 
 const express = require("express");
 const { Pool } = require("pg");
@@ -11,6 +11,10 @@ const QRCode = require("qrcode");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const databaseSchema = process.env.DATABASE_SCHEMA || "public";
+if (!/^[a-z_][a-z0-9_]*$/.test(databaseSchema)) {
+    throw new Error("DATABASE_SCHEMA must be a lowercase PostgreSQL schema identifier.");
+}
 const frontendOrigin =
     process.env.FRONTEND_URL ||
     "https://anchor-gym-system.vercel.app";
@@ -29,40 +33,27 @@ function isAllowedFrontendOrigin(origin) {
     );
 }
 
+function requireAdministrator(req, res) {
+    if (req.adminUser?.role === "admin") {
+        return true;
+    }
+
+    res.status(403).json({
+        success: false,
+        message: "Administrator authorization is required for this action."
+    });
+    return false;
+}
+
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    options: "-c timezone=Asia/Manila",
+    options: `-c timezone=Asia/Manila -c search_path=${databaseSchema}`,
     connectionTimeoutMillis: 10000,
     query_timeout: 15000,
     statement_timeout: 15000
 });
 
 async function ensureDashboardSchema() {
-    const cronAvailability = await pool.query(
-        "SELECT to_regclass('cron.job') IS NOT NULL AS available"
-    );
-    if (cronAvailability.rows[0].available) {
-        const retentionJobs = await pool.query(
-            "SELECT jobid FROM cron.job WHERE jobname = $1",
-            ["anchor-gym-transaction-retention"]
-        );
-        for (const job of retentionJobs.rows) {
-            await pool.query(
-                "SELECT cron.unschedule($1)",
-                [job.jobid]
-            );
-        }
-    }
-    await pool.query(`
-        CREATE OR REPLACE PROCEDURE public.purge_expired_transactions()
-        LANGUAGE plpgsql
-        AS $procedure$
-        BEGIN
-            NULL;
-        END;
-        $procedure$
-    `);
-
     await pool.query(`
         DO $$
         BEGIN
@@ -199,8 +190,27 @@ async function ensureDashboardSchema() {
     `);
     await pool.query(`
         ALTER TABLE attendance
-        ADD COLUMN IF NOT EXISTS expiration_time TIMESTAMPTZ,
-        ADD COLUMN IF NOT EXISTS voided_at TIMESTAMPTZ
+        ADD COLUMN IF NOT EXISTS expiration_time TIMESTAMPTZ
+    `);
+    await pool.query(`
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = current_schema()
+                  AND table_name = 'attendance'
+                  AND column_name = 'expires_at'
+            ) THEN
+                EXECUTE '
+                    UPDATE attendance
+                    SET expiration_time = expires_at
+                    WHERE expiration_time IS NULL
+                      AND expires_at IS NOT NULL
+                ';
+            END IF;
+        END;
+        $$
     `);
     await pool.query(`
         CREATE INDEX IF NOT EXISTS guest_transactions_created_at_idx
@@ -247,10 +257,10 @@ async function ensureDashboardSchema() {
                   AND (
                       pg_get_constraintdef(oid) ILIKE '%ACTIVE%'
                       OR pg_get_constraintdef(oid) ILIKE '%PENDING%'
+                      OR pg_get_constraintdef(oid) ILIKE '%EXPIRED%'
                       OR pg_get_constraintdef(oid) ILIKE '%SUSPENDED%'
                       OR pg_get_constraintdef(oid) ILIKE '%REVOKED%'
                   )
-                  AND conname <> 'members_lifecycle_status_check'
             LOOP
                 EXECUTE FORMAT(
                     'ALTER TABLE members DROP CONSTRAINT %I',
@@ -263,15 +273,32 @@ async function ensureDashboardSchema() {
     await pool.query(`
         UPDATE members
         SET status = CASE
-            WHEN UPPER(status) IN ('SUSPENDED', 'ARCHIVED', 'REVOKED') THEN 'REVOKED'
-            WHEN UPPER(status) IN ('ACTIVE', 'APPROVED', 'EXPIRED') THEN 'ACTIVE'
-            WHEN UPPER(status) = 'PENDING' THEN 'PENDING'
+            WHEN UPPER(status) IN ('SUSPENDED', 'ARCHIVED') THEN 'REVOKED'
+            WHEN UPPER(status) = 'EXPIRED' THEN 'ACTIVE'
             WHEN status IS NULL THEN 'PENDING'
-            ELSE 'PENDING'
+            ELSE UPPER(status)
         END
         WHERE status IS NULL
-           OR UPPER(status) NOT IN ('ACTIVE', 'APPROVED', 'EXPIRED', 'PENDING', 'REVOKED')
            OR status <> UPPER(status)
+           OR UPPER(status) IN ('SUSPENDED', 'ARCHIVED', 'EXPIRED')
+    `);
+    await pool.query(`
+        DO $$
+        DECLARE
+            invalid_statuses TEXT;
+        BEGIN
+            SELECT string_agg(DISTINCT status, ', ')
+            INTO invalid_statuses
+            FROM members
+            WHERE status NOT IN ('ACTIVE', 'PENDING', 'REVOKED');
+
+            IF invalid_statuses IS NOT NULL THEN
+                RAISE EXCEPTION
+                    'Cannot migrate member statuses safely; unsupported values: %',
+                    invalid_statuses;
+            END IF;
+        END;
+        $$
     `);
     await pool.query(`
         ALTER TABLE members
@@ -294,7 +321,46 @@ async function ensureDashboardSchema() {
         END;
         $$;
     `);
-
+    await pool.query(`
+        ALTER TABLE members
+        ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP WITHOUT TIME ZONE,
+        ADD COLUMN IF NOT EXISTS archived_archive_id BIGINT
+    `);
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS admin_sessions (
+            token_hash CHAR(64) PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            expires_at TIMESTAMPTZ NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `);
+    await pool.query(`
+        CREATE INDEX IF NOT EXISTS admin_sessions_expiration_idx
+        ON admin_sessions (expires_at)
+    `);
+    await pool.query(`
+        DO $$
+        BEGIN
+            IF current_schema() = 'public'
+               AND to_regclass('cron.job') IS NOT NULL THEN
+                EXECUTE $unschedule$
+                    DO $remove_job$
+                    DECLARE existing_job RECORD;
+                    BEGIN
+                        FOR existing_job IN
+                            SELECT jobid
+                            FROM cron.job
+                            WHERE jobname = 'anchor-gym-transaction-retention'
+                        LOOP
+                            PERFORM cron.unschedule(existing_job.jobid);
+                        END LOOP;
+                    END;
+                    $remove_job$
+                $unschedule$;
+            END IF;
+        END;
+        $$
+    `);
 }
 
 let customerProfilePhotoColumnReady = false;
@@ -492,6 +558,17 @@ function normalizePhilippinePhone(value) {
         .replace(/[\s()-]/g, "");
 }
 
+function normalizedPhoneSql(column) {
+    const digits = `regexp_replace(${column}, '[^0-9]', '', 'g')`;
+    return `
+        CASE
+            WHEN ${digits} LIKE '63%'
+            THEN '0' || SUBSTRING(${digits} FROM 3)
+            ELSE NULLIF(${digits}, '')
+        END
+    `;
+}
+
 // =====================================
 // GUEST TIMER TEST MODE
 // =====================================
@@ -628,50 +705,55 @@ const GUEST_NOW_SQL =
 
 async function getCurrentOccupancy(queryable = pool) {
     const result = await queryable.query(`
+        WITH open_visits AS (
+            SELECT
+                UPPER(a.user_type) AS user_type,
+                CASE
+                    WHEN UPPER(a.user_type) = 'MEMBER' THEN COALESCE(
+                        ${normalizedPhoneSql("u.phone")},
+                        'member-user:' || COALESCE(m.user_id::text, a.id::text)
+                    )
+                    WHEN UPPER(a.user_type) = 'GUEST' THEN COALESCE(
+                        ${normalizedPhoneSql("g.phone")},
+                        'guest-id:' || COALESCE(a.guest_id::text, a.id::text)
+                    )
+                END AS person_key
+            FROM attendance a
+            LEFT JOIN members m
+                ON m.id = a.member_id
+            LEFT JOIN users u
+                ON u.id = m.user_id
+            LEFT JOIN guests g
+                ON g.id = a.guest_id
+            WHERE a.check_out IS NULL
+              AND UPPER(a.user_type) IN ('MEMBER', 'GUEST')
+        ),
+        people_inside AS (
+            SELECT
+                person_key,
+                BOOL_OR(user_type = 'MEMBER') AS has_member_visit
+            FROM open_visits
+            WHERE person_key IS NOT NULL
+            GROUP BY person_key
+        ),
+        duplicate_people AS (
+            SELECT person_key
+            FROM open_visits
+            WHERE person_key IS NOT NULL
+            GROUP BY person_key
+            HAVING COUNT(*) > 1
+        )
         SELECT
-            COUNT(DISTINCT CASE
-                WHEN UPPER(a.user_type) = 'MEMBER'
-                 AND a.check_out IS NULL
-                 AND a.voided_at IS NULL
-                THEN 'member-user:' || m.user_id::text
-            END)::int AS members_inside,
-            COUNT(DISTINCT CASE
-                WHEN UPPER(a.user_type) = 'GUEST'
-                 AND a.check_out IS NULL
-                 AND a.voided_at IS NULL
-                THEN COALESCE(
-                    NULLIF(regexp_replace(g.phone, '[^0-9]', '', 'g'), ''),
-                    'guest-id:' || a.guest_id::text
-                )
-            END)::int AS guests_inside,
-            COUNT(DISTINCT CASE
-                WHEN a.check_out IS NULL
-                 AND a.voided_at IS NULL
-                 AND UPPER(a.user_type) IN ('MEMBER', 'GUEST')
-                THEN COALESCE(
-                    NULLIF(regexp_replace(
-                        CASE
-                            WHEN UPPER(a.user_type) = 'MEMBER' THEN NULL
-                            ELSE g.phone
-                        END,
-                        '[^0-9]',
-                        '',
-                        'g'
-                    ), ''),
-                    CASE
-                        WHEN UPPER(a.user_type) = 'MEMBER'
-                        THEN 'member-user:' || m.user_id::text
-                        ELSE 'guest-id:' || a.guest_id::text
-                    END
-                )
-            END)::int AS occupancy
-        FROM attendance a
-        LEFT JOIN members m
-            ON m.id = a.member_id
-        LEFT JOIN users u
-            ON u.id = m.user_id
-        LEFT JOIN guests g
-            ON g.id = a.guest_id
+            COUNT(*)::int AS occupancy,
+            COUNT(*) FILTER (
+                WHERE has_member_visit
+            )::int AS members_inside,
+            COUNT(*) FILTER (
+                WHERE NOT has_member_visit
+            )::int AS guests_inside,
+            (SELECT COUNT(*)::int FROM duplicate_people)
+                AS duplicate_open_people
+        FROM people_inside
     `);
 
     const membersInside = Number(result.rows[0].members_inside || 0);
@@ -680,7 +762,8 @@ async function getCurrentOccupancy(queryable = pool) {
     return {
         membersInside,
         guestsInside,
-        occupancy: Number(result.rows[0].occupancy || 0)
+        occupancy: Number(result.rows[0].occupancy || 0),
+        duplicateOpenPeople: Number(result.rows[0].duplicate_open_people || 0)
     };
 }
 
@@ -769,6 +852,138 @@ app.use(
         limit: "10mb"
     })
 );
+
+app.post("/api/admin/login", async (req, res) => {
+    try {
+        const email = String(req.body?.email || "").trim().toLowerCase();
+        const password = String(req.body?.password || "");
+
+        if (!email || !password) {
+            return res.status(400).json({
+                success: false,
+                message: "Email and password are required."
+            });
+        }
+
+        const result = await pool.query(
+            `
+            SELECT id, full_name, email, password, role
+            FROM users
+            WHERE LOWER(email) = $1
+              AND LOWER(role) IN ('admin', 'staff')
+            LIMIT 1
+            `,
+            [email]
+        );
+
+        if (
+            result.rows.length === 0 ||
+            !(await bcrypt.compare(password, result.rows[0].password))
+        ) {
+            return res.status(401).json({
+                success: false,
+                message: "Invalid admin or staff email or password."
+            });
+        }
+
+        const user = result.rows[0];
+        const token = crypto.randomBytes(32).toString("base64url");
+        const tokenHash = crypto
+            .createHash("sha256")
+            .update(token)
+            .digest("hex");
+        const sessionDays = req.body?.remember_me === true ? 30 : 1;
+
+        await pool.query(
+            `
+            INSERT INTO admin_sessions (token_hash, user_id, expires_at)
+            VALUES ($1, $2, NOW() + ($3::int * INTERVAL '1 day'))
+            `,
+            [tokenHash, user.id, sessionDays]
+        );
+
+        return res.json({
+            success: true,
+            token,
+            expires_in: sessionDays * 24 * 60 * 60,
+            user: {
+                id: user.id,
+                full_name: user.full_name,
+                email: user.email,
+                role: String(user.role).toLowerCase()
+            }
+        });
+    } catch (error) {
+        console.error("Admin login error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Unable to sign in to the admin dashboard."
+        });
+    }
+});
+
+app.use("/api/admin", async (req, res, next) => {
+    const authorization = String(req.get("Authorization") || "");
+    const match = authorization.match(/^Bearer\s+([A-Za-z0-9_-]+)$/i);
+
+    if (!match) {
+        return res.status(401).json({
+            success: false,
+            message: "Admin or staff authentication is required."
+        });
+    }
+
+    try {
+        const tokenHash = crypto
+            .createHash("sha256")
+            .update(match[1])
+            .digest("hex");
+        const result = await pool.query(
+            `
+            SELECT u.id, u.full_name, u.email, LOWER(u.role) AS role
+            FROM admin_sessions s
+            JOIN users u
+                ON u.id = s.user_id
+            WHERE s.token_hash = $1
+              AND s.expires_at > NOW()
+              AND LOWER(u.role) IN ('admin', 'staff')
+            `,
+            [tokenHash]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(401).json({
+                success: false,
+                message: "Admin session is invalid or expired. Sign in again."
+            });
+        }
+
+        req.adminUser = result.rows[0];
+        return next();
+    } catch (error) {
+        console.error("Admin session validation error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Unable to verify the admin session."
+        });
+    }
+});
+
+app.post("/api/admin/logout", async (req, res) => {
+    const authorization = String(req.get("Authorization") || "");
+    const match = authorization.match(/^Bearer\s+([A-Za-z0-9_-]+)$/i);
+    if (match) {
+        const tokenHash = crypto
+            .createHash("sha256")
+            .update(match[1])
+            .digest("hex");
+        await pool.query(
+            "DELETE FROM admin_sessions WHERE token_hash = $1",
+            [tokenHash]
+        );
+    }
+    return res.json({ success: true });
+});
 
 app.use(
     express.static(
@@ -896,212 +1111,16 @@ app.get(
 // DELETE RESTORED ARCHIVE
 // =====================================
 
-app.delete(
-    "/api/admin/archived-members/:id",
-    async (req, res) => {
-
-        const client =
-            await pool.connect();
-
-        let transactionStarted =
-            false;
-
-        try {
-
-            const archiveId =
-                Number(
-                    req.params.id
-                );
-
-            if (
-                !Number.isInteger(
-                    archiveId
-                ) ||
-                archiveId <= 0
-            ) {
-
-                return res.status(
-                    400
-                ).json({
-                    success:
-                        false,
-
-                    message:
-                        "Invalid archive ID."
-                });
-
-            }
-
-            await client.query(
-                "BEGIN"
-            );
-
-            transactionStarted =
-                true;
-
-            const archiveResult =
-                await client.query(
-                    `
-                    SELECT
-                        archive_id,
-                        user_id,
-                        member_id,
-                        restored_at,
-                        status
-                    FROM archived_members
-                    WHERE archive_id = $1
-                    FOR UPDATE
-                    `,
-                    [
-                        archiveId
-                    ]
-                );
-
-            if (
-                archiveResult.rows.length ===
-                0
-            ) {
-
-                await client.query(
-                    "ROLLBACK"
-                );
-
-                transactionStarted =
-                    false;
-
-                return res.status(
-                    404
-                ).json({
-                    success:
-                        false,
-
-                    message:
-                        "Archived member record not found."
-                });
-
-            }
-
-            const archived =
-                archiveResult.rows[0];
-
-            if (
-                !archived.restored_at &&
-                String(
-                    archived.status ||
-                    ""
-                ).toUpperCase() !==
-                "RESTORED"
-            ) {
-
-                await client.query(
-                    "ROLLBACK"
-                );
-
-                transactionStarted =
-                    false;
-
-                return res.status(
-                    400
-                ).json({
-                    success:
-                        false,
-
-                    message:
-                        "Only restored archived records can be deleted."
-                });
-
-            }
-
-            const deleteResult =
-                await client.query(
-                    `
-                    DELETE FROM archived_members
-                    WHERE archive_id = $1
-                    RETURNING
-                        archive_id,
-                        user_id,
-                        member_id
-                    `,
-                    [
-                        archiveId
-                    ]
-                );
-
-            await client.query(
-                "COMMIT"
-            );
-
-            transactionStarted =
-                false;
-
-            res.json({
-                success:
-                    true,
-
-                message:
-                    "Archived history deleted successfully.",
-
-                archive:
-                    deleteResult.rows[0]
-            });
-
-        } catch (error) {
-
-            if (
-                transactionStarted
-            ) {
-
-                try {
-
-                    await client.query(
-                        "ROLLBACK"
-                    );
-
-                } catch (
-                    rollbackError
-                ) {
-
-                    console.error(
-                        "Rollback error:",
-                        rollbackError
-                    );
-
-                }
-
-            }
-
-            console.error(
-                "Delete archived member error:",
-                error
-            );
-
-            res.status(500).json({
-                success:
-                    false,
-
-                message:
-                    "Unable to delete archived member history.",
-
-                error:
-                    error.message,
-
-                code:
-                    error.code ||
-                    null,
-
-                detail:
-                    error.detail ||
-                    null
-            });
-
-        } finally {
-
-            client.release();
-
-        }
-
+app.delete("/api/admin/archived-members/:id", (req, res) => {
+    if (!requireAdministrator(req, res)) {
+        return;
     }
-);
+
+    return res.status(410).json({
+        success: false,
+        message: "Archived membership history is retained and cannot be permanently deleted."
+    });
+});
 
 // =====================================
 // SIGN UP
@@ -3566,7 +3585,6 @@ app.post(
 
             }
 
-            await ensurePausedDaysRemainingColumn();
             await client.query(
                 "BEGIN"
             );
@@ -3737,24 +3755,29 @@ app.get(
                 await pool.query(
                     `
                     SELECT
-                        COUNT(*)::int AS total_members,
+                        COUNT(*) FILTER (
+                            WHERE archived_at IS NULL
+                              AND UPPER(status) <> 'REVOKED'
+                        )::int AS total_members,
 
                         COUNT(*) FILTER (
-                            WHERE UPPER(status) = 'ACTIVE'
+                            WHERE archived_at IS NULL
+                              AND UPPER(status) = 'ACTIVE'
                               AND (
                                   expiration_date IS NULL
-                                  OR expiration_date > (${GUEST_NOW_SQL})::date
+                                  OR expiration_date >= (${GUEST_NOW_SQL})::date
                               )
                         )::int AS active_members,
 
                         COUNT(*) FILTER (
-                            WHERE UPPER(status) = 'ACTIVE'
-                              AND expiration_date IS NOT NULL
-                              AND expiration_date <= (${GUEST_NOW_SQL})::date
+                            WHERE archived_at IS NULL
+                              AND UPPER(status) = 'ACTIVE'
+                              AND expiration_date < (${GUEST_NOW_SQL})::date
                         )::int AS expired_members,
 
                         COUNT(*) FILTER (
-                            WHERE UPPER(status) = 'REVOKED'
+                            WHERE archived_at IS NULL
+                              AND UPPER(status) = 'REVOKED'
                         )::int AS revoked_members
 
                     FROM members
@@ -3791,7 +3814,6 @@ app.get(
                         ON g.id = a.guest_id
                     WHERE UPPER(a.user_type) = 'GUEST'
                       AND a.check_out IS NULL
-                      AND a.voided_at IS NULL
                       AND ${GUEST_CLOSING_SQL} <= ${GUEST_NOW_SQL}
                     `
                 );
@@ -3945,13 +3967,13 @@ app.get(
                         m.status,
                         (
                             UPPER(m.status) = 'ACTIVE'
-                            AND m.expiration_date IS NOT NULL
-                            AND m.expiration_date <= (${GUEST_NOW_SQL})::date
-                        ) AS membership_expired
+                            AND m.expiration_date < (${GUEST_NOW_SQL})::date
+                        ) AS expired
                     FROM members m
                     JOIN users u
                         ON u.id = m.user_id
-                    WHERE UPPER(m.status) <> 'REVOKED'
+                    WHERE m.archived_at IS NULL
+                      AND UPPER(m.status) <> 'REVOKED'
                     ORDER BY m.id DESC
                     `
                 );
@@ -4000,6 +4022,9 @@ app.get(
 app.patch(
     "/api/admin/members/:id/revoke",
     async (req, res) => {
+        if (!requireAdministrator(req, res)) {
+            return;
+        }
 
         const client = await pool.connect();
         let transactionStarted = false;
@@ -4034,6 +4059,7 @@ app.patch(
                     m.user_id,
                     m.member_id,
                     m.status,
+                    m.archived_at,
                     m.expiration_date,
                     u.full_name
                 FROM members m
@@ -4071,7 +4097,6 @@ app.patch(
                 WHERE member_id = $1
                   AND UPPER(user_type) = 'MEMBER'
                   AND check_out IS NULL
-                  AND voided_at IS NULL
                 LIMIT 1
                 FOR UPDATE
                 `,
@@ -4157,6 +4182,9 @@ app.patch(
 app.post(
     "/api/admin/members/:id/restore",
     async (req, res) => {
+        if (!requireAdministrator(req, res)) {
+            return;
+        }
 
         const client = await pool.connect();
         let transactionStarted = false;
@@ -4276,6 +4304,9 @@ app.post(
 app.delete(
     "/api/admin/members/:id",
     async (req, res) => {
+        if (!requireAdministrator(req, res)) {
+            return;
+        }
 
         const client =
             await pool.connect();
@@ -4332,7 +4363,6 @@ app.delete(
 
             }
 
-            await ensurePausedDaysRemainingColumn();
             await client.query(
                 "BEGIN"
             );
@@ -4395,6 +4425,15 @@ app.delete(
             const member =
                 memberResult.rows[0];
 
+            if (member.archived_at) {
+                await client.query("ROLLBACK");
+                transactionStarted = false;
+                return res.status(409).json({
+                    success: false,
+                    message: "This member is already archived."
+                });
+            }
+
             const activeAttendance =
                 await client.query(
                     `
@@ -4402,7 +4441,6 @@ app.delete(
                     FROM attendance
                     WHERE member_id = $1
                       AND check_out IS NULL
-                      AND voided_at IS NULL
                     LIMIT 1
                     `,
                     [
@@ -4496,42 +4534,33 @@ app.delete(
                         member.membership_plan,
                         member.start_date,
                         member.expiration_date,
-                        "REVOKED",
+                        member.status,
                         member.qr_code,
                         reason
                     ]
                 );
 
-            const archivedMemberResult =
-                await client.query(
-                    `
-                    UPDATE members
-                    SET
-                        paused_days_remaining = GREATEST(
-                            COALESCE(
-                                expiration_date - (${GUEST_NOW_SQL})::date,
-                                0
-                            ),
-                            0
-                        ),
-                        status = 'REVOKED'
-                    WHERE id = $1
-                    RETURNING
-                        id,
-                        member_id,
-                        user_id,
-                        status
-                    `,
-                    [
-                        memberId
-                    ]
-                );
+            const archiveAssignment = await client.query(
+                `
+                UPDATE members
+                SET archived_at = ${GUEST_NOW_SQL},
+                    archived_archive_id = $2
+                WHERE id = $1
+                  AND archived_at IS NULL
+                RETURNING id, member_id, user_id, status, archived_at
+                `,
+                [memberId, archiveResult.rows[0].archive_id]
+            );
+
+            if (archiveAssignment.rows.length === 0) {
+                throw new Error("This membership is already archived.");
+            }
 
             await createNotification(
                 client,
                 member.user_id,
                 "Membership Archived",
-                `Your membership was archived and its access revoked by the gym administrator. Reason: ${reason}`
+                `Your membership record was archived by the gym administrator. Reason: ${reason}`
             );
 
             await client.query(
@@ -4547,10 +4576,10 @@ app.delete(
                     true,
 
                 message:
-                    "Membership archived and access revoked. Membership and attendance history were preserved.",
+                    "Membership archived. Attendance and transaction history has been preserved.",
 
                 member:
-                    archivedMemberResult.rows[0],
+                    archiveAssignment.rows[0],
 
                 archive:
                     archiveResult.rows[0]
@@ -4672,11 +4701,7 @@ app.get(
                     JOIN users u
                         ON u.id = m.user_id
                     WHERE UPPER(m.status) = 'REVOKED'
-                      AND NOT EXISTS (
-                          SELECT 1
-                          FROM archived_members ar
-                          WHERE ar.original_member_id = m.id
-                      )
+                      AND m.archived_at IS NULL
                     ORDER BY
                         archived_at DESC,
                         archive_id DESC
@@ -4727,6 +4752,9 @@ app.get(
 app.post(
     "/api/admin/archived-members/:id/restore",
     async (req, res) => {
+        if (!requireAdministrator(req, res)) {
+            return;
+        }
 
         const client =
             await pool.connect();
@@ -4900,7 +4928,9 @@ app.post(
                     SELECT
                         id,
                         member_id,
-                        status
+                        status,
+                        archived_at,
+                        archived_archive_id
                     FROM members
                     WHERE user_id = $1
                     FOR UPDATE
@@ -4910,45 +4940,47 @@ app.post(
                     ]
                 );
 
-            if (
-                existingMemberResult.rows.length >
-                0
-            ) {
+            if (existingMemberResult.rows.length > 0) {
                 const existingMember = existingMemberResult.rows[0];
                 if (
-                    Number(existingMember.id) !==
-                    Number(archived.original_member_id)
+                    existingMember.archived_at &&
+                    Number(existingMember.archived_archive_id) === archiveId
                 ) {
-                    await client.query("ROLLBACK");
+                    const restored = await client.query(
+                        `
+                        UPDATE members
+                        SET archived_at = NULL,
+                            archived_archive_id = NULL
+                        WHERE id = $1
+                        RETURNING
+                            id, user_id, member_id, status,
+                            start_date, expiration_date, qr_code
+                        `,
+                        [existingMember.id]
+                    );
+                    await client.query(
+                        `
+                        UPDATE archived_members
+                        SET restored_at = CURRENT_TIMESTAMP
+                        WHERE archive_id = $1
+                        `,
+                        [archiveId]
+                    );
+                    await client.query("COMMIT");
                     transactionStarted = false;
-                    return res.status(409).json({
-                        success: false,
-                        message: "This customer already has a different membership."
+                    return res.json({
+                        success: true,
+                        message: "Archived member record restored without changing membership status or dates.",
+                        member: restored.rows[0]
                     });
                 }
 
-                await client.query(
-                    `
-                    UPDATE archived_members
-                    SET restored_at = CURRENT_TIMESTAMP, status = 'RESTORED'
-                    WHERE archive_id = $1
-                    `,
-                    [archiveId]
-                );
-                await client.query("COMMIT");
+                await client.query("ROLLBACK");
                 transactionStarted = false;
-
-                const membershipStatus = String(existingMember.status || "")
-                    .trim()
-                    .toUpperCase();
-                return res.json({
-                    success: true,
-                    message: membershipStatus === "REVOKED"
-                        ? "Archive record restored. The membership remains revoked; reactivate it separately if authorized."
-                        : "Archive record restored. Existing membership status and dates were preserved.",
-                    member: existingMember
+                return res.status(409).json({
+                    success: false,
+                    message: "This customer already has a membership. No status or membership dates were changed."
                 });
-
             }
 
             let restoredMemberId =
@@ -4981,15 +5013,15 @@ app.post(
 
             }
 
-            const archivedStatus = String(archived.status || "")
-                .trim()
-                .toUpperCase();
-            const restoredStatus =
-                archivedStatus === "EXPIRED"
+            const archivedStatus = String(
+                archived.status || "PENDING"
+            ).trim().toUpperCase();
+            const restoredStatus = ["ACTIVE", "PENDING", "REVOKED"]
+                .includes(archivedStatus)
+                ? archivedStatus
+                : archivedStatus === "EXPIRED"
                     ? "ACTIVE"
-                    : ["ACTIVE", "PENDING", "REVOKED"].includes(archivedStatus)
-                        ? archivedStatus
-                        : "PENDING";
+                    : "REVOKED";
 
             const newQrCode =
                 `ANCHOR-${crypto.randomUUID()}`;
@@ -5006,7 +5038,9 @@ app.post(
                         start_date,
                         expiration_date,
                         status,
-                        qr_code
+                        qr_code,
+                        archived_at,
+                        archived_archive_id
                     )
                     VALUES
                     (
@@ -5017,7 +5051,9 @@ app.post(
                         $5,
                         $6,
                         $7,
-                        $8
+                        $8,
+                        NULL,
+                        NULL
                     )
                     RETURNING
                         id,
@@ -5048,11 +5084,7 @@ app.post(
                 `
                 UPDATE archived_members
                 SET
-                    restored_at =
-                        CURRENT_TIMESTAMP,
-
-                    status =
-                        'RESTORED'
+                    restored_at = CURRENT_TIMESTAMP
 
                 WHERE archive_id = $1
                 `,
@@ -5074,9 +5106,7 @@ app.post(
                     true,
 
                 message:
-                    restoredStatus === "REVOKED"
-                        ? "Archived record restored. The membership remains revoked until separately reactivated."
-                        : "Archived record restored without changing its membership eligibility.",
+                    "Membership restored successfully.",
 
                 member:
                     memberResult.rows[0]
@@ -5164,79 +5194,94 @@ app.get(
                 });
             }
 
-            const memberWhere = filterType === "guest" ? "FALSE" : "TRUE";
-            const guestWhere = filterType === "member" ? "FALSE" : "TRUE";
-
-            const [
-                memberTransactionsResult,
-                guestTransactionsResult
-            ] = await Promise.all([
-                pool.query(
-                    `
+            const result = await pool.query(
+                `
+                SELECT *
+                FROM (
                     SELECT
-                        t.id,
-                        t.user_id,
-                        t.application_id,
-                        u.full_name,
-                        u.email,
+                        'MEMBER-' || t.id::text AS transaction_id,
+                        t.id AS record_id,
+                        u.full_name AS customer_name,
+                        'MEMBER'::text AS person_type,
+                        'Membership Payment'::text AS description,
+                        'Membership payment (not linked to an attendance visit)'::text
+                            AS related_visit,
+                        NULL::timestamp without time zone AS check_in,
+                        NULL::timestamp without time zone AS check_out,
+                        NULL::text AS extension,
                         t.amount,
                         t.payment_method,
-                        t.gcash_reference,
-                        t.transaction_date,
-                        t.created_at,
-                        t.status
+                        CASE
+                            WHEN UPPER(t.status) IN (
+                                'VERIFIED', 'CONFIRMED', 'APPROVED', 'SUCCESS', 'PAID'
+                            ) THEN 'CONFIRMED'
+                            WHEN UPPER(t.status) IN ('REJECTED', 'FAILED', 'CANCELLED')
+                                THEN 'FAILED'
+                            ELSE UPPER(t.status)
+                        END AS payment_status,
+                        COALESCE(NULLIF(t.gcash_reference, ''), '—') AS reference,
+                        COALESCE(t.transaction_date, t.created_at) AS transaction_date,
+                        NULL::bigint AS attendance_id
                     FROM member_transactions t
                     JOIN users u
                         ON u.id = t.user_id
-                    WHERE ${memberWhere}
-                    ORDER BY
-                        t.transaction_date DESC,
-                        t.id DESC
-                    `
-                ),
-                pool.query(
-                    `
+                    WHERE $1 <> 'guest'
+
+                    UNION ALL
+
                     SELECT
-                        gt.id,
-                        gt.guest_id,
-                        gt.guest_name,
-                        gt.visit_type,
+                        'GUEST-' || gt.id::text AS transaction_id,
+                        gt.id AS record_id,
+                        gt.guest_name AS customer_name,
+                        'GUEST'::text AS person_type,
+                        CASE
+                            WHEN gt.extension_type = 'EXTRA_HOURS'
+                                THEN 'Extra ' || gt.additional_hours::text ||
+                                    CASE
+                                        WHEN gt.additional_hours = 1 THEN ' Hour'
+                                        ELSE ' Hours'
+                                    END
+                            WHEN gt.extension_type = 'ALL_DAY'
+                                THEN 'All-Day Access'
+                            WHEN UPPER(gt.visit_type) = 'DAY PASS'
+                                THEN 'Guest Day Pass'
+                            ELSE 'Guest Entry Fee'
+                        END AS description,
+                        CASE
+                            WHEN a.id IS NULL THEN 'Not linked to a visit'
+                            ELSE 'Visit #' || a.id::text
+                        END AS related_visit,
+                        a.check_in,
+                        a.check_out,
+                        CASE
+                            WHEN gt.extension_type = 'EXTRA_HOURS'
+                                THEN gt.additional_hours::text ||
+                                    CASE
+                                        WHEN gt.additional_hours = 1 THEN ' hour'
+                                        ELSE ' hours'
+                                    END
+                            ELSE NULL
+                        END AS extension,
                         gt.amount,
                         gt.payment_method,
-                        gt.transaction_date,
-                        gt.created_at,
                         gt.payment_status,
-                        gt.extension_type,
-                        gt.additional_hours,
-                        gt.attendance_id,
-                        gt.previous_expiration,
-                        gt.new_expiration,
-                        gt.transaction_reference,
-                        a.check_in,
-                        a.check_out
+                        COALESCE(NULLIF(gt.transaction_reference, ''), '—') AS reference,
+                        gt.transaction_date,
+                        gt.attendance_id
                     FROM guest_transactions gt
                     LEFT JOIN attendance a
                         ON a.id = gt.attendance_id
-                    WHERE ${guestWhere}
-                    ORDER BY gt.transaction_date DESC, gt.id DESC
-                    `
-                )
-            ]);
+                    WHERE $1 <> 'member'
+                ) transactions
+                ORDER BY transaction_date DESC NULLS LAST, record_id DESC
+                `,
+                [filterType]
+            );
 
-            res.json({
-
-                success:
-                    true,
-
-                type:
-                    filterType,
-
-                memberTransactions:
-                    memberTransactionsResult.rows,
-
-                guestTransactions:
-                    guestTransactionsResult.rows
-
+            return res.json({
+                success: true,
+                type: filterType,
+                transactions: result.rows
             });
 
         } catch (error) {
@@ -5579,11 +5624,8 @@ app.get(
                         ON g.id =
                         a.guest_id
 
-                    WHERE a.voided_at IS NULL
-                      AND (
-                          $1 = 'all'
-                          OR UPPER(a.user_type) = $2
-                      )
+                    WHERE $1 = 'all'
+                       OR UPPER(a.user_type) = $2
 
                     ORDER BY
                         a.check_in DESC,
@@ -5613,6 +5655,9 @@ app.get(
 
                 currentOccupancy:
                     occupancy.occupancy,
+
+                duplicateOpenPeople:
+                    occupancy.duplicateOpenPeople,
 
                 closingTime:
                     GYM_CLOSING_TIME
@@ -5693,7 +5738,6 @@ app.get(
                 WHERE a.id = $1
                   AND UPPER(a.user_type) = 'GUEST'
                   AND a.check_out IS NULL
-                  AND a.voided_at IS NULL
                 `,
                 [attendanceId]
             );
@@ -5774,14 +5818,18 @@ app.post(
         const extensionType = String(req.body?.extension_type || "")
             .trim()
             .toUpperCase();
+        const rawAdditionalHours = req.body?.additional_hours;
         const additionalHours =
-            req.body?.additional_hours === undefined
+            rawAdditionalHours === undefined ||
+            rawAdditionalHours === null ||
+            rawAdditionalHours === ""
                 ? null
-                : Number(req.body.additional_hours);
+                : Number(rawAdditionalHours);
         const idempotencyKey = String(req.body?.idempotency_key || "").trim();
         const paymentMethod = String(req.body?.payment_method || "")
             .trim()
             .toUpperCase();
+        const paymentReference = String(req.body?.payment_reference || "").trim();
         const paymentConfirmed = req.body?.payment_confirmed === true;
 
         if (!Number.isSafeInteger(attendanceId) || attendanceId <= 0) {
@@ -5824,6 +5872,11 @@ app.post(
         try {
             await client.query("BEGIN");
             transactionStarted = true;
+
+            await client.query(
+                "SELECT pg_advisory_xact_lock(hashtext($1))",
+                [`guest-extension:${idempotencyKey}`]
+            );
 
             const duplicateResult = await client.query(
                 `
@@ -5893,7 +5946,6 @@ app.post(
                 WHERE a.id = $1
                   AND UPPER(a.user_type) = 'GUEST'
                   AND a.check_out IS NULL
-                  AND a.voided_at IS NULL
                 FOR UPDATE OF a
                 `,
                 [attendanceId]
@@ -5983,13 +6035,55 @@ app.post(
                         message: "Select CASH or GCASH as the confirmed payment method."
                     });
                 }
+
+                if (
+                    paymentMethod === "GCASH" &&
+                    (paymentReference.length < 6 || paymentReference.length > 100)
+                ) {
+                    await client.query("ROLLBACK");
+                    transactionStarted = false;
+                    return res.status(400).json({
+                        success: false,
+                        message: "Enter the verified GCash reference (6 to 100 characters)."
+                    });
+                }
             }
 
             const transactionReference =
-                amount > 0 ? `EXT-${crypto.randomUUID()}` : null;
+                amount <= 0
+                    ? null
+                    : paymentMethod === "GCASH"
+                        ? paymentReference
+                        : `EXT-${crypto.randomUUID()}`;
             let transactionId = null;
 
             if (amount > 0) {
+                if (paymentMethod === "GCASH") {
+                    await client.query(
+                        "SELECT pg_advisory_xact_lock(hashtext($1))",
+                        [`gcash-reference:${paymentReference.toLowerCase()}`]
+                    );
+                    const duplicateReference = await client.query(
+                        `
+                        SELECT id
+                        FROM guest_transactions
+                        WHERE payment_method = 'GCASH'
+                          AND LOWER(transaction_reference) = LOWER($1)
+                          AND payment_status = 'CONFIRMED'
+                        LIMIT 1
+                        `,
+                        [paymentReference]
+                    );
+                    if (duplicateReference.rows.length > 0) {
+                        await client.query("ROLLBACK");
+                        transactionStarted = false;
+                        return res.status(409).json({
+                            success: false,
+                            message: "This GCash reference has already been recorded."
+                        });
+                    }
+                }
+
                 const paymentResult = await client.query(
                     `
                     INSERT INTO guest_transactions (
@@ -6256,8 +6350,9 @@ app.post(
                         m.expiration_date,
                         (
                             m.expiration_date IS NOT NULL
-                            AND m.expiration_date <= (${GUEST_NOW_SQL})::date
+                            AND m.expiration_date < (${GUEST_NOW_SQL})::date
                         ) AS membership_expired,
+                        m.archived_at,
                         m.status,
                         m.qr_code,
                         u.full_name,
@@ -6266,6 +6361,7 @@ app.post(
                     JOIN users u
                         ON u.id = m.user_id
                     WHERE m.qr_code = $1
+                      AND m.archived_at IS NULL
                     LIMIT 1
                     FOR UPDATE
                     `,
@@ -6322,7 +6418,6 @@ app.post(
                     WHERE member_id = $1
                       AND UPPER(user_type) = 'MEMBER'
                       AND check_out IS NULL
-                      AND voided_at IS NULL
                     ORDER BY
                         check_in DESC,
                         id DESC
@@ -6336,8 +6431,7 @@ app.post(
                 transactionStarted = false;
                 return res.status(409).json({
                     success: false,
-                    message: "This member has multiple open visits. Resolve the visit from the Attendance table before scanning again.",
-                    open_visits: openAttendanceResult.rows
+                    message: "This member has multiple open visits. Staff must select the specific visit to check out."
                 });
             }
 
@@ -6345,9 +6439,7 @@ app.post(
                 member.membership_expired &&
                 openAttendanceResult.rows.length === 0
             ) {
-                await client.query(
-                    "ROLLBACK"
-                );
+                await client.query("ROLLBACK");
                 transactionStarted =
                     false;
 
@@ -6392,40 +6484,128 @@ app.post(
 
             }
 
-            if (openAttendanceResult.rows.length > 0) {
-                await client.query("ROLLBACK");
-                transactionStarted = false;
-                return res.status(409).json({
-                    success: false,
-                    message: "This member already has an open visit. Select that visit in Attendance and record checkout only when they actually leave."
+            const recentScanResult =
+                await client.query(
+                    `
+                    SELECT id
+                    FROM attendance
+                    WHERE member_id = $1
+                      AND UPPER(user_type) = 'MEMBER'
+                      AND GREATEST(
+                            check_in,
+                            COALESCE(check_out, check_in)
+                          ) >=
+                          ${GUEST_NOW_SQL} - INTERVAL '5 seconds'
+                    ORDER BY
+                        check_in DESC,
+                        id DESC
+                    LIMIT 1
+                    `,
+                    [
+                        member.id
+                    ]
+                );
+
+            if (
+                recentScanResult.rows.length >
+                0
+            ) {
+
+                await client.query(
+                    "ROLLBACK"
+                );
+
+                transactionStarted =
+                    false;
+
+                return res.status(
+                    429
+                ).json({
+
+                    success:
+                        false,
+
+                    message:
+                        "This member was scanned just now. Please wait 5 seconds before scanning again."
+
                 });
+
             }
 
-            const checkinResult = await client.query(
-                `
-                INSERT INTO attendance
-                (
-                    member_id,
-                    user_type
-                )
-                VALUES
-                (
-                    $1,
-                    'MEMBER'
-                )
-                RETURNING
-                    id,
-                    member_id,
-                    guest_id,
-                    user_type,
-                    check_in,
-                    check_out
-                `,
-                [member.id]
-            );
+            let action;
 
-            const attendance = checkinResult.rows[0];
-            const action = "CHECKED_IN";
+            let attendance;
+
+            if (
+                openAttendanceResult.rows.length >
+                0
+            ) {
+
+                const activeAttendance =
+                    openAttendanceResult.rows[0];
+
+                const checkoutResult =
+                    await client.query(
+                        `
+                        UPDATE attendance
+                        SET
+                            check_out =
+                                ${GUEST_NOW_SQL}
+                        WHERE id = $1
+                        RETURNING
+                            id,
+                            member_id,
+                            guest_id,
+                            user_type,
+                            check_in,
+                            check_out
+                        `,
+                        [
+                            activeAttendance.id
+                        ]
+                    );
+
+                attendance =
+                    checkoutResult.rows[0];
+
+                action =
+                    "CHECKED_OUT";
+
+            } else {
+
+                const checkinResult =
+                    await client.query(
+                        `
+                        INSERT INTO attendance
+                        (
+                            member_id,
+                            user_type
+                        )
+                        VALUES
+                        (
+                            $1,
+                            'MEMBER'
+                        )
+                        RETURNING
+                            id,
+                            member_id,
+                            guest_id,
+                            user_type,
+                            check_in,
+                            check_out
+                        `,
+                        [
+                            member.id
+                        ]
+                    );
+
+                attendance =
+                    checkinResult.rows[0];
+
+                action =
+                    "CHECKED_IN";
+
+            }
 
             const {
                 membersInside,
@@ -6552,79 +6732,77 @@ app.post(
     }
 );
 
-app.get(
-    "/api/admin/attendance/member-search",
-    async (req, res) => {
-        const query = String(req.query.q || "").trim();
-
-        if (query.length < 2 || query.length > 100) {
-            return res.json({
-                success: true,
-                members: []
-            });
-        }
-
-        try {
-            const result = await pool.query(
-                `
-                SELECT
-                    m.id,
-                    m.member_id,
-                    m.full_name,
-                    m.status,
-                    m.expiration_date,
-                    (
-                        UPPER(m.status) = 'ACTIVE'
-                        AND (
-                            m.expiration_date IS NULL
-                            OR m.expiration_date > (${GUEST_NOW_SQL})::date
-                        )
-                    ) AS membership_eligible,
-                    EXISTS (
-                        SELECT 1
-                        FROM attendance a
-                        WHERE a.member_id = m.id
-                          AND UPPER(a.user_type) = 'MEMBER'
-                          AND a.check_out IS NULL
-                          AND a.voided_at IS NULL
-                    ) AS currently_checked_in
-                FROM (
-                    SELECT
-                        m.id,
-                        m.member_id,
-                        u.full_name,
-                        m.status,
-                        m.expiration_date
-                    FROM members m
-                    JOIN users u
-                        ON u.id = m.user_id
-                    WHERE m.member_id::text ILIKE $1
-                       OR u.full_name ILIKE $1
-                    ORDER BY
-                        CASE WHEN m.member_id::text ILIKE $1 THEN 0 ELSE 1 END,
-                        u.full_name,
-                        m.id DESC
-                    LIMIT 20
-                ) m
-                ORDER BY m.full_name, m.id DESC
-                `,
-                [`%${query}%`]
-            );
-
-            return res.json({
-                success: true,
-                members: result.rows
-            });
-        } catch (error) {
-            console.error("Manual attendance member search error:", error);
-            return res.status(500).json({
-                success: false,
-                message: "Unable to search members for manual attendance.",
-                error: error.message
-            });
-        }
+app.get("/api/admin/members/search", async (req, res) => {
+    const query = String(req.query.query || "").trim();
+    if (query.length < 2) {
+        return res.status(400).json({
+            success: false,
+            message: "Enter at least two characters to search members."
+        });
     }
-);
+
+    try {
+        const result = await pool.query(
+            `
+            SELECT
+                m.id,
+                m.member_id,
+                m.status,
+                m.expiration_date,
+                u.full_name,
+                (
+                    UPPER(m.status) = 'ACTIVE'
+                    AND m.archived_at IS NULL
+                    AND (
+                        m.expiration_date IS NULL
+                        OR m.expiration_date >= (${GUEST_NOW_SQL})::date
+                    )
+                ) AS eligible,
+                COALESCE((
+                    SELECT json_agg(
+                        json_build_object(
+                            'id', a.id,
+                            'check_in', a.check_in
+                        )
+                        ORDER BY a.check_in DESC, a.id DESC
+                    )
+                    FROM attendance a
+                    WHERE a.member_id = m.id
+                      AND UPPER(a.user_type) = 'MEMBER'
+                      AND a.check_out IS NULL
+                ), '[]'::json) AS open_visits
+            FROM members m
+            JOIN users u
+                ON u.id = m.user_id
+            WHERE m.archived_at IS NULL
+              AND UPPER(m.status) <> 'REVOKED'
+              AND LOWER(u.role) = 'customer'
+              AND (
+                  m.member_id ILIKE $1
+                  OR u.full_name ILIKE $1
+              )
+            ORDER BY u.full_name, m.id DESC
+            LIMIT 20
+            `,
+            [`%${query}%`]
+        );
+
+        return res.json({
+            success: true,
+            members: result.rows.map(member => ({
+                ...member,
+                expired: !member.eligible &&
+                    String(member.status).toUpperCase() === "ACTIVE"
+            }))
+        });
+    } catch (error) {
+        console.error("Manual member search error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Unable to search members."
+        });
+    }
+});
 
 app.post(
     "/api/admin/attendance/manual",
@@ -6635,28 +6813,10 @@ app.post(
 
         try {
 
-            const memberIdentifier = String(
-                req.body?.member_id || req.body?.user_id || ""
-            ).trim();
-            const userId =
-                req.body?.user_id === undefined
-                    ? null
-                    : Number(req.body.user_id);
             const action = String(req.body?.action || "")
                 .trim()
                 .toUpperCase()
                 .replace(/[\s-]+/g, "_");
-
-            if (
-                !memberIdentifier ||
-                (userId !== null &&
-                    (!Number.isSafeInteger(userId) || userId <= 0))
-            ) {
-                return res.status(400).json({
-                    success: false,
-                    message: "A valid member ID is required."
-                });
-            }
 
             if (action !== "CHECK_IN" && action !== "CHECK_OUT") {
                 return res.status(400).json({
@@ -6665,33 +6825,75 @@ app.post(
                 });
             }
 
+            const memberRecordId = Number(req.body?.member_record_id);
+            const attendanceId = Number(req.body?.attendance_id);
+            if (
+                (action === "CHECK_IN" &&
+                    (!Number.isSafeInteger(memberRecordId) || memberRecordId <= 0)) ||
+                (action === "CHECK_OUT" &&
+                    (!Number.isSafeInteger(attendanceId) || attendanceId <= 0))
+            ) {
+                return res.status(400).json({
+                    success: false,
+                    message: action === "CHECK_IN"
+                        ? "Select a member from the search results."
+                        : "Select the specific open visit to check out."
+                });
+            }
+
             await client.query("BEGIN");
             transactionStarted = true;
 
-            const memberResult = await client.query(
-                `
-                SELECT
-                    m.id,
-                    m.user_id,
-                    m.member_id,
-                    m.status,
-                    m.expiration_date,
-                    u.full_name,
-                    (
-                        m.expiration_date IS NULL OR
-                        m.expiration_date > (${GUEST_NOW_SQL})::date
-                    ) AS membership_unexpired
-                FROM members m
-                JOIN users u
-                    ON u.id = m.user_id
-                WHERE m.member_id::text = $1
-                   OR ($2::bigint IS NOT NULL AND m.user_id = $2)
-                ORDER BY m.id DESC
-                LIMIT 1
-                FOR UPDATE OF m
-                `,
-                [memberIdentifier, userId]
-            );
+            const memberResult = action === "CHECK_IN"
+                ? await client.query(
+                    `
+                    SELECT
+                        m.id,
+                        m.user_id,
+                        m.member_id,
+                        m.status,
+                        m.archived_at,
+                        m.expiration_date,
+                        u.full_name,
+                        (
+                            m.expiration_date IS NULL OR
+                            m.expiration_date >= (${GUEST_NOW_SQL})::date
+                        ) AS membership_unexpired
+                    FROM members m
+                    JOIN users u
+                        ON u.id = m.user_id
+                    WHERE m.id = $1
+                      AND LOWER(u.role) = 'customer'
+                    FOR UPDATE OF m
+                    `,
+                    [memberRecordId]
+                )
+                : await client.query(
+                    `
+                    SELECT
+                        m.id,
+                        m.user_id,
+                        m.member_id,
+                        m.status,
+                        m.archived_at,
+                        m.expiration_date,
+                        u.full_name,
+                        (
+                            m.expiration_date IS NULL OR
+                            m.expiration_date >= (${GUEST_NOW_SQL})::date
+                        ) AS membership_unexpired
+                    FROM attendance a
+                    JOIN members m
+                        ON m.id = a.member_id
+                    JOIN users u
+                        ON u.id = m.user_id
+                    WHERE a.id = $1
+                      AND UPPER(a.user_type) = 'MEMBER'
+                      AND a.check_out IS NULL
+                    FOR UPDATE OF a, m
+                    `,
+                    [attendanceId]
+                );
 
             if (memberResult.rows.length === 0) {
                 await client.query("ROLLBACK");
@@ -6705,38 +6907,42 @@ app.post(
             const member = memberResult.rows[0];
             const status = String(member.status || "").trim().toUpperCase();
 
-            const openAttendanceResult = await client.query(
-                `
-                SELECT id, check_in
-                FROM attendance
-                WHERE member_id = $1
-                  AND UPPER(user_type) = 'MEMBER'
-                  AND check_out IS NULL
-                  AND voided_at IS NULL
-                ORDER BY check_in DESC, id DESC
-                FOR UPDATE
-                `,
-                [member.id]
-            );
-
             let attendance;
 
             if (action === "CHECK_IN") {
-                if (status !== "ACTIVE" || !member.membership_unexpired) {
+                if (
+                    status !== "ACTIVE" ||
+                    !member.membership_unexpired ||
+                    member.archived_at
+                ) {
                     await client.query("ROLLBACK");
                     transactionStarted = false;
                     return res.status(400).json({
                         success: false,
-                        message: "This member does not have an active membership."
+                        message: !member.membership_unexpired
+                            ? "This membership has expired."
+                            : "This member does not have an active membership."
                     });
                 }
 
+                const openAttendanceResult = await client.query(
+                    `
+                    SELECT id
+                    FROM attendance
+                    WHERE member_id = $1
+                      AND UPPER(user_type) = 'MEMBER'
+                      AND check_out IS NULL
+                    ORDER BY check_in DESC, id DESC
+                    FOR UPDATE
+                    `,
+                    [member.id]
+                );
                 if (openAttendanceResult.rows.length > 0) {
                     await client.query("ROLLBACK");
                     transactionStarted = false;
                     return res.status(409).json({
                         success: false,
-                        message: "This member is already checked in."
+                        message: "This member has an open visit. Select that specific visit to check out before starting another."
                     });
                 }
 
@@ -6759,30 +6965,14 @@ app.post(
 
                 attendance = checkinResult.rows[0];
             } else {
-                if (openAttendanceResult.rows.length === 0) {
-                    await client.query("ROLLBACK");
-                    transactionStarted = false;
-                    return res.status(404).json({
-                        success: false,
-                        message: "This member has no open attendance session to check out."
-                    });
-                }
-
-                if (openAttendanceResult.rows.length > 1) {
-                    await client.query("ROLLBACK");
-                    transactionStarted = false;
-                    return res.status(409).json({
-                        success: false,
-                        message: "This member has multiple open visits. Select the exact visit in the Attendance table to check out.",
-                        open_visits: openAttendanceResult.rows
-                    });
-                }
-
                 const checkoutResult = await client.query(
                     `
                     UPDATE attendance
                     SET check_out = ${GUEST_NOW_SQL}
                     WHERE id = $1
+                      AND member_id = $2
+                      AND UPPER(user_type) = 'MEMBER'
+                      AND check_out IS NULL
                     RETURNING
                         id,
                         member_id,
@@ -6791,8 +6981,17 @@ app.post(
                         check_in,
                         check_out
                     `,
-                    [openAttendanceResult.rows[0].id]
+                    [attendanceId, member.id]
                 );
+
+                if (checkoutResult.rows.length === 0) {
+                    await client.query("ROLLBACK");
+                    transactionStarted = false;
+                    return res.status(404).json({
+                        success: false,
+                        message: "The selected visit is no longer active."
+                    });
+                }
 
                 attendance = checkoutResult.rows[0];
             }
@@ -6874,9 +7073,12 @@ app.post(
                 hours,
                 amount_paid,
                 payment_method,
+                payment_reference,
                 payment_confirmed,
                 idempotency_key
             } = req.body;
+            const idempotencyKey = String(idempotency_key || "").trim();
+            const paymentReference = String(payment_reference || "").trim();
 
             const finalName =
                 String(
@@ -6998,17 +7200,27 @@ app.post(
 
             }
 
-            const idempotencyKey = String(idempotency_key || "").trim();
             if (payment_confirmed !== true) {
                 return res.status(402).json({
                     success: false,
-                    message: "Confirm that the guest's payment was received before check-in."
+                    message: "Confirm that payment was received or verified before checking in the guest."
                 });
             }
+
             if (!idempotencyKey || idempotencyKey.length > 120) {
                 return res.status(400).json({
                     success: false,
-                    message: "A valid guest check-in request key is required."
+                    message: "A valid payment request key is required."
+                });
+            }
+
+            if (
+                finalPaymentMethod === "GCASH" &&
+                (paymentReference.length < 6 || paymentReference.length > 100)
+            ) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Enter the verified GCash reference (6 to 100 characters)."
                 });
             }
 
@@ -7099,8 +7311,8 @@ app.post(
                 true;
 
             await client.query(
-                "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
-                [idempotencyKey]
+                "SELECT pg_advisory_xact_lock(hashtext($1))",
+                [`guest-entry:${idempotencyKey}`]
             );
 
             const duplicateResult = await client.query(
@@ -7108,31 +7320,72 @@ app.post(
                 SELECT
                     gt.id AS transaction_id,
                     gt.transaction_reference,
-                    gt.attendance_id,
-                    a.guest_id,
-                    a.user_type,
+                    g.id AS guest_id,
+                    g.full_name,
+                    a.id AS attendance_id,
                     a.check_in,
                     a.check_out
                 FROM guest_transactions gt
+                JOIN guests g
+                    ON g.id = gt.guest_id
                 LEFT JOIN attendance a
                     ON a.id = gt.attendance_id
                 WHERE gt.idempotency_key = $1
-                FOR UPDATE OF gt
                 `,
-                [idempotencyKey]
+                [`ENTRY:${idempotencyKey}`]
             );
+
             if (duplicateResult.rows.length > 0) {
                 await client.query("COMMIT");
                 transactionStarted = false;
                 return res.json({
                     success: true,
                     duplicate: true,
-                    attendance: duplicateResult.rows[0],
-                    transaction: {
-                        id: duplicateResult.rows[0].transaction_id,
-                        reference: duplicateResult.rows[0].transaction_reference
-                    }
+                    message: "This guest payment and check-in were already recorded.",
+                    guest: {
+                        id: duplicateResult.rows[0].guest_id,
+                        full_name: duplicateResult.rows[0].full_name
+                    },
+                    attendance: {
+                        id: duplicateResult.rows[0].attendance_id,
+                        check_in: duplicateResult.rows[0].check_in,
+                        check_out: duplicateResult.rows[0].check_out
+                    },
+                    transaction_id: duplicateResult.rows[0].transaction_id,
+                    transaction_reference:
+                        duplicateResult.rows[0].transaction_reference
                 });
+            }
+
+            const transactionReference =
+                finalPaymentMethod === "GCASH"
+                    ? paymentReference
+                    : `GUEST-${crypto.randomUUID()}`;
+
+            if (finalPaymentMethod === "GCASH") {
+                await client.query(
+                    "SELECT pg_advisory_xact_lock(hashtext($1))",
+                    [`gcash-reference:${paymentReference.toLowerCase()}`]
+                );
+                const duplicateReference = await client.query(
+                    `
+                    SELECT id
+                    FROM guest_transactions
+                    WHERE payment_method = 'GCASH'
+                      AND LOWER(transaction_reference) = LOWER($1)
+                      AND payment_status = 'CONFIRMED'
+                    LIMIT 1
+                    `,
+                    [paymentReference]
+                );
+                if (duplicateReference.rows.length > 0) {
+                    await client.query("ROLLBACK");
+                    transactionStarted = false;
+                    return res.status(409).json({
+                        success: false,
+                        message: "This GCash reference has already been recorded."
+                    });
+                }
             }
 
             const guestResult =
@@ -7178,8 +7431,6 @@ app.post(
 
             const guest =
                 guestResult.rows[0];
-            const transactionReference =
-                `GUEST-${crypto.randomUUID()}`;
 
             const attendanceResult =
                 await client.query(
@@ -7241,7 +7492,7 @@ app.post(
                     guest.payment_method,
                     transactionReference,
                     attendanceResult.rows[0].id,
-                    idempotencyKey
+                    `ENTRY:${idempotencyKey}`
                 ]
             );
 
@@ -7265,7 +7516,10 @@ app.post(
                 guest,
 
                 attendance:
-                    attendanceResult.rows[0]
+                    attendanceResult.rows[0],
+
+                transaction_reference:
+                    transactionReference
 
             });
 
@@ -7393,7 +7647,6 @@ app.patch(
                     FROM attendance
                     WHERE id = $1
                       AND check_out IS NULL
-                      AND voided_at IS NULL
                     `,
                     [
                         attendanceId
@@ -7433,7 +7686,6 @@ app.patch(
                     WHERE
                         id = $1
                         AND check_out IS NULL
-                        AND voided_at IS NULL
 
                     RETURNING
                         id,
@@ -7519,142 +7771,16 @@ app.patch(
 // REMOVE GUEST ATTENDANCE RECORD
 // =====================================
 
-app.delete(
-    "/api/admin/attendance/:id/remove",
-    async (req, res) => {
-
-        try {
-
-            const attendanceId =
-                Number(
-                    req.params.id
-                );
-
-            if (
-                !Number.isInteger(
-                    attendanceId
-                )
-            ) {
-
-                return res.status(
-                    400
-                ).json({
-
-                    success:
-                        false,
-
-                    message:
-                        "Invalid attendance ID."
-
-                });
-
-            }
-
-            const result =
-                await pool.query(
-                    `
-                    UPDATE attendance
-                    SET voided_at = CURRENT_TIMESTAMP
-                    WHERE id = $1
-                      AND UPPER(user_type) = 'GUEST'
-                      AND check_out IS NOT NULL
-                      AND voided_at IS NULL
-                    RETURNING
-                        id,
-                        guest_id,
-                        user_type,
-                        check_in,
-                        check_out,
-                        voided_at
-                    `,
-                    [
-                        attendanceId
-                    ]
-                );
-
-            if (
-                result.rows.length ===
-                0
-            ) {
-                const existingResult = await pool.query(
-                    `
-                    SELECT check_out, voided_at
-                    FROM attendance
-                    WHERE id = $1
-                      AND UPPER(user_type) = 'GUEST'
-                    `,
-                    [attendanceId]
-                );
-                if (existingResult.rows.length > 0) {
-                    return res.status(409).json({
-                        success: false,
-                        message: existingResult.rows[0].voided_at
-                            ? "This guest attendance record was already voided."
-                            : "Check out the guest before voiding this visit. The attendance history will be retained."
-                    });
-                }
-
-                return res.status(
-                    404
-                ).json({
-
-                    success:
-                        false,
-
-                    message:
-                        "Guest attendance record not found."
-
-                });
-
-            }
-
-            res.json({
-
-                success:
-                    true,
-
-                message:
-                    "Guest attendance record voided. Its history and linked transactions were preserved.",
-
-                attendance:
-                    result.rows[0]
-
-            });
-
-        } catch (error) {
-
-            console.error(
-                "Remove attendance error:",
-                error
-            );
-
-            res.status(
-                500
-            ).json({
-
-                success:
-                    false,
-
-                message:
-                    "Unable to remove guest attendance record.",
-
-                error:
-                    error.message,
-
-                code:
-                    error.code ||
-                    null,
-
-                detail:
-                    error.detail ||
-                    null
-
-            });
-
-        }
-
+app.delete("/api/admin/attendance/:id/remove", (req, res) => {
+    if (!requireAdministrator(req, res)) {
+        return;
     }
-);
+
+    return res.status(410).json({
+        success: false,
+        message: "Attendance history is retained and cannot be permanently deleted."
+    });
+});
 
 // =====================================
 // REPORTS
@@ -7708,24 +7834,21 @@ app.get(
                 }
 
                 rangeCondition =
-                    "a.voided_at IS NULL AND a.check_in >= $1::date AND a.check_in < ($2::date + INTERVAL '1 day')";
+                    "a.check_in >= $1::date AND a.check_in < ($2::date + INTERVAL '1 day')";
                 reportParameters = [startDate, endDate];
             } else if (period === "daily") {
                 rangeCondition = `
-                    a.voided_at IS NULL
-                    AND a.check_in >= DATE_TRUNC('day', ${GUEST_NOW_SQL})
+                    a.check_in >= DATE_TRUNC('day', ${GUEST_NOW_SQL})
                     AND a.check_in < DATE_TRUNC('day', ${GUEST_NOW_SQL}) + INTERVAL '1 day'
                 `;
             } else if (period === "weekly") {
                 rangeCondition = `
-                    a.voided_at IS NULL
-                    AND a.check_in >= DATE_TRUNC('week', ${GUEST_NOW_SQL})
+                    a.check_in >= DATE_TRUNC('week', ${GUEST_NOW_SQL})
                     AND a.check_in < DATE_TRUNC('week', ${GUEST_NOW_SQL}) + INTERVAL '7 days'
                 `;
             } else {
                 rangeCondition = `
-                    a.voided_at IS NULL
-                    AND a.check_in >= DATE_TRUNC('month', ${GUEST_NOW_SQL})
+                    a.check_in >= DATE_TRUNC('month', ${GUEST_NOW_SQL})
                     AND a.check_in < DATE_TRUNC('month', ${GUEST_NOW_SQL}) + INTERVAL '1 month'
                 `;
             }
@@ -7742,22 +7865,28 @@ app.get(
                     )::int AS guest_visits,
                     COUNT(DISTINCT CASE
                         WHEN UPPER(a.user_type) = 'MEMBER'
-                        THEN 'member-user:' || m.user_id::text
+                        THEN COALESCE(
+                            ${normalizedPhoneSql("u.phone")},
+                            'member-user:' || COALESCE(m.user_id::text, a.id::text)
+                        )
                         WHEN UPPER(a.user_type) = 'GUEST'
                         THEN COALESCE(
-                            NULLIF(regexp_replace(g.phone, '[^0-9]', '', 'g'), ''),
-                            'guest-id:' || a.guest_id::text
+                            ${normalizedPhoneSql("g.phone")},
+                            'guest-id:' || COALESCE(a.guest_id::text, a.id::text)
                         )
                     END)::int AS unique_visitors,
                     COUNT(DISTINCT CASE
                         WHEN UPPER(a.user_type) = 'MEMBER'
-                        THEN 'member-user:' || m.user_id::text
+                        THEN COALESCE(
+                            ${normalizedPhoneSql("u.phone")},
+                            'member-user:' || COALESCE(m.user_id::text, a.id::text)
+                        )
                     END)::int AS member_visitor_count,
                     COUNT(DISTINCT CASE
                         WHEN UPPER(a.user_type) = 'GUEST'
                         THEN COALESCE(
-                            NULLIF(regexp_replace(g.phone, '[^0-9]', '', 'g'), ''),
-                            'guest-id:' || a.guest_id::text
+                            ${normalizedPhoneSql("g.phone")},
+                            'guest-id:' || COALESCE(a.guest_id::text, a.id::text)
                         )
                     END)::int AS guest_visitor_count
                 FROM attendance a
@@ -7788,28 +7917,26 @@ app.get(
                         : period === "monthly"
                             ? "Mon DD"
                             : "YYYY-MM-DD";
-            const chartInterval =
+            const bucketRange =
                 period === "daily"
-                    ? "1 hour"
-                    : period === "monthly"
-                        ? "1 week"
-                        : "1 day";
-            const chartStart =
-                period === "custom"
-                    ? "$1::date"
-                    : period === "monthly"
-                        ? `DATE_TRUNC('week', DATE_TRUNC('month', ${GUEST_NOW_SQL}))`
-                        : period === "weekly"
-                            ? `DATE_TRUNC('week', ${GUEST_NOW_SQL})`
-                            : `DATE_TRUNC('day', ${GUEST_NOW_SQL})`;
-            const chartEnd =
-                period === "custom"
-                    ? "$2::date"
-                    : period === "daily"
-                        ? `DATE_TRUNC('day', ${GUEST_NOW_SQL}) + INTERVAL '23 hours'`
-                        : period === "weekly"
-                            ? `DATE_TRUNC('week', ${GUEST_NOW_SQL}) + INTERVAL '6 days'`
-                            : `DATE_TRUNC('week', DATE_TRUNC('month', ${GUEST_NOW_SQL}) + INTERVAL '1 month' - INTERVAL '1 day')`;
+                    ? {
+                            start: `DATE_TRUNC('day', ${GUEST_NOW_SQL})`,
+                            end: `DATE_TRUNC('day', ${GUEST_NOW_SQL}) + INTERVAL '1 day'`
+                    }
+                    : period === "weekly"
+                            ? {
+                                start: `DATE_TRUNC('week', ${GUEST_NOW_SQL})`,
+                                end: `DATE_TRUNC('week', ${GUEST_NOW_SQL}) + INTERVAL '7 days'`
+                            }
+                            : period === "monthly"
+                                ? {
+                                    start: `DATE_TRUNC('month', ${GUEST_NOW_SQL})`,
+                                    end: `DATE_TRUNC('month', ${GUEST_NOW_SQL}) + INTERVAL '1 month'`
+                                }
+                                : {
+                                    start: "$1::date",
+                                    end: "($2::date + INTERVAL '1 day')"
+                                };
 
             const detailResult = await pool.query(
                 `
@@ -7875,23 +8002,35 @@ app.get(
 
             const seriesResult = await pool.query(
                 `
+                WITH buckets AS (
+                    SELECT generate_series(
+                        DATE_TRUNC('${chartBucket}', ${bucketRange.start}),
+                        DATE_TRUNC(
+                            '${chartBucket}',
+                            (${bucketRange.end}) - INTERVAL '1 microsecond'
+                        ),
+                        INTERVAL '1 ${chartBucket}'
+                    ) AS bucket
+                ),
+                visits AS (
+                    SELECT
+                        DATE_TRUNC('${chartBucket}', a.check_in) AS bucket,
+                        COUNT(*)::int AS visits
+                    FROM attendance a
+                    WHERE ${rangeCondition}
+                    GROUP BY DATE_TRUNC('${chartBucket}', a.check_in)
+                )
                 SELECT
+                    buckets.bucket,
                     TO_CHAR(
-                        period.bucket,
+                        buckets.bucket,
                         '${chartLabel}'
                     ) AS label,
-                    COUNT(a.id)::int AS visits
-                FROM GENERATE_SERIES(
-                    ${chartStart},
-                    ${chartEnd},
-                    INTERVAL '${chartInterval}'
-                ) AS period(bucket)
-                LEFT JOIN attendance a
-                    ON a.check_in >= period.bucket
-                   AND a.check_in < period.bucket + INTERVAL '${chartInterval}'
-                   AND ${rangeCondition}
-                GROUP BY period.bucket
-                ORDER BY period.bucket
+                    COALESCE(visits.visits, 0)::int AS visits
+                FROM buckets
+                LEFT JOIN visits
+                    ON visits.bucket = buckets.bucket
+                ORDER BY buckets.bucket
                 `,
                 reportParameters
             );
@@ -8049,9 +8188,18 @@ async function startServer() {
     );
 }
 
-startServer().catch(error => {
-    console.error("Database schema initialization failed:", error);
-    void pool.end().finally(() => {
-        process.exitCode = 1;
+if (require.main === module) {
+    startServer().catch(error => {
+        console.error("Database schema initialization failed:", error);
+        void pool.end().finally(() => {
+            process.exitCode = 1;
+        });
     });
-});
+}
+
+module.exports = {
+    app,
+    pool,
+    ensureDashboardSchema,
+    startServer
+};

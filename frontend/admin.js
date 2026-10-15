@@ -13,11 +13,8 @@ let transactionFilter = "all";
 let activeGuestExtensionId = null;
 let guestExtensionQuote = null;
 let guestExtensionRequestKey = null;
-let guestCheckInRequestKey = null;
-let guestCheckInSubmitting = false;
+let guestEntryRequestKey = null;
 let gymClosingTime = "22:00";
-let manualAttendanceMatches = [];
-let manualAttendanceSearchSequence = 0;
 
 const guestPhoneInput =
     document.getElementById(
@@ -40,6 +37,18 @@ if (guestPhoneInput) {
 
 }
 
+const guestForm =
+    document.getElementById("guestForm");
+
+if (guestForm) {
+    guestForm.addEventListener("input", () => {
+        guestEntryRequestKey = null;
+    });
+    guestForm.addEventListener("change", () => {
+        guestEntryRequestKey = null;
+    });
+}
+
 
 // =====================================
 // CHECK ADMIN ACCESS
@@ -54,7 +63,8 @@ function checkAdminAccess() {
 
     if (
         loggedIn !==
-        "true"
+        "true" ||
+        !window.anchorSession.get("anchorAdminToken")
     ) {
 
         window.location.href =
@@ -76,13 +86,23 @@ async function apiRequest(
     options = {}
 ) {
 
+    const headers =
+        new Headers(options.headers || {});
+    const adminToken =
+        window.anchorSession.get("anchorAdminToken");
+
+    if (adminToken) {
+        headers.set("Authorization", `Bearer ${adminToken}`);
+    }
+
     const response =
         await fetch(
             window.anchorApiUrl(url),
             {
                 cache:
                     "no-store",
-                ...options
+                ...options,
+                headers
             }
         );
 
@@ -1661,7 +1681,8 @@ async function loadMembers() {
                     getStatus(
                         member.status
                     ) ===
-                    "ACTIVE"
+                    "ACTIVE" &&
+                    member.expired !== true
             );
 
 
@@ -1714,12 +1735,8 @@ async function loadMembers() {
         body.innerHTML =
             members
                 .map(
-                    member => {
-                        const displayStatus = member.membership_expired
-                            ? "EXPIRED"
-                            : getStatus(member.status);
-
-                        return `
+                    member =>
+                        `
                         <tr>
 
                             <td>
@@ -1773,11 +1790,22 @@ async function loadMembers() {
                             <td>
 
                                 <span
-                                class="status ${getStatusClass(displayStatus)}">
+                                    class="status ${getStatusClass(
+                                        member.status
+                                    )}">
 
-                                ${escapeHtml(displayStatus)}
+                                    ${escapeHtml(
+                                        getStatus(
+                                            member.status
+                                        )
+                                    )}
 
                                 </span>
+                                ${
+                                    member.expired === true
+                                        ? '<span class="status expired">EXPIRED</span>'
+                                        : ""
+                                }
 
                             </td>
 
@@ -1789,9 +1817,9 @@ async function loadMembers() {
                                                 class="restore-button"
                                                 type="button"
                                                 onclick="restoreRevokedMember(${Number(member.id)})">
-                                                Restore
+                                                Reactivate Membership
                                             </button>
-                                        `;
+                                        `
                                         : `
                                             <button
                                                 class="remove-button"
@@ -1805,7 +1833,6 @@ async function loadMembers() {
 
                         </tr>
                         `
-                    }
                 )
                 .join("");
 
@@ -1929,7 +1956,7 @@ async function revokeMember(
 
 async function restoreRevokedMember(memberId) {
 
-    if (!    confirm("Reactivate this revoked membership and resume its remaining days?")) {
+    if (!confirm("Reactivate this revoked membership and resume its remaining days? Historical attendance and transactions will be preserved.")) {
         return;
     }
 
@@ -2291,11 +2318,6 @@ function updateArchiveMemberSelection() {
             "restoreSelectedArchivedMembersButton"
         );
 
-    const deleteButton =
-        document.getElementById(
-            "deleteSelectedArchivedMembersButton"
-        );
-
     const count =
         document.getElementById(
             "archivedMembersSelectedCount"
@@ -2335,14 +2357,6 @@ function updateArchiveMemberSelection() {
             !selectedCheckboxes.some(
                 checkbox =>
                     checkbox.dataset.selectable === "archived"
-            );
-    }
-
-    if (deleteButton) {
-        deleteButton.disabled =
-            !selectedCheckboxes.some(
-                checkbox =>
-                    checkbox.dataset.selectable === "restored"
             );
     }
 
@@ -2450,13 +2464,11 @@ async function loadArchivedMembers() {
                 .map(
                     member => {
 
-                        const isLiveRevokedMembership =
-                            member.record_type === "REVOKED";
                         const revoked =
-                            getStatus(member.status) === "REVOKED";
+                            member.record_type === "REVOKED";
 
                         const restored =
-                            member.record_type === "ARCHIVED" &&
+                            !revoked &&
                             (
                                 Boolean(member.restored_at) ||
                                 getStatus(member.status) === "RESTORED"
@@ -2472,7 +2484,7 @@ async function loadArchivedMembers() {
 
 
                         const action =
-                            isLiveRevokedMembership
+                            revoked
                                 ? `
                                     <button
                                         class="restore-button"
@@ -2482,21 +2494,12 @@ async function loadArchivedMembers() {
                                     </button>
                                 `
                                 : restored
-                                ? `
-                                    <button
-                                        class="remove-button"
-                                        type="button"
-                                        onclick="deleteArchivedMember(${member.archive_id})">
-
-                                        Delete
-
-                                    </button>
-                                `
+                                ? `<span class="archived-history-label">History retained</span>`
                                 : `
                                     <button
                                         class="restore-button"
                                         type="button"
-                                        onclick="restoreArchivedMember(${member.archive_id})">
+                                        onclick="restoreArchivedMember(${Number(member.archive_id)})">
 
                                         Restore
 
@@ -2509,7 +2512,7 @@ async function loadArchivedMembers() {
 
                                 <td>
                                     ${
-                                        isLiveRevokedMembership
+                                        revoked || restored
                                             ? ""
                                             : `
                                                 <input
@@ -2630,7 +2633,7 @@ async function restoreArchivedMember(
 
     const confirmed =
         confirm(
-            "Restore this archived record? If its membership is revoked, it will remain revoked until separately reactivated."
+            "Restore this archived membership?"
         );
 
 
@@ -2686,65 +2689,6 @@ async function restoreArchivedMember(
 
 }
 
-
-// =====================================
-// DELETE ARCHIVED MEMBER
-// =====================================
-
-async function deleteArchivedMember(
-    archiveId
-) {
-
-    const confirmed =
-        confirm(
-            "Are you sure you want to permanently delete this restored archive history?"
-        );
-
-
-    if (!confirmed) {
-
-        return;
-
-    }
-
-
-    try {
-
-        const data =
-            await apiRequest(
-                `/api/admin/archived-members/${archiveId}`,
-                {
-                    method:
-                        "DELETE"
-                }
-            );
-
-
-        alert(
-            data.message ||
-            "Archived history deleted successfully."
-        );
-
-
-        await loadArchivedMembers();
-
-
-    } catch (error) {
-
-        console.error(
-            "Delete archived member error:",
-            error
-        );
-
-
-        alert(
-            error.message ||
-            "Unable to delete archived member history."
-        );
-
-    }
-
-}
 
 async function restoreSelectedArchivedMembers() {
 
@@ -2813,66 +2757,6 @@ async function restoreSelectedArchivedMembers() {
 }
 
 
-async function deleteSelectedArchivedMembers() {
-
-    const archiveIds =
-        getSelectedArchiveIds("restored");
-
-    if (!archiveIds.length) {
-        return;
-    }
-
-    const confirmed =
-        confirm(
-            `Permanently delete the history for ${archiveIds.length} selected restored membership(s)?`
-        );
-
-    if (!confirmed) {
-        return;
-    }
-
-    const failedIds = [];
-
-    for (const archiveId of archiveIds) {
-
-        try {
-
-            await apiRequest(
-                `/api/admin/archived-members/${archiveId}`,
-                {
-                    method: "DELETE"
-                }
-            );
-
-        } catch (error) {
-
-            console.error(
-                `Unable to delete restored archive record ${archiveId}:`,
-                error
-            );
-
-            failedIds.push(archiveId);
-
-        }
-    }
-
-    await loadArchivedMembers();
-
-    if (failedIds.length) {
-        alert(
-            `${archiveIds.length - failedIds.length} archive history record(s) deleted. ` +
-            `Unable to delete archive ID(s): ${failedIds.join(", ")}.`
-        );
-
-        return;
-    }
-
-    alert(
-        `${archiveIds.length} archive history record(s) deleted successfully.`
-    );
-}
-
-
 // =====================================
 // TRANSACTIONS
 // =====================================
@@ -2902,82 +2786,51 @@ async function loadTransactions(
                 `/api/admin/transactions?type=${encodeURIComponent(transactionFilter)}`
             );
 
-        const memberTransactions =
-            data.memberTransactions || [];
-        const guestTransactions =
-            data.guestTransactions || [];
-        const transactions = [
-            ...memberTransactions.map(transaction => ({
-                ...transaction,
-                person_type: "MEMBER",
-                person_name: transaction.full_name,
-                payment_description: "Membership Payment",
-                identifier: `M-${Number(transaction.id)}`,
-                reference: transaction.gcash_reference,
-                payment_status: transaction.status || "CONFIRMED"
-            })),
-            ...guestTransactions.map(transaction => {
-                const extensionType = String(transaction.extension_type || "").toUpperCase();
-                const hours = Number(transaction.additional_hours || 0);
-                const description = extensionType === "ALL_DAY"
-                    ? "All-Day Access"
-                    : extensionType === "EXTRA_HOURS"
-                        ? `Extra ${hours} Hour${hours === 1 ? "" : "s"}`
-                        : `Guest Entry Fee${transaction.visit_type ? ` · ${transaction.visit_type}` : ""}`;
-
-                return {
-                    ...transaction,
-                    person_type: "GUEST",
-                    person_name: transaction.guest_name,
-                    payment_description: description,
-                    identifier: `G-${Number(transaction.id)}`,
-                    reference: transaction.transaction_reference,
-                    payment_status: transaction.payment_status || "CONFIRMED",
-                    extension_duration: extensionType === "EXTRA_HOURS"
-                        ? `${hours} hour${hours === 1 ? "" : "s"}`
-                        : extensionType === "ALL_DAY"
-                            ? "Through closing"
-                            : "-"
-                };
-            })
-        ].sort(
-            (left, right) =>
-                new Date(right.transaction_date || right.created_at).getTime() -
-                new Date(left.transaction_date || left.created_at).getTime()
-        );
         const body = document.getElementById("transactionsTableBody");
-
-        if (body) {
-            body.innerHTML = transactions.length
-                ? transactions.map(transaction => `
-                    <tr>
-                        <td>${escapeHtml(transaction.identifier)}${transaction.reference ? `<br><small>${escapeHtml(transaction.reference)}</small>` : ""}</td>
-                        <td>${escapeHtml(transaction.person_name || "-")}</td>
-                        <td>${escapeHtml(transaction.person_type)}</td>
-                        <td>${escapeHtml(transaction.payment_description)}</td>
-                        <td>${transaction.attendance_id ? `Visit #${Number(transaction.attendance_id)}` : "No linked visit"}</td>
-                        <td>${transaction.check_in ? formatDateTime(transaction.check_in) : "-"}</td>
-                        <td>${transaction.check_out ? formatDateTime(transaction.check_out) : "-"}</td>
-                        <td>${escapeHtml(transaction.extension_duration || "-")}</td>
-                        <td>₱${Number(transaction.amount || 0).toLocaleString()}</td>
-                        <td>${escapeHtml(transaction.payment_method || "-")}</td>
-                        <td>
-                            <span class="status ${getStatusClass(transaction.payment_status)}">
-                                ${escapeHtml(getStatus(transaction.payment_status) || "-")}
-                            </span>
-                        </td>
-                        <td>${formatDateTime(transaction.transaction_date || transaction.created_at)}</td>
-                        <td>-</td>
-                    </tr>
-                `).join("")
-                : `
-                    <tr>
-                        <td colspan="13" style="text-align:center;">
-                            No transaction records available.
-                        </td>
-                    </tr>
-                `;
+        const transactions = data.transactions || [];
+        if (!body) {
+            return;
         }
+
+        body.innerHTML = transactions.length
+            ? transactions.map(transaction => `
+                <tr>
+                    <td>
+                        <strong>${escapeHtml(transaction.transaction_id || "-")}</strong>
+                        <small class="transaction-reference">${escapeHtml(transaction.reference || "—")}</small>
+                    </td>
+                    <td>${escapeHtml(transaction.customer_name || "-")}</td>
+                    <td>${escapeHtml(transaction.person_type || "-")}</td>
+                    <td>${escapeHtml(transaction.description || "-")}</td>
+                    <td>${escapeHtml(transaction.related_visit || "Not linked to a visit")}</td>
+                    <td>${transaction.check_in ? formatDateTime(transaction.check_in) : "—"}</td>
+                    <td>${transaction.check_out ? formatDateTime(transaction.check_out) : "—"}</td>
+                    <td>${escapeHtml(transaction.extension || "—")}</td>
+                    <td>₱${Number(transaction.amount || 0).toLocaleString()}</td>
+                    <td>${escapeHtml(transaction.payment_method || "—")}</td>
+                    <td>
+                        <span class="status ${getStatusClass(transaction.payment_status)}">
+                            ${escapeHtml(getStatus(transaction.payment_status) || "—")}
+                        </span>
+                    </td>
+                    <td>${formatDateTime(transaction.transaction_date)}</td>
+                    <td>
+                        ${transaction.attendance_id
+                            ? `<button class="small-btn" type="button"
+                                onclick="openAttendanceVisit(${Number(transaction.attendance_id)})">
+                                View Visit
+                              </button>`
+                            : "—"}
+                    </td>
+                </tr>
+            `).join("")
+            : `
+                <tr>
+                    <td colspan="13" style="text-align:center;">
+                        No transactions found for this filter.
+                    </td>
+                </tr>
+            `;
 
     } catch (error) {
 
@@ -2985,7 +2838,28 @@ async function loadTransactions(
             "Transactions loading error:",
             error
         );
+        const body = document.getElementById("transactionsTableBody");
+        if (body) {
+            body.innerHTML = `
+                <tr>
+                    <td colspan="13" style="text-align:center;">
+                        ${escapeHtml(error.message || "Unable to load transactions.")}
+                    </td>
+                </tr>
+            `;
+        }
 
+    }
+
+    async function openAttendanceVisit(attendanceId) {
+        showPage("attendance");
+        await loadAttendance();
+        const row = document.getElementById(`attendance-row-${Number(attendanceId)}`);
+        if (row) {
+            row.scrollIntoView({ behavior: "smooth", block: "center" });
+            row.classList.add("attendance-row-highlight");
+            setTimeout(() => row.classList.remove("attendance-row-highlight"), 2500);
+        }
     }
 
 }
@@ -2994,6 +2868,13 @@ async function loadTransactions(
 // =====================================
 // ATTENDANCE
 // =====================================
+
+function formatVisitDuration(value) {
+    const seconds = Math.max(0, Number(value) || 0);
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    return hours ? `${hours}h ${minutes}m` : `${minutes}m`;
+}
 
 async function loadAttendance(
     filterType = document.getElementById("attendanceTypeFilter")?.value || "all"
@@ -3060,6 +2941,16 @@ async function loadAttendance(
             "attendanceTimedOutGuests",
             timedOutGuests
         );
+        setText(
+            "attendanceDuplicateOpenPeople",
+            Number(data.duplicateOpenPeople || 0)
+        );
+        setText(
+            "attendanceTimeoutAlert",
+            timedOutGuests > 0
+                ? `${timedOutGuests} guest visit(s) have timed out but remain checked in. Record checkout only after the guest actually leaves.`
+                : ""
+        );
 
         setText(
             "dashboardOccupancy",
@@ -3095,21 +2986,13 @@ async function loadAttendance(
             body.innerHTML = `
                 <tr>
                     <td
-                        colspan="9"
+                        colspan="7"
                         style="text-align:center;"
                     >
                         No attendance records found.
                     </td>
                 </tr>
             `;
-
-            updateBulkSelection(
-                "attendanceTableBody",
-                "selectAllAttendance",
-                "deleteSelectedAttendanceButton",
-                "attendanceSelectedCount",
-                "guest"
-            );
 
             return;
 
@@ -3133,10 +3016,14 @@ async function loadAttendance(
                             Boolean(
                                 record.check_out
                             );
+                        const isTimedOut =
+                            isGuest &&
+                            !isCheckedOut &&
+                            record.timed_out === true;
                         const visitStatus =
                             isCheckedOut
                                 ? "CHECKED OUT"
-                                : isGuest && record.timed_out
+                                : isTimedOut
                                     ? "TIMED OUT"
                                     : "CHECKED IN";
 
@@ -3229,22 +3116,12 @@ async function loadAttendance(
                                             : ""
                                     }
 
-                                    <button
-                                        type="button"
-                                        class="remove-button"
-                                        onclick="removeGuestAttendance(${Number(record.id)})"
-                                    >
-                                        Void Visit
-                                    </button>
-
                                 </div>
                             `;
 
                         } else {
 
-                            remainingHtml = isCheckedOut
-                                ? `<span class="guest">CHECKED OUT</span>`
-                                : `<span class="countdown-active">CHECKED IN</span>`;
+                            remainingHtml = "<span>—</span>";
 
                             actionHtml = isCheckedOut
                                 ? ""
@@ -3260,23 +3137,7 @@ async function loadAttendance(
                         }
 
                         return `
-                            <tr>
-
-                                <td>
-                                    ${
-                                        isGuest
-                                            ? `
-                                                <input
-                                                    class="row-select"
-                                                    type="checkbox"
-                                                    data-selectable="guest"
-                                                    data-record-id="${Number(record.id)}"
-                                                    aria-label="Select guest attendance record ${Number(record.id)}"
-                                                    onchange="updateBulkSelection('attendanceTableBody', 'selectAllAttendance', 'deleteSelectedAttendanceButton', 'attendanceSelectedCount', 'guest')">
-                                              `
-                                            : ""
-                                    }
-                                </td>
+                            <tr id="attendance-row-${Number(record.id)}">
 
                                 <td>
                                     ${escapeHtml(
@@ -3315,13 +3176,7 @@ async function loadAttendance(
                                 </td>
 
                                 <td>
-                                    <span class="${
-                                        visitStatus === "TIMED OUT"
-                                            ? "timed-out-label"
-                                            : visitStatus === "CHECKED OUT"
-                                                ? "visit-status"
-                                                : "status active"
-                                    }">
+                                    <span class="${visitStatus === "TIMED OUT" ? "timed-out-label" : `visit-status ${getStatusClass(visitStatus)}`}">
                                         ${visitStatus}
                                     </span>
                                 </td>
@@ -3336,14 +3191,6 @@ async function loadAttendance(
                 )
                 .join("");
 
-        updateBulkSelection(
-            "attendanceTableBody",
-            "selectAllAttendance",
-            "deleteSelectedAttendanceButton",
-            "attendanceSelectedCount",
-            "guest"
-        );
-
         updateGuestCountdowns();
 
     } catch (error) {
@@ -3355,74 +3202,6 @@ async function loadAttendance(
 
     }
 }
-
-async function deleteSelectedGuestAttendance() {
-
-    const selectedIds =
-        getSelectedRecordIds(
-            "attendanceTableBody",
-            "guest"
-        );
-
-    if (!selectedIds.length) {
-        return;
-    }
-
-    const confirmed =
-        confirm(
-            `Void ${selectedIds.length} selected checked-out guest attendance record(s)? Their history and linked payments will be retained.`
-        );
-
-    if (!confirmed) {
-        return;
-    }
-
-    const failedIds = [];
-
-    for (const attendanceId of selectedIds) {
-
-        try {
-
-            await apiRequest(
-                `/api/admin/attendance/${attendanceId}/remove`,
-                {
-                    method: "DELETE"
-                }
-            );
-
-        } catch (error) {
-
-            console.error(
-                `Unable to delete selected guest attendance ${attendanceId}:`,
-                error
-            );
-
-            failedIds.push(attendanceId);
-
-        }
-    }
-
-    await Promise.all([
-        loadAttendance(),
-        loadAdminDashboard(),
-        loadReports()
-    ]);
-
-    if (failedIds.length) {
-
-        alert(
-            `${selectedIds.length - failedIds.length} guest attendance record(s) voided. ` +
-            `Unable to void record ID(s): ${failedIds.join(", ")}.`
-        );
-
-        return;
-    }
-
-    alert(
-        `${selectedIds.length} guest attendance record(s) voided. Their history is retained.`
-    );
-}
-
 
 // =====================================
 // GUEST COUNTDOWN HELPERS
@@ -3725,30 +3504,96 @@ async function checkoutAttendance(attendanceId) {
     }
 }
 
-async function submitManualAttendance(action) {
-    const memberId = document.getElementById("manualAttendanceMemberId")?.value;
+async function searchManualMembers(event) {
+    event.preventDefault();
+    const input = document.getElementById("manualAttendanceSearch");
+    const results = document.getElementById("manualAttendanceResults");
+    const query = input?.value.trim() || "";
 
-    if (!memberId) {
-        alert("Search for and select the correct member first.");
+    if (!results || query.length < 2) {
         return;
     }
 
-    if (
-        action === "CHECK_OUT" &&
-        !confirm("Record this member's actual departure now?")
-    ) {
+    results.textContent = "Searching members...";
+    try {
+        const data = await apiRequest(
+            `/api/admin/members/search?query=${encodeURIComponent(query)}`
+        );
+        const members = data.members || [];
+        results.innerHTML = members.length
+            ? members.map(member => {
+                const openVisits = Array.isArray(member.open_visits)
+                    ? member.open_visits
+                    : [];
+                const expired = member.expired === true;
+                let actions;
+
+                if (openVisits.length) {
+                    actions = openVisits.map(visit => `
+                        <button class="small-btn" type="button"
+                            onclick="manualMemberCheckOut(${Number(visit.id)})">
+                            Check Out Visit #${Number(visit.id)} · ${escapeHtml(formatDateTime(visit.check_in))}
+                        </button>
+                    `).join("");
+                } else if (member.eligible) {
+                    actions = `
+                        <button class="restore-button" type="button"
+                            onclick="manualMemberCheckIn(${Number(member.id)})">
+                            Check In Member
+                        </button>
+                    `;
+                } else {
+                    actions = `<span class="status ${expired ? "expired" : getStatusClass(member.status)}">
+                        ${expired ? "EXPIRED" : escapeHtml(getStatus(member.status))}
+                    </span>`;
+                }
+
+                return `
+                    <article class="manual-attendance-result">
+                        <div>
+                            <strong>${escapeHtml(member.full_name || "-")}</strong>
+                            <span>${escapeHtml(member.member_id || "-")}</span>
+                            <span class="status ${getStatusClass(member.status)}">
+                                ${escapeHtml(getStatus(member.status))}
+                            </span>
+                            ${expired ? '<span class="status expired">EXPIRED</span>' : ""}
+                        </div>
+                        <div class="manual-attendance-actions">
+                            ${actions}
+                        </div>
+                    </article>
+                `;
+            }).join("")
+            : `<p class="empty-state">No matching members found.</p>`;
+    } catch (error) {
+        console.error("Manual attendance error:", error);
+        results.textContent = error.message || "Unable to search members.";
+    }
+}
+
+async function manualMemberCheckIn(memberRecordId) {
+    if (!confirm("Record this member's check-in now?")) {
         return;
     }
 
-    const actionButton = document.getElementById(
-        action === "CHECK_IN"
-            ? "manualMemberCheckInButton"
-            : "manualMemberCheckOutButton"
-    );
-    if (actionButton) {
-        actionButton.disabled = true;
+    await submitManualAttendance({
+        action: "CHECK_IN",
+        member_record_id: Number(memberRecordId)
+    });
+}
+
+async function manualMemberCheckOut(attendanceId) {
+    if (!confirm("Record the actual departure for this specific visit?")) {
+        return;
     }
 
+    await submitManualAttendance({
+        action: "CHECK_OUT",
+        attendance_id: Number(attendanceId)
+    });
+}
+
+async function submitManualAttendance(payload) {
     try {
         const data = await apiRequest(
             "/api/admin/attendance/manual",
@@ -3757,22 +3602,15 @@ async function submitManualAttendance(action) {
                 headers: {
                     "Content-Type": "application/json"
                 },
-                body: JSON.stringify({
-                    member_id: memberId,
-                    action
-                })
+                body: JSON.stringify(payload)
             }
         );
 
         alert(data.message || "Attendance updated.");
-        document.getElementById("manualAttendanceSearch").value = "";
-        document.getElementById("manualAttendanceMemberId").value = "";
-        document.getElementById("manualAttendanceSelectedMember").textContent =
-            "Select a member before recording attendance.";
-        document.getElementById("manualAttendanceSearchResults").innerHTML = "";
-        manualAttendanceMatches = [];
-        document.getElementById("manualMemberCheckInButton").disabled = true;
-        document.getElementById("manualMemberCheckOutButton").disabled = true;
+        const searchForm = document.getElementById("manualMemberSearchForm");
+        if (searchForm) {
+            await searchManualMembers({ preventDefault() {} });
+        }
         await Promise.all([
             loadAttendance(),
             loadAdminDashboard(),
@@ -3781,153 +3619,14 @@ async function submitManualAttendance(action) {
     } catch (error) {
         console.error("Manual attendance error:", error);
         alert(error.message || "Unable to update attendance.");
-    } finally {
-        if (actionButton) {
-            const selectedMember = manualAttendanceMatches.find(
-                member => String(member.member_id) === String(memberId)
-            );
-            actionButton.disabled = !selectedMember || (
-                action === "CHECK_IN"
-                    ? !selectedMember.membership_eligible ||
-                        selectedMember.currently_checked_in
-                    : !selectedMember.currently_checked_in
-            );
-        }
     }
 }
-
-async function searchManualAttendanceMembers() {
-    const searchInput = document.getElementById("manualAttendanceSearch");
-    const results = document.getElementById("manualAttendanceSearchResults");
-    const selectedMemberInput = document.getElementById("manualAttendanceMemberId");
-    const selectedMemberLabel = document.getElementById("manualAttendanceSelectedMember");
-    const checkInButton = document.getElementById("manualMemberCheckInButton");
-    const checkOutButton = document.getElementById("manualMemberCheckOutButton");
-    const query = searchInput.value.trim();
-    const requestSequence = ++manualAttendanceSearchSequence;
-
-    selectedMemberInput.value = "";
-    selectedMemberLabel.textContent = "Select a member before recording attendance.";
-    checkInButton.disabled = true;
-    checkOutButton.disabled = true;
-    manualAttendanceMatches = [];
-
-    if (query.length < 2) {
-        results.innerHTML = query
-            ? `<p class="subtitle">Enter at least two characters to search.</p>`
-            : "";
-        return;
-    }
-
-    results.innerHTML = `<p class="subtitle">Searching members...</p>`;
-    try {
-        const data = await apiRequest(
-            `/api/admin/attendance/member-search?q=${encodeURIComponent(query)}`
-        );
-        if (requestSequence !== manualAttendanceSearchSequence) {
-            return;
-        }
-
-        manualAttendanceMatches = data.members || [];
-        results.innerHTML = manualAttendanceMatches.length
-            ? manualAttendanceMatches.map(member => `
-                <button
-                    type="button"
-                    class="manual-member-result"
-                    role="option"
-                    onclick="selectManualAttendanceMember(${Number(member.id)})">
-                    <strong>${escapeHtml(member.full_name || "Unnamed member")}</strong>
-                    <span>${escapeHtml(member.member_id || "-")}</span>
-                    <small>
-                        ${member.membership_eligible ? "Eligible" : "Not eligible"} ·
-                        ${member.currently_checked_in ? "Currently checked in" : "Not checked in"}
-                    </small>
-                </button>
-            `).join("")
-            : `<p class="subtitle">No matching members were found.</p>`;
-    } catch (error) {
-        if (requestSequence === manualAttendanceSearchSequence) {
-            results.innerHTML = `<p class="error-message">${escapeHtml(error.message || "Unable to search members.")}</p>`;
-        }
-    }
-}
-
-function selectManualAttendanceMember(memberId) {
-    const member = manualAttendanceMatches.find(
-        item => Number(item.id) === Number(memberId)
-    );
-    if (!member) {
-        return;
-    }
-
-    document.getElementById("manualAttendanceMemberId").value = member.member_id;
-    document.getElementById("manualAttendanceSearch").value =
-        `${member.full_name} (${member.member_id})`;
-    document.getElementById("manualAttendanceSearchResults").innerHTML = "";
-    document.getElementById("manualAttendanceSelectedMember").textContent =
-        `${member.full_name} · ${member.member_id} · ${member.membership_eligible ? "Eligible" : "Not eligible"} · ` +
-        `${member.currently_checked_in ? "Currently checked in" : "Not checked in"}`;
-    document.getElementById("manualMemberCheckInButton").disabled =
-        !member.membership_eligible || member.currently_checked_in;
-    document.getElementById("manualMemberCheckOutButton").disabled =
-        !member.currently_checked_in;
-}
-
-
-async function removeGuestAttendance(
-    attendanceId
-) {
-
-    const confirmed =
-        confirm(
-            "Remove this guest attendance record? This is intended for correcting an incorrect guest entry."
-        );
-
-    if (!confirmed) {
-        return;
-    }
-
-    try {
-
-        const data =
-            await apiRequest(
-                `/api/admin/attendance/${attendanceId}/remove`,
-                {
-                    method: "DELETE"
-                }
-            );
-
-        alert(
-            data.message ||
-            "Guest attendance record removed successfully."
-        );
-
-        await Promise.all([
-            loadAttendance(),
-            loadAdminDashboard(),
-            loadReports()
-        ]);
-
-    } catch (error) {
-
-        console.error(
-            "Remove guest attendance error:",
-            error
-        );
-
-        alert(
-            error.message ||
-            "Unable to remove guest attendance record."
-        );
-    }
-}
-
 
 // =====================================
 // GUEST PRICING
 // =====================================
 
-function createIdempotencyKey() {
+function createGuestExtensionRequestKey() {
     if (window.crypto?.randomUUID) {
         return window.crypto.randomUUID();
     }
@@ -3947,7 +3646,7 @@ async function openGuestExtension(attendanceId) {
     }
 
     activeGuestExtensionId = Number(attendanceId);
-    guestExtensionRequestKey = createIdempotencyKey();
+    guestExtensionRequestKey = createGuestExtensionRequestKey();
     setText("extensionGuestName", record.full_name || "-");
     setText("extensionCheckIn", formatDateTime(record.check_in));
     setText("extensionCurrentExpiration", formatGuestEndLabel(
@@ -3961,7 +3660,9 @@ async function openGuestExtension(attendanceId) {
     );
     document.getElementById("extensionOption").value = "EXTRA_HOURS:1";
     document.getElementById("extensionPaymentMethod").value = "";
+    document.getElementById("extensionPaymentReference").value = "";
     document.getElementById("extensionPaymentConfirmed").checked = false;
+    toggleGuestExtensionPaymentReference();
     document.getElementById("extensionModalMessage").textContent = "";
     modal.hidden = false;
 
@@ -3978,13 +3679,37 @@ function closeGuestExtensionModal() {
     guestExtensionRequestKey = null;
 }
 
+function toggleGuestExtensionPaymentReference() {
+    const method =
+        document.getElementById("extensionPaymentMethod")?.value;
+    const group =
+        document.getElementById("extensionPaymentReferenceGroup");
+    const reference =
+        document.getElementById("extensionPaymentReference");
+    const confirmation =
+        document.getElementById("extensionPaymentConfirmed");
+
+    if (group) {
+        group.hidden = method !== "GCASH";
+    }
+    if (reference) {
+        reference.required = method === "GCASH";
+        if (method !== "GCASH") {
+            reference.value = "";
+        }
+    }
+    if (confirmation) {
+        confirmation.checked = false;
+    }
+}
+
 async function updateGuestExtensionQuote(resetRequestKey = false) {
     if (!activeGuestExtensionId) {
         return;
     }
 
     if (resetRequestKey) {
-        guestExtensionRequestKey = createIdempotencyKey();
+        guestExtensionRequestKey = createGuestExtensionRequestKey();
     }
 
     const message = document.getElementById("extensionModalMessage");
@@ -3998,6 +3723,7 @@ async function updateGuestExtensionQuote(resetRequestKey = false) {
     if (button) {
         button.disabled = true;
     }
+    guestExtensionQuote = null;
 
     try {
         const quote = await apiRequest(
@@ -4064,6 +3790,17 @@ async function updateGuestExtensionQuote(resetRequestKey = false) {
                 paymentConfirmed.checked = false;
             }
         }
+        toggleGuestExtensionPaymentReference();
+        const referenceInput =
+            document.getElementById("extensionPaymentReference");
+        if (referenceInput) {
+            referenceInput.required =
+                requiresPayment &&
+                paymentMethod?.value === "GCASH";
+            if (!requiresPayment) {
+                referenceInput.value = "";
+            }
+        }
         if (message) {
             message.textContent = requiresPayment
                 ? "Review the amount and confirm receipt of payment before submitting."
@@ -4076,7 +3813,7 @@ async function updateGuestExtensionQuote(resetRequestKey = false) {
         }
     } finally {
         if (button) {
-            button.disabled = false;
+            button.disabled = !guestExtensionQuote;
         }
     }
 }
@@ -4095,11 +3832,24 @@ async function submitGuestExtension(event) {
     const paymentConfirmed = document
         .getElementById("extensionPaymentConfirmed")
         .checked;
+    const paymentReference = document
+        .getElementById("extensionPaymentReference")
+        .value
+        .trim();
 
-    if (amount > 0 && (!method || !paymentConfirmed)) {
+    if (
+        amount > 0 &&
+        (
+            !method ||
+            !paymentConfirmed ||
+            (method === "GCASH" && !paymentReference)
+        )
+    ) {
         setText(
             "extensionModalMessage",
-            "Select the payment method and confirm the payment was received."
+            method === "GCASH" && !paymentReference
+                ? "Enter the verified GCash reference before confirming payment."
+                : "Select the payment method and confirm payment was received or verified."
         );
         return;
     }
@@ -4110,6 +3860,9 @@ async function submitGuestExtension(event) {
             : `Add ${guestExtensionQuote.hours} hour(s)`}\n` +
         `Amount due: ₱${amount.toLocaleString()}\n` +
         `Payment method: ${amount > 0 ? method : "Already paid"}\n` +
+        (method === "GCASH" && paymentReference
+            ? `GCash reference: ${paymentReference}\n`
+            : "") +
         `Access through: ${document.getElementById("extensionNewExpiration").textContent}`;
 
     if (!confirm(`Confirm guest extension?\n\n${summary}`)) {
@@ -4135,6 +3888,7 @@ async function submitGuestExtension(event) {
                     extension_type: guestExtensionQuote.extensionType,
                     additional_hours: guestExtensionQuote.hours,
                     payment_method: method || null,
+                    payment_reference: paymentReference || null,
                     payment_confirmed: paymentConfirmed,
                     idempotency_key: guestExtensionRequestKey
                 })
@@ -4200,6 +3954,30 @@ function updateGuestPricing() {
 
     }
 
+    function toggleGuestPaymentReference() {
+        const method =
+            document.getElementById("guestPaymentMethod")?.value;
+        const group =
+            document.getElementById("guestPaymentReferenceGroup");
+        const reference =
+            document.getElementById("guestPaymentReference");
+        const confirmation =
+            document.getElementById("guestPaymentConfirmed");
+
+        if (group) {
+            group.hidden = method !== "GCASH";
+        }
+        if (reference) {
+            reference.required = method === "GCASH";
+            if (method !== "GCASH") {
+                reference.value = "";
+            }
+        }
+        if (confirmation) {
+            confirmation.checked = false;
+        }
+    }
+
 
     if (
         visitType ===
@@ -4258,9 +4036,6 @@ function updateGuestPricing() {
 async function addGuest(
     event
 ) {
-    if (guestCheckInSubmitting) {
-        return;
-    }
 
     if (event) {
 
@@ -4303,8 +4078,16 @@ async function addGuest(
         document.getElementById(
             "guestPaymentMethod"
         )?.value;
+
+    const paymentReference =
+        document.getElementById(
+            "guestPaymentReference"
+        )?.value.trim();
+
     const paymentConfirmed =
-        document.getElementById("guestPaymentConfirmed")?.checked === true;
+        document.getElementById(
+            "guestPaymentConfirmed"
+        )?.checked;
 
 
     if (!fullName) {
@@ -4349,8 +4132,13 @@ async function addGuest(
 
     }
 
+    if (paymentMethod === "GCASH" && !paymentReference) {
+        alert("Enter the GCash reference after verifying the payment.");
+        return;
+    }
+
     if (!paymentConfirmed) {
-        alert("Confirm that the guest's payment has been received.");
+        alert("Confirm that payment was received or verified before checking in the guest.");
         return;
     }
 
@@ -4375,7 +4163,12 @@ async function addGuest(
 
     const confirmed =
         confirm(
-            `Record ${fullName} as ${visitType} for ₱${calculatedAmount.toLocaleString()} using ${paymentMethod}?`
+            `Confirm payment of ₱${calculatedAmount.toLocaleString()} for ${fullName}'s ${visitType}.\n\n` +
+            `Method: ${paymentMethod}` +
+            (paymentMethod === "GCASH"
+                ? `\nGCash reference: ${paymentReference}`
+                : "\nCash received: confirmed") +
+            "\n\nRecord the paid guest visit?"
         );
 
 
@@ -4385,16 +4178,11 @@ async function addGuest(
 
     }
 
-    if (!guestCheckInRequestKey) {
-        guestCheckInRequestKey = createIdempotencyKey();
-    }
-    guestCheckInSubmitting = true;
-    const submitButton = document.getElementById("guestCheckInButton");
-    if (submitButton) {
-        submitButton.disabled = true;
-    }
 
     try {
+        guestEntryRequestKey =
+            guestEntryRequestKey ||
+            createGuestExtensionRequestKey();
 
         const data =
             await apiRequest(
@@ -4432,11 +4220,14 @@ async function addGuest(
                             payment_method:
                                 paymentMethod,
 
+                            payment_reference:
+                                paymentReference || null,
+
                             payment_confirmed:
-                                paymentConfirmed,
+                                paymentConfirmed === true,
 
                             idempotency_key:
-                                guestCheckInRequestKey
+                                guestEntryRequestKey
 
                         })
                 }
@@ -4461,7 +4252,8 @@ async function addGuest(
 
         }
 
-        guestCheckInRequestKey = null;
+        guestEntryRequestKey = null;
+        toggleGuestPaymentReference();
 
         updateGuestPricing();
 
@@ -4490,12 +4282,6 @@ async function addGuest(
             error.message ||
             "Unable to record guest."
         );
-
-    } finally {
-        guestCheckInSubmitting = false;
-        if (submitButton) {
-            submitButton.disabled = false;
-        }
 
     }
 
@@ -4977,6 +4763,9 @@ async function loadReports(
         });
 
     if (period === "custom" && (!startDate || !endDate || startDate > endDate)) {
+        clearReportData(
+            "Choose a valid start and end date, then apply the custom range."
+        );
         setText(
             "reportMessage",
             "Choose a valid start and end date, then apply the custom range."
@@ -5116,8 +4905,7 @@ async function loadReports(
             "Reports loading error:",
             error
         );
-        setText(
-            "reportMessage",
+        clearReportData(
             error.message || "Unable to load attendance reports."
         );
 
@@ -5125,6 +4913,33 @@ async function loadReports(
 
 }
 
+function clearReportData(message) {
+    [
+        "reportTotalVisits",
+        "reportMemberVisits",
+        "reportGuestVisits",
+        "reportUniqueVisitors",
+        "reportMemberVisitorCount",
+        "reportGuestVisitorCount",
+        "reportCurrentOccupancy"
+    ].forEach(id => setText(id, "0"));
+
+    updatePeakBars([], reportPeriod, true);
+
+    const reportBody =
+        document.getElementById("reportAttendanceTableBody");
+    if (reportBody) {
+        reportBody.innerHTML = `
+            <tr>
+                <td colspan="8" style="text-align:center;">
+                    ${escapeHtml(message)}
+                </td>
+            </tr>
+        `;
+    }
+
+    setText("reportMessage", message);
+}
 
 // =====================================
 // PEAK BARS
@@ -5150,41 +4965,63 @@ function updatePeakBars(
         label: String(item.label || ""),
         visits: Math.max(0, Number(item.visits) || 0)
     }));
-    const maxVisits =
-        Math.max(0, ...values.map(item => item.visits));
-    const axisMax =
-        Math.max(4, Math.ceil(maxVisits / 4) * 4);
-    const interval =
-        axisMax / 4;
-    const ticks =
-        Array.from({ length: 5 }, (_, index) => axisMax - interval * index);
-
-    yAxis.innerHTML =
-        ticks.map(value => `<span>${value}</span>`).join("");
-
-    chart.innerHTML = values.length
-        ? values.map(item => {
-            const height = item.visits / axisMax * 100;
-
-            return `
-                <div
-                    class="report-bar"
-                    role="listitem"
-                    aria-label="${escapeAttribute(`${item.label}: ${item.visits} visits`)}"
-                    style="--bar-height:${height}%">
-                    <span class="report-bar-value">${item.visits}</span>
-                    <span class="report-bar-label">${escapeHtml(item.label)}</span>
-                </div>
-            `;
-        }).join("")
-        : `<div class="report-chart-empty">No attendance visits for this period.</div>`;
-
     const periodDescription = {
         daily: "hourly attendance for today",
         weekly: "daily attendance for the current week",
         monthly: "weekly attendance for the current month",
         custom: "daily attendance for the selected date range"
     }[period];
+
+    if (
+        values.length === 0 ||
+        values.every(item => item.visits === 0)
+    ) {
+        yAxis.innerHTML = "<span>0</span>";
+        chart.innerHTML =
+            '<div class="chart-empty">No attendance data for this period.</div>';
+        chart.setAttribute(
+            "aria-label",
+            `Peak attendance chart showing ${periodDescription}; no attendance data`
+        );
+        if (description && (announcePeriodChange || !description.textContent)) {
+            description.textContent =
+                `Peak attendance chart showing ${periodDescription}. No attendance data.`;
+        }
+        return;
+    }
+
+    const max =
+        Math.max(1, ...values.map(item => item.visits));
+    const rawStep = max / 4;
+    const magnitude = 10 ** Math.floor(Math.log10(rawStep));
+    const fraction = rawStep / magnitude;
+    const stepFactor =
+        fraction <= 1 ? 1 :
+            fraction <= 2 ? 2 :
+                fraction <= 5 ? 5 : 10;
+    const step = stepFactor * magnitude;
+    const axisMaximum = Math.ceil(max / step) * step;
+    const ticks = [];
+    for (let value = axisMaximum; value >= 0; value -= step) {
+        ticks.push(Number(value.toFixed(6)));
+    }
+
+    yAxis.innerHTML =
+        ticks.map(value => `<span>${value}</span>`).join("");
+
+    chart.innerHTML =
+        values.map(item => {
+            return `
+                <div
+                    class="report-bar"
+                    role="listitem"
+                    aria-label="${escapeAttribute(`${item.label}: ${item.visits} visits`)}"
+                    style="--bar-height:${item.visits === 0 ? 0 : item.visits / axisMaximum * 100}%">
+                    <span class="report-bar-value">${item.visits}</span>
+                    <span class="report-bar-label">${escapeHtml(item.label)}</span>
+                </div>
+            `;
+        }).join("");
 
     chart.setAttribute(
         "aria-label",
@@ -5647,15 +5484,6 @@ function formatDate(
 // FORMAT DATE TIME
 // =====================================
 
-function formatVisitDuration(value) {
-    const seconds = Math.max(0, Number(value) || 0);
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    return hours
-        ? `${hours}h ${minutes}m`
-        : `${minutes}m`;
-}
-
 function formatDateTime(
     value
 ) {
@@ -5778,7 +5606,7 @@ function escapeAttribute(
 // LOGOUT
 // =====================================
 
-function logout() {
+async function logout() {
 
     const confirmed =
         confirm(
@@ -5791,6 +5619,18 @@ function logout() {
         return;
 
     }
+
+    try {
+        await apiRequest("/api/admin/logout", {
+            method: "POST"
+        });
+    } catch (error) {
+        console.error("Admin logout request failed:", error);
+    }
+
+    window.anchorSession.remove(
+        "anchorAdminToken"
+    );
 
 
     window.anchorSession.remove(

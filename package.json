@@ -4,7 +4,7 @@
   "description": "",
   "main": "admin.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node --test backend/tests/attendance-api.test.js",
     "start": "node server.js"
   },
   "keywords": [],

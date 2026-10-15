@@ -1151,7 +1151,7 @@ if (adminLoginForm) {
 
     adminLoginForm.addEventListener(
         "submit",
-        function(event) {
+        async function(event) {
 
             event.preventDefault();
 
@@ -1186,105 +1186,77 @@ if (adminLoginForm) {
                 );
 
 
-            // =================================
-            // HARD-CODED ADMIN / STAFF LOGIN
-            // =================================
+            if (error) {
+                error.textContent = "";
+            }
 
-            if (
-                email === "admin@gmail.com" &&
-                password === "admin123"
-            ) {
-
-                // Remove customer session
-                window.anchorSession.remove(
-                    "anchorUser"
+            try {
+                const response = await fetch(
+                    window.anchorApiUrl("/api/admin/login"),
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            email,
+                            password,
+                            remember_me: Boolean(
+                                rememberMe && rememberMe.checked
+                            )
+                        })
+                    }
                 );
+                const data = await response.json();
 
+                if (!response.ok || data.success === false) {
+                    throw new Error(
+                        data.message || "Invalid admin or staff email or password."
+                    );
+                }
 
-                // Save admin session
+                const remember = Boolean(
+                    rememberMe && rememberMe.checked
+                );
+                window.anchorSession.remove("anchorUser");
+                window.anchorSession.set(
+                    "anchorAdminToken",
+                    data.token,
+                    remember
+                );
                 window.anchorSession.set(
                     "anchorAdminLoggedIn",
                     "true",
-                    Boolean(
-                        rememberMe &&
-                        rememberMe.checked
-                    )
+                    remember
                 );
-
-
                 window.anchorSession.set(
                     "anchorAdminRole",
-                    "admin",
-                    Boolean(
-                        rememberMe &&
-                        rememberMe.checked
-                    )
+                    data.user.role,
+                    remember
                 );
 
-
-                if (
-                    rememberMe &&
-                    rememberMe.checked
-                ) {
-
+                if (remember) {
                     window.localStorage.setItem(
                         rememberedAdminEmailKey,
                         email
                     );
-
-                    localStorage.setItem(
-                        "anchorAdminRemember",
-                        "true"
-                    );
-
+                    localStorage.setItem("anchorAdminRemember", "true");
                 } else {
-
-                    window.localStorage.removeItem(
-                        rememberedAdminEmailKey
-                    );
-
-                    localStorage.removeItem(
-                        "anchorAdminRemember"
-                    );
-
+                    window.localStorage.removeItem(rememberedAdminEmailKey);
+                    localStorage.removeItem("anchorAdminRemember");
                 }
 
-
-                // Go to admin dashboard
-                window.location.href =
-                    "admin.html";
-
-
-                return;
-
+                window.location.href = "admin.html";
+            } catch (loginError) {
+                window.anchorSession.remove("anchorAdminToken");
+                window.anchorSession.remove("anchorAdminLoggedIn");
+                window.anchorSession.remove("anchorAdminRole");
+                if (error) {
+                    error.textContent =
+                        loginError.message || "Unable to sign in.";
+                }
+                document.getElementById("adminPassword").value = "";
             }
-
-
-            // =================================
-            // WRONG CREDENTIALS
-            // =================================
-
-            window.anchorSession.remove(
-                "anchorAdminLoggedIn"
-            );
-
-
-            window.anchorSession.remove(
-                "anchorAdminRole"
-            );
-
-
-            if (error) {
-
-                error.textContent =
-                    "Invalid admin email or password.";
-
-            }
-
-
-            document.getElementById(
-                "adminPassword"
-            ).value = "";
 
         }
     );
