@@ -107,6 +107,12 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(reportPage, /Visits by Hour/);
     assert.match(adminHtml, /id="attendanceMembersTableBody"/);
     assert.doesNotMatch(adminHtml, /attendanceTimeoutAlert|manualMemberSearchForm|manualAttendanceSearch|manualAttendanceResults/);
+    assert.match(adminHtml, /class="card attendance-scanner-card"/);
+    assert.match(adminHtml, /class="attendance-scanner-actions"/);
+    assert.match(adminHtml, /class="attendance-scan-button"/);
+    assert.match(adminHtml, /class="attendance-stop-scan-button"/);
+    assert.match(adminCss, /#attendance\.active \.attendance-stats\s*\{\s*grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\)/);
+    assert.match(adminCss, /#attendance\.active \.attendance-stats \.card/);
     assert.ok(
         adminHtml.indexOf("id=\"qrScanStatus\"") <
             adminHtml.indexOf("class=\"attendance-stats\""),
@@ -176,8 +182,15 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(memberPage, /id="archivedMembersPageStatus"/);
     assert.match(memberPage, /id="archivedMembersPreviousPage"/);
     assert.match(memberPage, /id="archivedMembersNextPage"/);
-    assert.match(memberPage, /id="restoreSelectedArchivedMembersButton"[\s\S]*?Restore selected/);
-    assert.match(adminJs, /async function restoreSelectedArchivedMembers/);
+    assert.doesNotMatch(memberPage, /restoreSelectedArchivedMembersButton|Restore archived/);
+    assert.match(memberPage, /id="reactivateSelectedRevokedMembersButton"[\s\S]*?Reactivate revoked/);
+    assert.doesNotMatch(adminJs, /async function restoreSelectedArchivedMembers/);
+    assert.match(adminJs, /async function reactivateSelectedRevokedMembers/);
+    assert.match(adminJs, /data-selectable="revoked"/);
+    assert.match(adminJs, /getSelectedRevokedMemberIds\(\)/);
+    assert.match(adminJs, /onclick="restoreArchivedMember\(\$\{Number\(member\.archive_id\)\}\)"/);
+    assert.match(adminJs, /\/api\/admin\/archived-members\/\$\{archiveId\}\/restore/);
+    assert.match(adminJs, /\/api\/admin\/members\/\$\{memberId\}\/restore/);
     assert.match(adminJs, /function applyMemberTablePagination\(tableName\)/);
     assert.match(adminJs, /function changeMemberTablePage\(tableName, change\)/);
     assert.match(adminCss, /\.members-list-table \.remove-button/);

@@ -2149,7 +2149,7 @@ textarea:focus-visible {
 
 :root[data-page="admin-dashboard"] .members-list-table .restore-button,
 :root[data-page="admin-dashboard"] .archived-members-list-table .restore-button,
-:root[data-page="admin-dashboard"] .member-list-toolbar #restoreSelectedArchivedMembersButton {
+:root[data-page="admin-dashboard"] .member-list-toolbar #reactivateSelectedRevokedMembersButton {
     border: 1px solid #16a34a;
     background: transparent;
     color: #22c55e;
@@ -2157,7 +2157,7 @@ textarea:focus-visible {
 
 :root[data-page="admin-dashboard"] .members-list-table .restore-button:hover:not(:disabled),
 :root[data-page="admin-dashboard"] .archived-members-list-table .restore-button:hover:not(:disabled),
-:root[data-page="admin-dashboard"] .member-list-toolbar #restoreSelectedArchivedMembersButton:hover:not(:disabled) {
+:root[data-page="admin-dashboard"] .member-list-toolbar #reactivateSelectedRevokedMembersButton:hover:not(:disabled) {
     border-color: #16a34a;
     background: rgb(22 163 74 / 12%);
     color: #22c55e;

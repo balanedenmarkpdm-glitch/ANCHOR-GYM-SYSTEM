@@ -764,12 +764,12 @@
                         </div>
                         <span id="archivedMembersSelectedCount">0 selected</span>
                         <button
-                            id="restoreSelectedArchivedMembersButton"
+                            id="reactivateSelectedRevokedMembersButton"
                             class="restore-button"
                             type="button"
                             disabled
-                            onclick="restoreSelectedArchivedMembers()">
-                            Restore selected
+                            onclick="reactivateSelectedRevokedMembers()">
+                            Reactivate revoked
                         </button>
                     </div>
                     <div class="table-scroll archived-members-table-scroll">
@@ -781,7 +781,7 @@
                                             id="selectAllArchivedMembers"
                                             type="checkbox"
                                             disabled
-                                            aria-label="Select all visible archived members"
+                                            aria-label="Select all visible revoked memberships"
                                             onchange="toggleSelectAllArchivedMembers(this.checked)">
                                     </th>
                                     <th>Member ID</th>
@@ -917,39 +917,37 @@
 
                 </p>
 
-                <div class="card">
-
-                    <h3>
-                        📷 Member QR Scanner
-                    </h3>
-
-                    <p
-                        id="qrScanStatus">
-
-                        Scan a member's QR code during the
-                        configured gym opening hours.
-                        Record checkout only when the
-                        member actually leaves.
-
-                    </p>
-
-                    <button
-                        class="red-button"
-                        type="button"
-                        onclick="scanCustomerQr()">
-
-                        📷 Scan QR
-
-                    </button>
-
-                    <button
-                        class="red-button"
-                        type="button"
-                        onclick="closeQrScanner()">
-
-                        Stop Scanner
-
-                    </button>
+                <div class="card attendance-scanner-card">
+                    <div class="attendance-scanner-heading">
+                        <div class="attendance-scanner-title">
+                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+                                <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+                                <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+                                <path d="M14 14h3v3h-3zm5 0h2m-7 5v2m4-4h3v4h-3"></path>
+                            </svg>
+                            <div>
+                                <h3>Member QR Scanner</h3>
+                                <p id="qrScanStatus">
+                                    Scan a member QR code during gym opening hours. Record checkout only when the member actually leaves.
+                                </p>
+                            </div>
+                        </div>
+                        <div class="attendance-scanner-actions">
+                            <button
+                                class="attendance-scan-button"
+                                type="button"
+                                onclick="scanCustomerQr()">
+                                Scan QR
+                            </button>
+                            <button
+                                class="attendance-stop-scan-button"
+                                type="button"
+                                onclick="closeQrScanner()">
+                                Stop Scanner
+                            </button>
+                        </div>
+                    </div>
 
                     <div
                         id="qr-reader">

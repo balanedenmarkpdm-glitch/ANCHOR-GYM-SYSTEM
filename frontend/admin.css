@@ -1886,13 +1886,13 @@ button,
     background: rgb(220 38 38 / 12%);
 }
 
-.member-list-toolbar #restoreSelectedArchivedMembersButton {
+.member-list-toolbar #reactivateSelectedRevokedMembersButton {
     border: 1px solid #16A34A;
     background: transparent;
     color: #22c55e;
 }
 
-.member-list-toolbar #restoreSelectedArchivedMembersButton:hover:not(:disabled) {
+.member-list-toolbar #reactivateSelectedRevokedMembersButton:hover:not(:disabled) {
     background: rgb(22 163 74 / 12%);
 }
 
@@ -2206,6 +2206,144 @@ button,
 
 .attendance-stats strong {
     font-size: 25px;
+}
+
+#attendance.active .attendance-scanner-card {
+    margin-bottom: 8px;
+    padding: 14px 16px;
+    border-radius: 8px;
+}
+
+#attendance.active .attendance-scanner-heading,
+#attendance.active .attendance-scanner-title {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
+#attendance.active .attendance-scanner-heading {
+    justify-content: space-between;
+    gap: 14px;
+}
+
+#attendance.active .attendance-scanner-title {
+    gap: 12px;
+}
+
+#attendance.active .attendance-scanner-title > svg {
+    width: 22px;
+    height: 22px;
+    flex: 0 0 22px;
+    fill: none;
+    stroke: var(--color-primary);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+}
+
+#attendance.active .attendance-scanner-title h3 {
+    margin: 0 0 4px;
+    font-size: 15px;
+}
+
+#attendance.active #qrScanStatus {
+    margin: 0;
+    color: var(--color-subtle);
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+#attendance.active .attendance-scanner-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 6px;
+}
+
+#attendance.active .attendance-scanner-actions button {
+    min-height: 38px;
+    padding: 7px 13px;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+#attendance.active .attendance-scan-button {
+    border-color: var(--color-primary);
+    background: var(--color-primary);
+    color: var(--color-primary-text);
+}
+
+#attendance.active .attendance-stop-scan-button {
+    border-color: var(--color-border);
+    background: var(--color-surface-raised);
+    color: var(--color-text);
+}
+
+#attendance.active #qr-reader {
+    margin: 10px auto 2px !important;
+}
+
+#attendance.active .attendance-stats {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+    margin: 10px 0 16px;
+}
+
+#attendance.active .attendance-stats .card {
+    min-height: 74px;
+    padding: 12px 14px;
+    border-radius: 7px;
+}
+
+#attendance.active .attendance-stats p {
+    margin: 0 0 7px;
+    color: var(--color-muted);
+    font-size: 11px;
+    line-height: 1.35;
+}
+
+#attendance.active .attendance-stats strong {
+    display: block;
+    color: var(--color-success);
+    font-size: 21px;
+    line-height: 1.2;
+}
+
+#attendance.active #attendanceTimedOutGuests {
+    color: var(--color-danger);
+}
+
+#attendance.active #attendanceDuplicateOpenPeople {
+    color: var(--color-text);
+}
+
+@media (max-width: 900px) {
+    #attendance.active .attendance-stats {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 700px) {
+    #attendance.active .attendance-scanner-heading {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    #attendance.active .attendance-scanner-title {
+        align-items: flex-start;
+    }
+
+    #attendance.active .attendance-scanner-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
+
+    #attendance.active .attendance-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 
 

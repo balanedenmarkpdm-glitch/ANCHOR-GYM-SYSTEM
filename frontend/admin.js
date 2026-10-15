@@ -2446,9 +2446,7 @@ function toggleSelectAllRows(
     );
 }
 
-function getSelectedArchiveIds(
-    selectableType
-) {
+function getSelectedRevokedMemberIds() {
 
     const body =
         document.getElementById(
@@ -2467,7 +2465,7 @@ function getSelectedArchiveIds(
         .filter(
             checkbox =>
                 !checkbox.closest("tr").hidden &&
-                checkbox.dataset.selectable === selectableType
+                checkbox.dataset.selectable === "revoked"
         )
         .map(
             checkbox =>
@@ -2489,9 +2487,9 @@ function updateArchiveMemberSelection() {
             "selectAllArchivedMembers"
         );
 
-    const restoreButton =
+    const reactivateButton =
         document.getElementById(
-            "restoreSelectedArchivedMembersButton"
+            "reactivateSelectedRevokedMembersButton"
         );
 
     const count =
@@ -2528,11 +2526,11 @@ function updateArchiveMemberSelection() {
             `${selectedCount} selected`;
     }
 
-    if (restoreButton) {
-        restoreButton.disabled =
+    if (reactivateButton) {
+        reactivateButton.disabled =
             !selectedCheckboxes.some(
                 checkbox =>
-                    checkbox.dataset.selectable === "archived"
+                    checkbox.dataset.selectable === "revoked"
             );
     }
 
@@ -2689,15 +2687,15 @@ async function loadArchivedMembers() {
 
                                 <td>
                                     ${
-                                        revoked || restored
+                                        !revoked
                                             ? ""
                                             : `
                                                 <input
                                                     class="archive-row-select"
                                                     type="checkbox"
-                                                    data-selectable="${restored ? "restored" : "archived"}"
-                                                    data-record-id="${Number(member.archive_id)}"
-                                                    aria-label="Select ${restored ? "restored" : "archived"} member ${escapeAttribute(
+                                                    data-selectable="revoked"
+                                                    data-record-id="${Number(member.original_member_id)}"
+                                                    aria-label="Select revoked member ${escapeAttribute(
                                                         member.full_name ||
                                                         member.member_id ||
                                                         "record"
@@ -2868,46 +2866,31 @@ async function restoreArchivedMember(
 }
 
 
-async function restoreSelectedArchivedMembers() {
-
-    const archiveIds =
-        getSelectedArchiveIds("archived");
-
-    if (!archiveIds.length) {
+async function reactivateSelectedRevokedMembers() {
+    const memberIds = getSelectedRevokedMemberIds();
+    if (!memberIds.length) {
         return;
     }
 
-    const confirmed =
-        confirm(
-            `Restore ${archiveIds.length} selected archived membership(s)?`
-        );
-
-    if (!confirmed) {
+    if (!confirm(
+        `Reactivate ${memberIds.length} revoked membership(s) and resume their remaining membership days?`
+    )) {
         return;
     }
 
     const failedIds = [];
-
-    for (const archiveId of archiveIds) {
-
+    for (const memberId of memberIds) {
         try {
-
             await apiRequest(
-                `/api/admin/archived-members/${archiveId}/restore`,
-                {
-                    method: "POST"
-                }
+                `/api/admin/members/${memberId}/restore`,
+                { method: "POST" }
             );
-
         } catch (error) {
-
             console.error(
-                `Unable to restore archived member record ${archiveId}:`,
+                `Unable to reactivate revoked member ${memberId}:`,
                 error
             );
-
-            failedIds.push(archiveId);
-
+            failedIds.push(memberId);
         }
     }
 
@@ -2915,23 +2898,18 @@ async function restoreSelectedArchivedMembers() {
         loadArchivedMembers(),
         loadMembers(),
         loadAdminDashboard(),
-        loadTransactions(),
-        loadApplications(),
         loadAttendance()
     ]);
 
     if (failedIds.length) {
         alert(
-            `${archiveIds.length - failedIds.length} membership(s) restored. ` +
-            `Unable to restore archive ID(s): ${failedIds.join(", ")}.`
+            `${memberIds.length - failedIds.length} membership(s) reactivated. ` +
+            `Unable to reactivate member ID(s): ${failedIds.join(", ")}.`
         );
-
         return;
     }
 
-    alert(
-        `${archiveIds.length} membership(s) restored successfully.`
-    );
+    alert(`${memberIds.length} membership(s) reactivated successfully.`);
 }
 
 
