@@ -421,8 +421,17 @@ async function ensureDashboardSchema() {
             user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             expires_at TIMESTAMPTZ NOT NULL,
             used_at TIMESTAMPTZ,
+            attempts INTEGER NOT NULL DEFAULT 0,
+            verified_at TIMESTAMPTZ,
+            reset_token_hash CHAR(64),
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
+    `);
+    await pool.query(`
+        ALTER TABLE password_reset_tokens
+        ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS verified_at TIMESTAMPTZ,
+        ADD COLUMN IF NOT EXISTS reset_token_hash CHAR(64)
     `);
     await pool.query(`
         CREATE INDEX IF NOT EXISTS password_reset_tokens_user_created_idx
@@ -1395,7 +1404,7 @@ app.post(
         let client;
         let tokenHash;
         let recipient;
-        let resetUrl;
+        let verificationCode;
 
         try {
             client = await pool.connect();
@@ -1434,11 +1443,13 @@ app.post(
                     );
 
                 if (recentRequests.rows[0].count < 3) {
-                    const rawToken =
-                        crypto.randomBytes(32).toString("hex");
+                    verificationCode =
+                        crypto.randomInt(0, 10000)
+                            .toString()
+                            .padStart(4, "0");
                     tokenHash =
-                        crypto.createHash("sha256")
-                            .update(rawToken)
+                        crypto.createHmac("sha256", gmailClientSecret)
+                            .update(verificationCode)
                             .digest("hex");
 
                     await client.query(
@@ -1461,10 +1472,6 @@ app.post(
                     );
 
                     recipient = user.email;
-                    resetUrl = new URL(
-                        `reset-password.html?token=${rawToken}`,
-                        `${frontendOrigin.replace(/\/+$/, "")}/`
-                    ).toString();
                 }
             }
 
@@ -1472,13 +1479,7 @@ app.post(
             client.release();
             client = null;
 
-            if (recipient && resetUrl && tokenHash) {
-                const escapedUrl =
-                    resetUrl.replace(/&/g, "&amp;")
-                        .replace(/</g, "&lt;")
-                        .replace(/>/g, "&gt;")
-                        .replace(/"/g, "&quot;");
-
+            if (recipient && verificationCode && tokenHash) {
                 const gmailClient =
                     new OAuth2Client(
                         gmailClientId,
@@ -1501,8 +1502,8 @@ app.post(
                     `anchor-${crypto.randomBytes(16).toString("hex")}`;
                 const emailHtml =
                     `<p>We received a request to reset your ANCHOR password.</p>` +
-                    `<p><a href="${escapedUrl}">Reset your password</a></p>` +
-                    `<p>This link expires in 30 minutes. If you did not request this, you can ignore this email.</p>`;
+                    `<p>Your password reset code is <strong>${verificationCode}</strong>.</p>` +
+                    `<p>Enter this code on the password reset page within 30 minutes. If you did not request this, you can ignore this email.</p>`;
                 const rawMessage =
                     [
                         `From: ${emailFrom}`,
@@ -1515,7 +1516,7 @@ app.post(
                         "Content-Type: text/plain; charset=UTF-8",
                         "Content-Transfer-Encoding: 8bit",
                         "",
-                        `We received a request to reset your ANCHOR password. Use this link within 30 minutes: ${resetUrl}`,
+                        `We received a request to reset your ANCHOR password. Enter this code on the password reset page within 30 minutes: ${verificationCode}`,
                         "",
                         "If you did not request this, you can ignore this email.",
                         "",
@@ -1561,7 +1562,7 @@ app.post(
 
             return res.json({
                 success: true,
-                message: "If an ANCHOR customer account exists for that email, a password reset link will be sent."
+                message: "If an ANCHOR customer account exists for that email, a password reset code will be sent."
             });
         } catch (error) {
             if (client) {
@@ -1633,17 +1634,180 @@ app.post(
 );
 
 app.post(
+    "/api/auth/verify-reset-code",
+    async (req, res) => {
+        const email =
+            normalizeSignupEmail(req.body.email);
+        const verificationCode =
+            String(req.body.code || "").trim();
+        const invalidCodeMessage =
+            "This code is invalid, expired, or can no longer be used. Request a new code.";
+
+        if (
+            !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+            !/^\d{4}$/.test(verificationCode)
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: invalidCodeMessage
+            });
+        }
+
+        const gmailClientSecret =
+            String(process.env.GOOGLE_CLIENT_SECRET || "").trim();
+        if (!gmailClientSecret) {
+            return res.status(503).json({
+                success: false,
+                message: "Password reset is not configured. Contact the administrator."
+            });
+        }
+
+        const tokenHash =
+            crypto.createHmac("sha256", gmailClientSecret)
+                .update(verificationCode)
+                .digest("hex");
+        const resetToken =
+            crypto.randomBytes(32).toString("hex");
+        const resetTokenHash =
+            crypto.createHash("sha256")
+                .update(resetToken)
+                .digest("hex");
+        const client = await pool.connect();
+        let transactionStarted = false;
+
+        try {
+            await client.query("BEGIN");
+            transactionStarted = true;
+
+            const userResult =
+                await client.query(
+                    `
+                    SELECT id
+                    FROM users
+                    WHERE LOWER(email) = $1
+                      AND LOWER(role) = 'customer'
+                    LIMIT 1
+                    FOR UPDATE
+                    `,
+                    [email]
+                );
+
+            if (userResult.rows.length === 0) {
+                await client.query("ROLLBACK");
+                transactionStarted = false;
+                return res.status(400).json({
+                    success: false,
+                    message: invalidCodeMessage
+                });
+            }
+
+            const userId = userResult.rows[0].id;
+            const tokenResult =
+                await client.query(
+                    `
+                    SELECT token_hash
+                    FROM password_reset_tokens
+                    WHERE user_id = $1
+                      AND expires_at > NOW()
+                      AND used_at IS NULL
+                      AND attempts < 5
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                    FOR UPDATE
+                    `,
+                    [userId]
+                );
+
+            if (tokenResult.rows.length === 0) {
+                await client.query("ROLLBACK");
+                transactionStarted = false;
+                return res.status(400).json({
+                    success: false,
+                    message: invalidCodeMessage
+                });
+            }
+
+            const reset = tokenResult.rows[0];
+            const suppliedHashBuffer = Buffer.from(tokenHash, "hex");
+            const storedHashBuffer = Buffer.from(
+                String(reset.token_hash || "").trim(),
+                "hex"
+            );
+            const codeMatches =
+                storedHashBuffer.length === suppliedHashBuffer.length &&
+                crypto.timingSafeEqual(storedHashBuffer, suppliedHashBuffer);
+
+            if (!codeMatches) {
+                await client.query(
+                    `
+                    UPDATE password_reset_tokens
+                    SET attempts = attempts + 1
+                    WHERE token_hash = $1
+                      AND expires_at > NOW()
+                      AND used_at IS NULL
+                      AND attempts < 5
+                    `,
+                    [reset.token_hash]
+                );
+                await client.query("COMMIT");
+                transactionStarted = false;
+                return res.status(400).json({
+                    success: false,
+                    message: invalidCodeMessage
+                });
+            }
+
+            await client.query(
+                `
+                UPDATE password_reset_tokens
+                SET verified_at = NOW(),
+                    reset_token_hash = $2
+                WHERE token_hash = $1
+                `,
+                [reset.token_hash, resetTokenHash]
+            );
+            await client.query("COMMIT");
+            transactionStarted = false;
+            return res.json({
+                success: true,
+                resetToken,
+                message: "Code verified. Choose a new password."
+            });
+        } catch (error) {
+            if (transactionStarted) {
+                try {
+                    await client.query("ROLLBACK");
+                } catch (rollbackError) {
+                    console.error(
+                        "Password reset code verification rollback error:",
+                        rollbackError
+                    );
+                }
+            }
+
+            console.error("Password reset code verification error:", error);
+            return res.status(500).json({
+                success: false,
+                message: "Unable to verify the code right now."
+            });
+        } finally {
+            client.release();
+        }
+    }
+);
+
+app.post(
     "/api/auth/reset-password",
     async (req, res) => {
-        const token =
-            String(req.body.token || "").trim();
+        const resetToken =
+            String(req.body.resetToken || "").trim();
         const password =
             String(req.body.password || "");
 
-        if (!/^[a-f0-9]{64}$/i.test(token)) {
+        if (!/^[a-f0-9]{64}$/i.test(resetToken)) {
             return res.status(400).json({
                 success: false,
-                message: "This password reset link is invalid or has expired. Request a new one."
+                message: "Verify your email code before choosing a new password."
             });
         }
 
@@ -1657,9 +1821,9 @@ app.post(
             });
         }
 
-        const tokenHash =
+        const resetTokenHash =
             crypto.createHash("sha256")
-                .update(token)
+                .update(resetToken)
                 .digest("hex");
         const client = await pool.connect();
         let transactionStarted = false;
@@ -1675,13 +1839,14 @@ app.post(
                     FROM password_reset_tokens reset
                     JOIN users u
                         ON u.id = reset.user_id
-                    WHERE reset.token_hash = $1
+                    WHERE reset.reset_token_hash = $1
+                      AND reset.verified_at > NOW() - INTERVAL '10 minutes'
                       AND reset.expires_at > NOW()
                       AND reset.used_at IS NULL
                       AND LOWER(u.role) = 'customer'
                     FOR UPDATE OF reset
                     `,
-                    [tokenHash]
+                    [resetTokenHash]
                 );
 
             if (tokenResult.rows.length === 0) {
@@ -1689,7 +1854,7 @@ app.post(
                 transactionStarted = false;
                 return res.status(400).json({
                     success: false,
-                    message: "This password reset link is invalid or has expired. Request a new one."
+                    message: "Your verified code has expired. Request a new code."
                 });
             }
 
@@ -1710,10 +1875,10 @@ app.post(
                 `
                 UPDATE password_reset_tokens
                 SET used_at = NOW()
-                WHERE user_id = $1
+                WHERE reset_token_hash = $1
                   AND used_at IS NULL
                 `,
-                [userId]
+                [resetTokenHash]
             );
 
             await client.query("COMMIT");

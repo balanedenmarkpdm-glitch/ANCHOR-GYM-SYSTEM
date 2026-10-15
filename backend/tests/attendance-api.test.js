@@ -103,16 +103,29 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(forgotPasswordHtml, /id="forgotForm"/);
     assert.match(forgotPasswordHtml, /id="forgotMessage"/);
     assert.match(authJs, /\/api\/auth\/forgot-password/);
-    assert.match(authJs, /Sending reset link\. Please wait\.\.\./);
+    assert.match(authJs, /Sending verification code\. Please wait\.\.\./);
     assert.match(authJs, /The request took too long\. Please try again\./);
+    assert.match(authJs, /\/api\/auth\/verify-reset-code/);
     assert.match(authJs, /\/api\/auth\/reset-password/);
+    assert.match(resetPasswordHtml, /id="verifyResetCodeForm"/);
+    assert.match(resetPasswordHtml, /id="resendResetCode"/);
+    assert.match(authJs, /anchorPasswordResetEmail/);
+    assert.match(authJs, /\/api\/auth\/forgot-password/);
     assert.match(resetPasswordHtml, /id="resetPasswordForm"/);
+    assert.match(resetPasswordHtml, /id="resetPasswordForm" hidden/);
+    assert.equal(
+        (resetPasswordHtml.match(/aria-label="Digit \d of 4"/g) || []).length,
+        4
+    );
+    assert.doesNotMatch(resetPasswordHtml, /id="resetEmail"/);
+    assert.match(backendServer, /crypto\.createHmac\("sha256", gmailClientSecret\)/);
+    assert.match(backendServer, /attempts < 5/);
     assert.match(backendServer, /CREATE TABLE IF NOT EXISTS password_reset_tokens/);
     assert.match(backendServer, /NOW\(\) \+ INTERVAL '30 minutes'/);
     assert.match(backendServer, /GMAIL_REFRESH_TOKEN/);
     assert.match(backendServer, /EMAIL_FROM/);
     assert.match(backendServer, /https:\/\/gmail\.googleapis\.com\/gmail\/v1\/users\/me\/messages\/send/);
-    assert.match(backendServer, /crypto\.createHash\("sha256"\)/);
+    assert.match(backendServer, /crypto\.createHmac\("sha256", gmailClientSecret\)/);
     assert.match(backendServer, /Gmail authorization failed/);
     assert.match(backendServer, /gmail\.send permission/);
     assert.match(
@@ -634,50 +647,67 @@ if (!integrationEnabled) {
         assert.equal(unchanged.rows[0].status, "ACTIVE");
     });
 
-    test("password reset rejects expired and used tokens", async () => {
+    test("password reset rejects expired and used codes", async () => {
         const originalPassword = await pool.query(
             "SELECT password FROM users WHERE id = $1",
             [activeUserId]
         );
+        const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+        process.env.GOOGLE_CLIENT_SECRET = "integration-reset-code-secret";
 
-        for (const state of ["expired", "used"]) {
-            const token =
-                crypto.randomBytes(32).toString("hex");
-            const tokenHash =
-                crypto.createHash("sha256")
-                    .update(token)
-                    .digest("hex");
+        try {
+            for (const state of ["expired", "used"]) {
+                const code =
+                    state === "expired" ? "1234" : "8765";
+                const tokenHash =
+                    crypto.createHmac(
+                        "sha256",
+                        process.env.GOOGLE_CLIENT_SECRET
+                    )
+                        .update(code)
+                        .digest("hex");
 
+                await pool.query(
+                    `
+                    INSERT INTO password_reset_tokens
+                        (token_hash, user_id, expires_at, used_at)
+                    VALUES (
+                        $1,
+                        $2,
+                        CASE WHEN $3 = 'expired'
+                            THEN NOW() - INTERVAL '1 minute'
+                            ELSE NOW() + INTERVAL '30 minutes'
+                        END,
+                        CASE WHEN $3 = 'used' THEN NOW() ELSE NULL END
+                    )
+                    `,
+                    [tokenHash, activeUserId, state]
+                );
+
+                const result = await api(
+                    "/api/auth/verify-reset-code",
+                    {
+                        method: "POST",
+                        body: JSON.stringify({
+                            email: "test-member@example.invalid",
+                            code
+                        })
+                    }
+                );
+
+                assert.equal(result.response.status, 400);
+                assert.match(result.body.message, /invalid, expired/i);
+            }
+        } finally {
             await pool.query(
-                `
-                INSERT INTO password_reset_tokens
-                    (token_hash, user_id, expires_at, used_at)
-                VALUES (
-                    $1,
-                    $2,
-                    CASE WHEN $3 = 'expired'
-                        THEN NOW() - INTERVAL '1 minute'
-                        ELSE NOW() + INTERVAL '30 minutes'
-                    END,
-                    CASE WHEN $3 = 'used' THEN NOW() ELSE NULL END
-                )
-                `,
-                [tokenHash, activeUserId, state]
+                "DELETE FROM password_reset_tokens WHERE user_id = $1",
+                [activeUserId]
             );
-
-            const result = await api(
-                "/api/auth/reset-password",
-                {
-                    method: "POST",
-                    body: JSON.stringify({
-                        token,
-                        password: "new-valid-password"
-                    })
-                }
-            );
-
-            assert.equal(result.response.status, 400);
-            assert.match(result.body.message, /invalid or has expired/i);
+            if (clientSecret === undefined) {
+                delete process.env.GOOGLE_CLIENT_SECRET;
+            } else {
+                process.env.GOOGLE_CLIENT_SECRET = clientSecret;
+            }
         }
 
         const unchangedPassword = await pool.query(
@@ -688,6 +718,152 @@ if (!integrationEnabled) {
             unchangedPassword.rows[0].password,
             originalPassword.rows[0].password
         );
+    });
+
+    test("password reset accepts one valid code and locks it after five incorrect attempts", async () => {
+        const originalPassword = await pool.query(
+            "SELECT password FROM users WHERE id = $1",
+            [activeUserId]
+        );
+        const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+        process.env.GOOGLE_CLIENT_SECRET = "integration-reset-code-secret";
+
+        try {
+            const validCode = "0123";
+            const tokenHash =
+                crypto.createHmac(
+                    "sha256",
+                    process.env.GOOGLE_CLIENT_SECRET
+                )
+                    .update(validCode)
+                    .digest("hex");
+
+            await pool.query(
+                `
+                INSERT INTO password_reset_tokens
+                    (token_hash, user_id, expires_at)
+                VALUES ($1, $2, NOW() + INTERVAL '30 minutes')
+                `,
+                [tokenHash, activeUserId]
+            );
+
+            const wrongCodeHash = crypto.createHmac(
+                "sha256",
+                process.env.GOOGLE_CLIENT_SECRET
+            ).update("9999").digest("hex");
+            assert.notEqual(wrongCodeHash, tokenHash);
+
+            for (let attempt = 0; attempt < 5; attempt += 1) {
+                const result = await api(
+                    "/api/auth/verify-reset-code",
+                    {
+                        method: "POST",
+                        body: JSON.stringify({
+                            email: "test-member@example.invalid",
+                            code: "9999",
+                            password: "new-valid-password"
+                        })
+                    }
+                );
+                assert.equal(result.response.status, 400);
+            }
+
+            const lockedOut = await api(
+                "/api/auth/verify-reset-code",
+                {
+                    method: "POST",
+                    body: JSON.stringify({
+                        email: "test-member@example.invalid",
+                        code: validCode
+                    })
+                }
+            );
+            assert.equal(lockedOut.response.status, 400);
+
+            await pool.query(
+                "DELETE FROM password_reset_tokens WHERE token_hash = $1",
+                [tokenHash]
+            );
+            const successfulCode = "8765";
+            const successfulHash = crypto.createHmac(
+                "sha256",
+                process.env.GOOGLE_CLIENT_SECRET
+            ).update(successfulCode).digest("hex");
+            await pool.query(
+                `
+                INSERT INTO password_reset_tokens
+                    (token_hash, user_id, expires_at)
+                VALUES ($1, $2, NOW() + INTERVAL '30 minutes')
+                `,
+                [successfulHash, activeUserId]
+            );
+
+            const codeVerification = await api(
+                "/api/auth/verify-reset-code",
+                {
+                    method: "POST",
+                    body: JSON.stringify({
+                        email: "test-member@example.invalid",
+                        code: successfulCode
+                    })
+                }
+            );
+            assert.equal(
+                codeVerification.response.status,
+                200,
+                codeVerification.body.message
+            );
+            assert.match(codeVerification.body.resetToken, /^[a-f0-9]{64}$/);
+
+            const success = await api(
+                "/api/auth/reset-password",
+                {
+                    method: "POST",
+                    body: JSON.stringify({
+                        resetToken: codeVerification.body.resetToken,
+                        password: "new-valid-password"
+                    })
+                }
+            );
+            assert.equal(success.response.status, 200, success.body.message);
+            const updatedPassword = await pool.query(
+                "SELECT password FROM users WHERE id = $1",
+                [activeUserId]
+            );
+            assert.equal(
+                await bcrypt.compare(
+                    "new-valid-password",
+                    updatedPassword.rows[0].password
+                ),
+                true
+            );
+
+            const reusedCode = await api(
+                "/api/auth/reset-password",
+                {
+                    method: "POST",
+                    body: JSON.stringify({
+                        resetToken: codeVerification.body.resetToken,
+                        password: "another-valid-password"
+                    })
+                }
+            );
+            assert.equal(reusedCode.response.status, 400);
+        } finally {
+            await pool.query(
+                "UPDATE users SET password = $2 WHERE id = $1",
+                [activeUserId, originalPassword.rows[0].password]
+            );
+            await pool.query(
+                "DELETE FROM password_reset_tokens WHERE user_id = $1",
+                [activeUserId]
+            );
+            if (clientSecret === undefined) {
+                delete process.env.GOOGLE_CLIENT_SECRET;
+            } else {
+                process.env.GOOGLE_CLIENT_SECRET = clientSecret;
+            }
+        }
     });
 
     test("manual check-in, visit-specific checkout, repeat visits, and no fake member payment", async () => {

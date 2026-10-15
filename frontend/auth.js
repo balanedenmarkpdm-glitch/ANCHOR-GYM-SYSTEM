@@ -995,7 +995,7 @@ if (forgotForm) {
             forgotMessage.textContent = "";
             forgotMessage.dataset.state = "";
             forgotMessage.textContent =
-                "Sending reset link. Please wait...";
+                "Sending verification code. Please wait...";
             submitButton.disabled = true;
 
             const abortController =
@@ -1028,7 +1028,11 @@ if (forgotForm) {
                     );
                 }
 
-                forgotMessage.textContent = data.message;
+                window.sessionStorage.setItem(
+                    "anchorPasswordResetEmail",
+                    email
+                );
+                window.location.href = "reset-password.html";
             } catch (error) {
                 console.error("Forgot password request error:", error);
                 forgotMessage.textContent =
@@ -1045,25 +1049,97 @@ if (forgotForm) {
     );
 }
 
+const verifyResetCodeForm =
+    document.getElementById("verifyResetCodeForm");
 const resetPasswordForm =
     document.getElementById("resetPasswordForm");
 
-if (resetPasswordForm) {
+if (verifyResetCodeForm && resetPasswordForm) {
     const resetMessage =
         document.getElementById("resetPasswordMessage");
     const resetPasswordInput =
         document.getElementById("resetPassword");
     const resetPasswordConfirm =
         document.getElementById("resetPasswordConfirm");
-    const resetToken =
-        new URLSearchParams(window.location.search).get("token");
+    const resetRecipient =
+        document.getElementById("resetRecipient");
+    const resetCodeInputs =
+        Array.from(
+            document.querySelectorAll("#resetCodeInputs input")
+        );
+    const resendResetCodeButton =
+        document.getElementById("resendResetCode");
+    const requestNewResetCode =
+        document.getElementById("requestNewResetCode");
+    const resetEmail =
+        window.sessionStorage.getItem("anchorPasswordResetEmail") || "";
+    let resetToken = "";
 
-    if (!resetToken || !/^[a-f0-9]{64}$/i.test(resetToken)) {
+    if (!resetEmail) {
+        verifyResetCodeForm.hidden = true;
         resetMessage.textContent =
-            "This password reset link is invalid. Request a new one.";
+            "Request a verification code first, then enter it here.";
         resetMessage.dataset.state = "error";
-        resetPasswordForm.hidden = true;
+        requestNewResetCode.hidden = false;
+    } else {
+        resetRecipient.textContent = resetEmail;
+        resetCodeInputs[0].focus();
     }
+
+    const clearCodeInputs = function() {
+        resetCodeInputs.forEach(function(input) {
+            input.value = "";
+        });
+        resetCodeInputs[0].focus();
+    };
+
+    const fillCodeInputs = function(startIndex, digits) {
+        const codeDigits = digits.replace(/\D/g, "").slice(0, 4 - startIndex);
+
+        for (let offset = 0; offset < codeDigits.length; offset += 1) {
+            resetCodeInputs[startIndex + offset].value = codeDigits[offset];
+        }
+
+        const nextInput =
+            resetCodeInputs[Math.min(startIndex + codeDigits.length, 3)];
+        nextInput.focus();
+    };
+
+    resetCodeInputs.forEach(function(input, index) {
+        input.addEventListener("input", function() {
+            const digits = input.value.replace(/\D/g, "");
+            input.value = "";
+            if (!digits) {
+                return;
+            }
+            fillCodeInputs(index, digits);
+        });
+
+        input.addEventListener("keydown", function(event) {
+            if (
+                event.key === "Backspace" &&
+                !input.value &&
+                index > 0
+            ) {
+                resetCodeInputs[index - 1].focus();
+            } else if (event.key === "ArrowLeft" && index > 0) {
+                resetCodeInputs[index - 1].focus();
+            } else if (
+                event.key === "ArrowRight" &&
+                index < resetCodeInputs.length - 1
+            ) {
+                resetCodeInputs[index + 1].focus();
+            }
+        });
+
+        input.addEventListener("paste", function(event) {
+            event.preventDefault();
+            fillCodeInputs(
+                index,
+                event.clipboardData.getData("text")
+            );
+        });
+    });
 
     const validateResetPasswordMatch = function() {
         resetPasswordConfirm.setCustomValidity(
@@ -1074,14 +1150,107 @@ if (resetPasswordForm) {
         );
     };
 
-    resetPasswordInput.addEventListener(
-        "input",
-        validateResetPasswordMatch
+    verifyResetCodeForm.addEventListener(
+        "submit",
+        async function(event) {
+            event.preventDefault();
+
+            if (!verifyResetCodeForm.reportValidity()) {
+                return;
+            }
+
+            const submitButton =
+                verifyResetCodeForm.querySelector('button[type="submit"]');
+            submitButton.disabled = true;
+            resetMessage.textContent = "";
+            resetMessage.dataset.state = "";
+
+            try {
+                const response = await fetch(
+                    window.anchorApiUrl("/api/auth/verify-reset-code"),
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            email: resetEmail,
+                            code: resetCodeInputs
+                                .map(input => input.value)
+                                .join("")
+                        })
+                    }
+                );
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(
+                        data.message || "Unable to verify the code."
+                    );
+                }
+                if (!/^[a-f0-9]{64}$/i.test(data.resetToken || "")) {
+                    throw new Error(
+                        "Code verification did not complete. Please try again."
+                    );
+                }
+
+                resetToken = data.resetToken;
+                verifyResetCodeForm.hidden = true;
+                resetPasswordForm.hidden = false;
+                resetMessage.textContent = data.message;
+            } catch (error) {
+                console.error("Password reset code verification error:", error);
+                resetMessage.textContent =
+                    error.message || "Unable to verify the code.";
+                resetMessage.dataset.state = "error";
+                submitButton.disabled = false;
+            }
+        }
     );
-    resetPasswordConfirm.addEventListener(
-        "input",
-        validateResetPasswordMatch
+
+    resendResetCodeButton.addEventListener(
+        "click",
+        async function() {
+            resendResetCodeButton.disabled = true;
+            resetMessage.textContent = "Sending a new verification code...";
+            resetMessage.dataset.state = "";
+
+            try {
+                const response = await fetch(
+                    window.anchorApiUrl("/api/auth/forgot-password"),
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({ email: resetEmail })
+                    }
+                );
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(
+                        data.message || "Unable to resend the verification code."
+                    );
+                }
+
+                resetToken = "";
+                clearCodeInputs();
+                resetMessage.textContent =
+                    "If an account matches this email, a new verification code has been sent.";
+            } catch (error) {
+                console.error("Password reset code resend error:", error);
+                resetMessage.textContent =
+                    error.message || "Unable to resend the verification code.";
+                resetMessage.dataset.state = "error";
+            } finally {
+                resendResetCodeButton.disabled = false;
+            }
+        }
     );
+
+    resetPasswordInput.addEventListener("input", validateResetPasswordMatch);
+    resetPasswordConfirm.addEventListener("input", validateResetPasswordMatch);
 
     resetPasswordForm.addEventListener(
         "submit",
@@ -1108,7 +1277,7 @@ if (resetPasswordForm) {
                             "Content-Type": "application/json"
                         },
                         body: JSON.stringify({
-                            token: resetToken,
+                            resetToken,
                             password: resetPasswordInput.value
                         })
                     }
@@ -1122,6 +1291,9 @@ if (resetPasswordForm) {
                 }
 
                 resetPasswordForm.hidden = true;
+                window.sessionStorage.removeItem(
+                    "anchorPasswordResetEmail"
+                );
                 resetMessage.textContent =
                     "Your password has been reset. You can now sign in.";
                 window.history.replaceState(

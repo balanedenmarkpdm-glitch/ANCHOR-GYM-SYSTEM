@@ -1611,6 +1611,34 @@ textarea:focus-visible {
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 18%, transparent);
 }
 
+:root[data-page="forgot-password"] .verification-code-inputs {
+    display: grid;
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    gap: 7px;
+    margin: 8px 0 18px;
+}
+
+:root[data-page="forgot-password"] .verification-code-inputs input {
+    width: 100%;
+    min-width: 0;
+    min-height: 48px;
+    padding: 4px 0;
+    text-align: center;
+    font-size: 20px;
+    font-weight: 700;
+}
+
+:root[data-page="forgot-password"] .auth-card .secondary-btn {
+    margin-top: 10px;
+    border-color: var(--color-border);
+    background: var(--color-surface-raised);
+    color: var(--color-text);
+}
+
+:root[data-page="forgot-password"] .auth-card .secondary-btn:hover {
+    background: var(--color-surface);
+}
+
 :root:is(
     [data-page="signup"],
     [data-page="forgot-password"]
