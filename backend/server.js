@@ -3,7 +3,6 @@ require("dotenv").config();
 const express = require("express");
 const { Pool } = require("pg");
 const bcrypt = require("bcrypt");
-const nodemailer = require("nodemailer");
 const { OAuth2Client } = require("google-auth-library");
 const fs = require("fs");
 const path = require("path");
@@ -1372,46 +1371,20 @@ app.post(
             });
         }
 
-        const smtpHost =
-            String(process.env.SMTP_HOST || "").trim();
-        const smtpUser =
-            String(process.env.SMTP_USER || "").trim();
-        const smtpPass =
-            String(process.env.SMTP_PASS || "");
-        const smtpPort =
-            Number(process.env.SMTP_PORT || 587);
+        const resendApiKey =
+            String(process.env.RESEND_API_KEY || "").trim();
+        const emailFrom =
+            String(process.env.EMAIL_FROM || "").trim();
 
         if (
-            !smtpHost ||
-            !smtpUser ||
-            !smtpPass ||
-            !Number.isInteger(smtpPort) ||
-            smtpPort < 1 ||
-            smtpPort > 65535
+            !resendApiKey ||
+            !emailFrom
         ) {
             return res.status(503).json({
                 success: false,
-                message: "Password reset email is not configured. Please contact the gym."
+                message: "Password reset email is not configured. Set RESEND_API_KEY and a verified EMAIL_FROM sender on the backend."
             });
         }
-
-        const transporter =
-            nodemailer.createTransport({
-                host: smtpHost,
-                port: smtpPort,
-                connectionTimeout: 10000,
-                greetingTimeout: 10000,
-                socketTimeout: 15000,
-                secure:
-                    String(process.env.SMTP_SECURE || "")
-                        .trim()
-                        .toLowerCase() === "true" ||
-                    smtpPort === 465,
-                auth: {
-                    user: smtpUser,
-                    pass: smtpPass
-                }
-            });
 
         let client;
         let tokenHash;
@@ -1419,8 +1392,6 @@ app.post(
         let resetUrl;
 
         try {
-            await transporter.verify();
-
             client = await pool.connect();
             await client.query("BEGIN");
             await client.query(
@@ -1502,19 +1473,39 @@ app.post(
                         .replace(/>/g, "&gt;")
                         .replace(/"/g, "&quot;");
 
-                await transporter.sendMail({
-                    from: process.env.SMTP_FROM || smtpUser,
-                    to: recipient,
-                    subject: "Reset your ANCHOR Gym System password",
-                    text:
-                        `We received a request to reset your ANCHOR password. ` +
-                        `Use this link within 30 minutes: ${resetUrl}\n\n` +
-                        "If you did not request this, you can ignore this email.",
-                    html:
-                        `<p>We received a request to reset your ANCHOR password.</p>` +
-                        `<p><a href="${escapedUrl}">Reset your password</a></p>` +
-                        `<p>This link expires in 30 minutes. If you did not request this, you can ignore this email.</p>`
-                });
+                const emailResponse =
+                    await fetch(
+                        "https://api.resend.com/emails",
+                        {
+                            method: "POST",
+                            headers: {
+                                Authorization: `Bearer ${resendApiKey}`,
+                                "Content-Type": "application/json"
+                            },
+                            body: JSON.stringify({
+                                from: emailFrom,
+                                to: [recipient],
+                                subject: "Reset your ANCHOR Gym System password",
+                                text:
+                                    `We received a request to reset your ANCHOR password. ` +
+                                    `Use this link within 30 minutes: ${resetUrl}\n\n` +
+                                    "If you did not request this, you can ignore this email.",
+                                html:
+                                    `<p>We received a request to reset your ANCHOR password.</p>` +
+                                    `<p><a href="${escapedUrl}">Reset your password</a></p>` +
+                                    `<p>This link expires in 30 minutes. If you did not request this, you can ignore this email.</p>`
+                            }),
+                            signal: AbortSignal.timeout(15000)
+                        }
+                    );
+
+                if (!emailResponse.ok) {
+                    const error =
+                        new Error("Email provider rejected the reset email request.");
+                    error.statusCode =
+                        emailResponse.status;
+                    throw error;
+                }
             }
 
             return res.json({
@@ -1548,39 +1539,31 @@ app.post(
             }
 
             console.error("Password reset email request error:", error);
-            const errorCode =
+            const providerStatus =
                 error && typeof error === "object"
-                    ? String(error.code || "")
-                    : "";
-            const responseCode =
-                error && typeof error === "object"
-                    ? Number(error.responseCode || 0)
+                    ? Number(error.statusCode || 0)
                     : 0;
             let failureMessage =
                 "Unable to send a password reset email right now. Please try again later.";
 
-            if (
-                errorCode === "EAUTH" ||
-                responseCode === 535
-            ) {
+            if (providerStatus === 401) {
                 failureMessage =
-                    "Gmail rejected SMTP authentication. Verify SMTP_USER is the full Gmail address and SMTP_PASS is a current Google App Password.";
+                    "Resend rejected the API key. Verify RESEND_API_KEY on the backend.";
+            } else if (providerStatus === 403 || providerStatus === 422) {
+                failureMessage =
+                    "Resend rejected the sender address. Verify EMAIL_FROM and confirm its domain or sender is verified in Resend.";
+            } else if (providerStatus === 429) {
+                failureMessage =
+                    "Resend rate-limited the request. Please wait a few minutes and try again.";
+            } else if (providerStatus >= 500) {
+                failureMessage =
+                    "Resend is temporarily unavailable. Please try again later.";
             } else if (
-                [
-                    "ECONNECTION",
-                    "ECONNREFUSED",
-                    "EDNS",
-                    "ESOCKET",
-                    "ETIMEDOUT"
-                ].includes(errorCode)
+                error && typeof error === "object" &&
+                error.name === "TimeoutError"
             ) {
                 failureMessage =
-                    "The email server could not be reached. Verify SMTP_HOST, SMTP_PORT, and SMTP_SECURE in the backend settings.";
-            } else if (
-                responseCode >= 500
-            ) {
-                failureMessage =
-                    "Gmail rejected the reset email. Verify the SMTP account is active and allowed to send mail.";
+                    "The email service took too long to respond. Please try again.";
             }
 
             return res.status(503).json({
@@ -1591,7 +1574,6 @@ app.post(
             if (client) {
                 client.release();
             }
-            transporter.close();
         }
     }
 );

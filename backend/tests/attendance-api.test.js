@@ -109,13 +109,12 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(resetPasswordHtml, /id="resetPasswordForm"/);
     assert.match(backendServer, /CREATE TABLE IF NOT EXISTS password_reset_tokens/);
     assert.match(backendServer, /NOW\(\) \+ INTERVAL '30 minutes'/);
-    assert.match(backendServer, /connectionTimeout:\s*10000/);
-    assert.match(backendServer, /greetingTimeout:\s*10000/);
-    assert.match(backendServer, /socketTimeout:\s*15000/);
+    assert.match(backendServer, /RESEND_API_KEY/);
+    assert.match(backendServer, /EMAIL_FROM/);
+    assert.match(backendServer, /https:\/\/api\.resend\.com\/emails/);
     assert.match(backendServer, /crypto\.createHash\("sha256"\)/);
-    assert.match(backendServer, /Gmail rejected SMTP authentication/);
-    assert.match(backendServer, /current Google App Password/);
-    assert.match(backendServer, /The email server could not be reached/);
+    assert.match(backendServer, /Resend rejected the API key/);
+    assert.match(backendServer, /verified in Resend/);
     assert.match(
         portalTheme,
         /:root\[data-page="admin-login"\] \.auth-card label\[for="adminEmail"\],[\s\S]*?label\[for="adminPassword"\]\s*\{[^}]*color:\s*var\(--color-placeholder\)/s
