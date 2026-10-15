@@ -1548,9 +1548,44 @@ app.post(
             }
 
             console.error("Password reset email request error:", error);
+            const errorCode =
+                error && typeof error === "object"
+                    ? String(error.code || "")
+                    : "";
+            const responseCode =
+                error && typeof error === "object"
+                    ? Number(error.responseCode || 0)
+                    : 0;
+            let failureMessage =
+                "Unable to send a password reset email right now. Please try again later.";
+
+            if (
+                errorCode === "EAUTH" ||
+                responseCode === 535
+            ) {
+                failureMessage =
+                    "Gmail rejected SMTP authentication. Verify SMTP_USER is the full Gmail address and SMTP_PASS is a current Google App Password.";
+            } else if (
+                [
+                    "ECONNECTION",
+                    "ECONNREFUSED",
+                    "EDNS",
+                    "ESOCKET",
+                    "ETIMEDOUT"
+                ].includes(errorCode)
+            ) {
+                failureMessage =
+                    "The email server could not be reached. Verify SMTP_HOST, SMTP_PORT, and SMTP_SECURE in the backend settings.";
+            } else if (
+                responseCode >= 500
+            ) {
+                failureMessage =
+                    "Gmail rejected the reset email. Verify the SMTP account is active and allowed to send mail.";
+            }
+
             return res.status(503).json({
                 success: false,
-                message: "Unable to send a password reset email right now. Please try again later."
+                message: failureMessage
             });
         } finally {
             if (client) {

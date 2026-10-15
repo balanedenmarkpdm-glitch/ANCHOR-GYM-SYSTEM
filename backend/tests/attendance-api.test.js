@@ -113,6 +113,9 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(backendServer, /greetingTimeout:\s*10000/);
     assert.match(backendServer, /socketTimeout:\s*15000/);
     assert.match(backendServer, /crypto\.createHash\("sha256"\)/);
+    assert.match(backendServer, /Gmail rejected SMTP authentication/);
+    assert.match(backendServer, /current Google App Password/);
+    assert.match(backendServer, /The email server could not be reached/);
     assert.match(
         portalTheme,
         /:root\[data-page="admin-login"\] \.auth-card label\[for="adminEmail"\],[\s\S]*?label\[for="adminPassword"\]\s*\{[^}]*color:\s*var\(--color-placeholder\)/s
