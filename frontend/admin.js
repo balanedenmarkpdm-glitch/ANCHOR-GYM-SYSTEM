@@ -12,8 +12,19 @@ let reportPeriod = "daily";
 let attendanceRecords = [];
 let attendanceMembers = [];
 let attendanceMembersPage = 1;
-const attendanceMembersPageSize = 25;
+const attendanceMembersPageSize = 5;
+const memberTablePages = {
+    members: 1,
+    archived: 1
+};
+const memberTablePageSize = 5;
+let adminApplications = [];
+let applicationsPage = 1;
+const applicationsPageSize = 5;
 let transactionFilter = "all";
+let adminTransactions = [];
+let transactionsPage = 1;
+const transactionsPageSize = 8;
 let activeGuestExtensionId = null;
 let guestExtensionQuote = null;
 let guestExtensionRequestKey = null;
@@ -249,6 +260,10 @@ function showPageById(
     id
 ) {
 
+    if (id === "archived-members") {
+        id = "members";
+    }
+
     const button =
         document.querySelector(
             `.sidebar button[onclick*="showPage('${id}'"]`
@@ -293,17 +308,11 @@ async function loadPageData(
         "members"
     ) {
 
-        await loadMembers();
+        await Promise.all([
+            loadMembers(),
+            loadArchivedMembers()
+        ]);
 
-    }
-
-
-    if (
-        id ===
-        "archived-members"
-    ) {
-
-        await loadArchivedMembers();
 
     }
 
@@ -512,10 +521,10 @@ function updateMembershipPie(
             0
         );
 
-    setText(
-        "dashboardMembershipTotal",
-        total
-    );
+    const totalLabel = chart.querySelector(".donut-total");
+    if (totalLabel) {
+        totalLabel.textContent = String(total);
+    }
 
     if (total === 0) {
         chart.style.background =
@@ -562,6 +571,7 @@ async function loadApplications() {
         const applications =
             data.applications ||
             [];
+        adminApplications = applications;
 
 
         const pendingApplications =
@@ -655,9 +665,13 @@ async function loadApplications() {
             ) {
 
                 pendingDashboard.innerHTML = `
-                    <p>
-                        No pending applications.
-                    </p>
+                    <div class="dashboard-empty-state">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                            <path d="M7 3h7l5 5v13H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"></path>
+                            <path d="M14 3v5h5m-8 5h4m-4 4h4"></path>
+                        </svg>
+                        <span>No pending applications.</span>
+                    </div>
                 `;
 
             } else {
@@ -745,41 +759,11 @@ async function loadApplications() {
         // APPLICATION TABLE
         // ---------------------------------
 
-        const tableBody =
-            document.getElementById(
-                "applicationsTableBody"
-            );
-
-
-        if (tableBody) {
-
-            if (applications.length === 0) {
-
-                tableBody.innerHTML = `
-                    <tr>
-                        <td
-                            colspan="10"
-                            style="text-align:center;">
-                            No applications found.
-                        </td>
-                    </tr>
-                `;
-
-            } else {
-
-                tableBody.innerHTML =
-                    applications
-                        .map(
-                            application =>
-                                createApplicationRow(
-                                    application
-                                )
-                        )
-                        .join("");
-
-            }
-
-        }
+        applicationsPage = Math.min(
+            applicationsPage,
+            Math.max(1, Math.ceil(applications.length / applicationsPageSize))
+        );
+        renderApplicationsTable(applications);
 
 
     } catch (error) {
@@ -791,6 +775,61 @@ async function loadApplications() {
 
     }
 
+}
+
+
+function changeApplicationsPage(change) {
+    const totalPages = Math.max(
+        1,
+        Math.ceil(adminApplications.length / applicationsPageSize)
+    );
+    applicationsPage = Math.min(
+        totalPages,
+        Math.max(1, applicationsPage + change)
+    );
+    renderApplicationsTable(adminApplications);
+}
+
+
+function renderApplicationsTable(applications) {
+    const tableBody = document.getElementById("applicationsTableBody");
+    if (!tableBody) {
+        return;
+    }
+
+    const totalPages = Math.max(
+        1,
+        Math.ceil(applications.length / applicationsPageSize)
+    );
+    applicationsPage = Math.min(applicationsPage, totalPages);
+    const start = (applicationsPage - 1) * applicationsPageSize;
+    const visibleApplications = applications.slice(
+        start,
+        start + applicationsPageSize
+    );
+
+    setText(
+        "applicationsPageStatus",
+        `Page ${applicationsPage} of ${totalPages} · ${applications.length} ${applications.length === 1 ? "application" : "applications"}`
+    );
+    const previousButton = document.getElementById("applicationsPreviousPage");
+    const nextButton = document.getElementById("applicationsNextPage");
+    if (previousButton) {
+        previousButton.disabled = applicationsPage <= 1;
+    }
+    if (nextButton) {
+        nextButton.disabled = applicationsPage >= totalPages;
+    }
+
+    tableBody.innerHTML = visibleApplications.length
+        ? visibleApplications.map(createApplicationRow).join("")
+        : `
+            <tr>
+                <td colspan="9" class="applications-empty-state">
+                    No applications found.
+                </td>
+            </tr>
+        `;
 }
 
 
@@ -846,12 +885,15 @@ function createApplicationRow(
                     onclick="viewScreenshot('${escapeAttribute(
                         application.payment_screenshot
                     )}')">
-
-                    View Payment Screenshot
-
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+                        <circle cx="8.5" cy="9" r="1.5"></circle>
+                        <path d="m21 15-5-5L5 20"></path>
+                    </svg>
+                    <span>View Payment<br>Screenshot</span>
                 </button>
             `
-            : "None";
+            : "—";
 
 
     const actions =
@@ -876,24 +918,30 @@ function createApplicationRow(
 
                 </button>
             `
-            : escapeHtml(
-                status
-            );
+            : "—";
 
 
     return `
         <tr>
 
-            <td>
-                ${escapeHtml(
-                    application.full_name ||
-                    "-"
-                )}
+            <td class="application-applicant">
+                ${escapeHtml(application.full_name || "-")}
             </td>
 
-            <td>
-                ${escapeHtml(application.email || "-")}
-                <small>${escapeHtml(application.phone || "-")}</small>
+            <td class="application-contact">
+                <span>
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <rect x="3" y="5" width="18" height="14" rx="2"></rect>
+                        <path d="m4 7 8 6 8-6"></path>
+                    </svg>
+                    ${escapeHtml(application.email || "-")}
+                </span>
+                <span>
+                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M7 3h3l2 5-2 1.5a14 14 0 0 0 4.5 4.5L16 12l5 2v3a2 2 0 0 1-2 2C10 19 5 14 5 5a2 2 0 0 1 2-2Z"></path>
+                    </svg>
+                    ${escapeHtml(application.phone || "-")}
+                </span>
             </td>
 
             <td>
@@ -915,9 +963,10 @@ function createApplicationRow(
             </td>
 
             <td>
-                ${formatDate(
-                    application.payment_date
-                )}
+                <span class="application-payment-date">
+                    ${formatDate(application.payment_date)}
+                    <small>${formatTime(application.payment_date)}</small>
+                </span>
             </td>
 
             <td>
@@ -937,17 +986,36 @@ function createApplicationRow(
 
             </td>
 
-            <td>
+            <td class="application-decision">
                 ${actions}
-            </td>
-
-            <td>
-                ${escapeHtml(application.rejection_reason || "-")}
+                ${
+                    status === "REJECTED" && application.rejection_reason
+                        ? `<small class="application-rejection-reason">${escapeHtml(application.rejection_reason)}</small>`
+                        : ""
+                }
             </td>
 
         </tr>
     `;
 
+}
+
+
+function formatTime(value) {
+    if (!value) {
+        return "—";
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+        return "—";
+    }
+
+    return date.toLocaleTimeString("en-US", {
+        timeZone: "Asia/Manila",
+        hour: "numeric",
+        minute: "2-digit"
+    });
 }
 
 
@@ -1717,7 +1785,7 @@ async function loadMembers() {
         ) {
 
             body.innerHTML = `
-                <tr>
+                <tr class="member-empty-row">
                     <td
                         colspan="8"
                         style="text-align:center;">
@@ -1726,6 +1794,7 @@ async function loadMembers() {
                 </tr>
             `;
 
+            applyMemberTablePagination("members");
             updateBulkSelection(
                 "membersTableBody",
                 "selectAllMembers",
@@ -1773,18 +1842,25 @@ async function loadMembers() {
                                 )}
                             </td>
 
-                            <td>
-                                ${escapeHtml(
-                                    member.registration_type ||
-                                    "-"
-                                )}
+                            <td class="member-contact-cell">
+                                <span>
+                                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                        <rect x="3" y="5" width="18" height="14" rx="2"></rect>
+                                        <path d="m4 7 8 6 8-6"></path>
+                                    </svg>
+                                    ${escapeHtml(member.email || "-")}
+                                </span>
+                                <span>
+                                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                        <path d="M7 3h3l2 5-2 1.5a14 14 0 0 0 4.5 4.5L16 12l5 2v3a2 2 0 0 1-2 2C10 19 5 14 5 5a2 2 0 0 1 2-2Z"></path>
+                                    </svg>
+                                    ${escapeHtml(member.phone || "-")}
+                                </span>
                             </td>
 
-                            <td>
-                                ${escapeHtml(
-                                    member.membership_plan ||
-                                    "-"
-                                )}
+                            <td class="member-plan-cell">
+                                <span>Monthly</span>
+                                <small>₱800</small>
                             </td>
 
                             <td>
@@ -2114,6 +2190,7 @@ function filterTableRows(
     );
 
     if (tableBodyId === "membersTableBody") {
+        applyMemberTablePagination("members");
         updateBulkSelection(
             "membersTableBody",
             "selectAllMembers",
@@ -2123,7 +2200,100 @@ function filterTableRows(
     }
 
     if (tableBodyId === "archivedMembersTableBody") {
+        applyMemberTablePagination("archived");
         updateArchiveMemberSelection();
+    }
+}
+
+
+function changeMemberTablePage(tableName, change) {
+    if (!Object.prototype.hasOwnProperty.call(memberTablePages, tableName)) {
+        return;
+    }
+
+    memberTablePages[tableName] = Math.max(
+        1,
+        memberTablePages[tableName] + change
+    );
+    applyMemberTablePagination(tableName);
+
+    if (tableName === "members") {
+        updateBulkSelection(
+            "membersTableBody",
+            "selectAllMembers",
+            "archiveSelectedMembersButton",
+            "membersSelectedCount"
+        );
+    } else {
+        updateArchiveMemberSelection();
+    }
+}
+
+
+function applyMemberTablePagination(tableName) {
+    const config = tableName === "members"
+        ? {
+            bodyId: "membersTableBody",
+            searchId: "membersSearch",
+            statusId: "membersPageStatus",
+            previousId: "membersPreviousPage",
+            nextId: "membersNextPage",
+            noun: "members"
+        }
+        : {
+            bodyId: "archivedMembersTableBody",
+            searchId: "archivedMembersSearch",
+            statusId: "archivedMembersPageStatus",
+            previousId: "archivedMembersPreviousPage",
+            nextId: "archivedMembersNextPage",
+            noun: "archived members"
+        };
+    const body = document.getElementById(config.bodyId);
+    if (!body) {
+        return;
+    }
+
+    const query = (
+        document.getElementById(config.searchId)?.value || ""
+    ).trim().toLowerCase();
+    const rows = Array.from(body.querySelectorAll("tr"))
+        .filter(row => !row.classList.contains("member-empty-row"));
+    const matchedRows = rows.filter(row =>
+        !query || row.textContent.toLowerCase().includes(query)
+    );
+    const totalPages = Math.max(
+        1,
+        Math.ceil(matchedRows.length / memberTablePageSize)
+    );
+    memberTablePages[tableName] = Math.min(
+        memberTablePages[tableName],
+        totalPages
+    );
+    const start = (memberTablePages[tableName] - 1) * memberTablePageSize;
+    const visibleRows = new Set(
+        matchedRows.slice(start, start + memberTablePageSize)
+    );
+
+    for (const row of rows) {
+        row.hidden = !visibleRows.has(row);
+    }
+
+    setText(
+        config.statusId,
+        `Page ${memberTablePages[tableName]} of ${totalPages} · ${matchedRows.length} ${config.noun}`
+    );
+    const previousButton = document.getElementById(config.previousId);
+    const nextButton = document.getElementById(config.nextId);
+    if (previousButton) {
+        previousButton.disabled = memberTablePages[tableName] <= 1;
+    }
+    if (nextButton) {
+        nextButton.disabled = memberTablePages[tableName] >= totalPages;
+    }
+
+    const emptyRow = body.querySelector(".member-empty-row");
+    if (emptyRow) {
+        emptyRow.hidden = matchedRows.length > 0;
     }
 }
 
@@ -2449,7 +2619,7 @@ async function loadArchivedMembers() {
         ) {
 
             body.innerHTML = `
-                <tr>
+                <tr class="member-empty-row">
                     <td
                         colspan="9"
                         style="text-align:center;">
@@ -2458,6 +2628,7 @@ async function loadArchivedMembers() {
                 </tr>
             `;
 
+            applyMemberTablePagination("archived");
             updateArchiveMemberSelection();
 
             return;
@@ -2615,7 +2786,7 @@ async function loadArchivedMembers() {
 
 
         body.innerHTML = `
-            <tr>
+            <tr class="member-empty-row">
                 <td
                     colspan="9"
                     style="text-align:center;">
@@ -2623,6 +2794,7 @@ async function loadArchivedMembers() {
                 </td>
             </tr>
         `;
+        applyMemberTablePagination("archived");
 
     }
 
@@ -2768,7 +2940,7 @@ async function restoreSelectedArchivedMembers() {
 // =====================================
 
 async function loadTransactions(
-    filterType = transactionFilter
+    filterType = document.getElementById("transactionTypeFilter")?.value || transactionFilter
 ) {
 
     try {
@@ -2778,57 +2950,21 @@ async function loadTransactions(
         }
 
         transactionFilter = filterType;
-        document
-            .querySelectorAll("[data-transaction-filter]")
-            .forEach(button => {
-                button.setAttribute(
-                    "aria-pressed",
-                    String(button.dataset.transactionFilter === transactionFilter)
-                );
-            });
+        const filterSelect =
+            document.getElementById("transactionTypeFilter");
+
+        if (filterSelect) {
+            filterSelect.value = transactionFilter;
+        }
 
         const data =
             await apiRequest(
                 `/api/admin/transactions?type=${encodeURIComponent(transactionFilter)}`
             );
 
-        const body = document.getElementById("transactionsTableBody");
-        const transactions = data.transactions || [];
-        if (!body) {
-            return;
-        }
-
-        body.innerHTML = transactions.length
-            ? transactions.map(transaction => `
-                <tr>
-                    <td>
-                        <strong>${escapeHtml(transaction.transaction_id || "-")}</strong>
-                        <small class="transaction-reference">${escapeHtml(transaction.reference || "—")}</small>
-                    </td>
-                    <td>${escapeHtml(transaction.customer_name || "-")}</td>
-                    <td>${escapeHtml(transaction.person_type || "-")}</td>
-                    <td>${escapeHtml(transaction.description || "-")}</td>
-                    <td>${escapeHtml(transaction.related_visit || "Not linked to a visit")}</td>
-                    <td>${transaction.check_in ? formatDateTime(transaction.check_in) : "—"}</td>
-                    <td>${transaction.check_out ? formatDateTime(transaction.check_out) : "—"}</td>
-                    <td>${escapeHtml(transaction.extension || "—")}</td>
-                    <td>₱${Number(transaction.amount || 0).toLocaleString()}</td>
-                    <td>${escapeHtml(transaction.payment_method || "—")}</td>
-                    <td>
-                        <span class="status ${getStatusClass(transaction.payment_status)}">
-                            ${escapeHtml(getStatus(transaction.payment_status) || "—")}
-                        </span>
-                    </td>
-                    <td>${formatDateTime(transaction.transaction_date)}</td>
-                </tr>
-            `).join("")
-            : `
-                <tr>
-                    <td colspan="12" style="text-align:center;">
-                        No transactions found for this filter.
-                    </td>
-                </tr>
-            `;
+        adminTransactions = data.transactions || [];
+        transactionsPage = 1;
+        renderTransactionsTable();
 
     } catch (error) {
 
@@ -2839,8 +2975,8 @@ async function loadTransactions(
         const body = document.getElementById("transactionsTableBody");
         if (body) {
             body.innerHTML = `
-                <tr>
-                    <td colspan="12" style="text-align:center;">
+                <tr class="member-empty-row">
+                    <td colspan="10" style="text-align:center;">
                         ${escapeHtml(error.message || "Unable to load transactions.")}
                     </td>
                 </tr>
@@ -2849,6 +2985,137 @@ async function loadTransactions(
 
     }
 
+}
+
+
+function changeTransactionsPage(change) {
+    const totalPages = Math.max(
+        1,
+        Math.ceil(adminTransactions.length / transactionsPageSize)
+    );
+    transactionsPage = Math.min(
+        totalPages,
+        Math.max(1, transactionsPage + change)
+    );
+    renderTransactionsTable();
+}
+
+
+function renderTransactionsTable() {
+    const body = document.getElementById("transactionsTableBody");
+    if (!body) {
+        return;
+    }
+
+    const totalPages = Math.max(
+        1,
+        Math.ceil(adminTransactions.length / transactionsPageSize)
+    );
+    transactionsPage = Math.min(transactionsPage, totalPages);
+    const start = (transactionsPage - 1) * transactionsPageSize;
+    const transactions = adminTransactions.slice(
+        start,
+        start + transactionsPageSize
+    );
+
+    setText(
+        "transactionsPageStatus",
+        `Page ${transactionsPage} of ${totalPages} · ${adminTransactions.length} ${adminTransactions.length === 1 ? "transaction" : "transactions"}`
+    );
+    const previousButton = document.getElementById("transactionsPreviousPage");
+    const nextButton = document.getElementById("transactionsNextPage");
+    if (previousButton) {
+        previousButton.disabled = transactionsPage <= 1;
+    }
+    if (nextButton) {
+        nextButton.disabled = transactionsPage >= totalPages;
+    }
+
+    body.innerHTML = transactions.length
+        ? transactions.map(transaction => {
+            const memberId =
+                transaction.member_id && transaction.person_type === "MEMBER"
+                    ? `<small class="transaction-member-id">${escapeHtml(transaction.member_id)}</small>`
+                    : "";
+            const accessType =
+                transaction.access_type ||
+                transaction.extension ||
+                "—";
+            const visitInfo =
+                transaction.related_visit &&
+                transaction.related_visit !== "Not linked to a visit"
+                    ? `
+                        <small class="transaction-context">
+                            ${escapeHtml(transaction.related_visit)}
+                            ${
+                                transaction.check_in
+                                    ? `<br>In: ${escapeHtml(formatDateTime(transaction.check_in))}`
+                                    : ""
+                            }
+                            ${
+                                transaction.check_out
+                                    ? `<br>Out: ${escapeHtml(formatDateTime(transaction.check_out))}`
+                                    : ""
+                            }
+                        </small>
+                    `
+                    : "";
+            const screenshot = transaction.payment_screenshot
+                ? `
+                    <button
+                        class="small-btn application-proof-button"
+                        type="button"
+                        onclick="viewScreenshot('${escapeAttribute(transaction.payment_screenshot)}')">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                            <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+                            <circle cx="8.5" cy="9" r="1.5"></circle>
+                            <path d="m21 15-5-5L5 20"></path>
+                        </svg>
+                        <span>View Payment<br>Screenshot</span>
+                    </button>
+                `
+                : "—";
+
+            return `
+                <tr>
+                    <td>
+                        <strong>${escapeHtml(transaction.transaction_id || "—")}</strong>
+                        <small class="transaction-reference">${escapeHtml(transaction.reference || "—")}</small>
+                    </td>
+                    <td>
+                        <span class="transaction-customer-name">${escapeHtml(transaction.customer_name || "—")}</span>
+                        ${memberId}
+                    </td>
+                    <td><span class="transaction-person-type ${transaction.person_type === "MEMBER" ? "member" : "guest"}">${escapeHtml(transaction.person_type || "—")}</span></td>
+                    <td>
+                        <span>${escapeHtml(transaction.description || "—")}</span>
+                        ${visitInfo}
+                    </td>
+                    <td>${escapeHtml(accessType)}</td>
+                    <td>₱${Number(transaction.amount || 0).toLocaleString()}</td>
+                    <td>${escapeHtml(transaction.payment_method || "—")}</td>
+                    <td>
+                        <span class="status ${getStatusClass(transaction.payment_status)}">
+                            ${escapeHtml(getStatus(transaction.payment_status) || "—")}
+                        </span>
+                    </td>
+                    <td>
+                        <span class="transaction-date">
+                            ${formatDate(transaction.transaction_date)}
+                            <small>${formatTime(transaction.transaction_date)}</small>
+                        </span>
+                    </td>
+                    <td>${screenshot}</td>
+                </tr>
+            `;
+        }).join("")
+        : `
+            <tr>
+                <td colspan="10" class="applications-empty-state">
+                    No transactions found for this filter.
+                </td>
+            </tr>
+        `;
 }
 
 
@@ -2932,12 +3199,6 @@ async function loadAttendance(
             "attendanceDuplicateOpenPeople",
             Number(data.duplicateOpenPeople || 0)
         );
-        setText(
-            "attendanceTimeoutAlert",
-            timedOutGuests > 0
-                ? `${timedOutGuests} guest access pass(es) have expired. They are TIMED OUT and excluded from occupancy; no checkout time is fabricated.`
-                : ""
-        );
 
         setText(
             "dashboardOccupancy",
@@ -2975,7 +3236,7 @@ async function loadAttendance(
             body.innerHTML = `
                 <tr>
                     <td
-                        colspan="8"
+                        colspan="7"
                         style="text-align:center;"
                     >
                         No attendance records found.
@@ -3013,7 +3274,7 @@ async function loadAttendance(
                             isCheckedOut
                                 ? "CHECKED OUT"
                                 : isTimedOut
-                                    ? "TIMED OUT"
+                                    ? "TIME OUT"
                                     : "CHECKED IN";
 
                         let remainingHtml =
@@ -3069,15 +3330,6 @@ async function loadAttendance(
                                         </small>
                                     `;
 
-                                } else {
-                                    remainingHtml = `
-                                        <span class="timed-out-label">
-                                            TIMED OUT / OVERDUE
-                                        </span>
-                                        <small class="countdown-note">
-                                            Paid access ended; not counted in occupancy
-                                        </small>
-                                    `;
                                 }
                             }
 
@@ -3089,10 +3341,10 @@ async function loadAttendance(
                                             ? `
                                                 <button
                                                     type="button"
-                                                    class="small-btn"
+                                                    class="attendance-action-link"
                                                     onclick="openGuestExtension(${Number(record.id)})"
                                                 >
-                                                    Extend Time / Upgrade to All-Day
+                                                    Extend Time
                                                 </button>
                                                       `
                                             : ""
@@ -3105,17 +3357,7 @@ async function loadAttendance(
 
                             remainingHtml = "<span>—</span>";
 
-                            actionHtml = isCheckedOut
-                                ? ""
-                                : `
-                                        <button
-                                            type="button"
-                                            class="small-btn"
-                                            onclick="checkoutAttendance(${Number(record.id)})"
-                                        >
-                                            Check Out
-                                        </button>
-                                      `;
+                            actionHtml = "";
                         }
 
                         return `
@@ -3144,12 +3386,6 @@ async function loadAttendance(
                                 </td>
 
                                 <td>
-                                    ${record.check_out
-                                        ? formatDateTime(record.check_out)
-                                        : "-"}
-                                </td>
-
-                                <td>
                                     ${formatVisitDuration(record.duration_seconds)}
                                 </td>
 
@@ -3158,7 +3394,7 @@ async function loadAttendance(
                                 </td>
 
                                 <td>
-                                    <span class="${visitStatus === "TIMED OUT" ? "timed-out-label" : `visit-status ${getStatusClass(visitStatus)}`}">
+                                    <span class="${visitStatus === "CHECKED OUT" || visitStatus === "TIME OUT" ? "timed-out-label" : "visit-status checked-in"}">
                                         ${visitStatus}
                                     </span>
                                 </td>
@@ -3267,8 +3503,16 @@ function renderAttendanceMembers() {
 
     setText(
         "attendanceMembersPageStatus",
-        `Page ${attendanceMembersPage} of ${totalPages} · ${filteredMembers.length} member(s)`
+        `Page ${attendanceMembersPage} of ${totalPages} · ${filteredMembers.length} ${filteredMembers.length === 1 ? "member" : "members"}`
     );
+    const previousPageButton = document.getElementById("attendanceMembersPreviousPage");
+    const nextPageButton = document.getElementById("attendanceMembersNextPage");
+    if (previousPageButton) {
+        previousPageButton.disabled = attendanceMembersPage <= 1;
+    }
+    if (nextPageButton) {
+        nextPageButton.disabled = attendanceMembersPage >= totalPages;
+    }
     if (pageMembers.length === 0) {
         body.innerHTML = `
             <tr>
@@ -3290,23 +3534,36 @@ function renderAttendanceMembers() {
             ? `<span class="status expired">EXPIRED</span>`
             : `<span class="status ${getStatusClass(member.status)}">${escapeHtml(getStatus(member.status))}</span>`;
         const attendanceStatus = openVisits.length > 1
-            ? `Multiple Open Visits (${openVisits.length})`
+            ? `<span class="member-attendance-state inside">Multiple Open Visits (${openVisits.length})</span>`
             : openVisits.length === 1
-                ? "Inside Gym"
-                : "Not Checked In";
+                ? `<span class="member-attendance-state inside">Inside Gym</span>`
+                : `<span class="member-attendance-state not-inside">Not Checked In</span>`;
         const checkInTime = openVisits.length
             ? openVisits.map(visit => escapeHtml(formatDateTime(visit.check_in))).join("<br>")
             : "—";
         const actions = openVisits.length
             ? openVisits.map(visit => `
-                <button class="small-btn" type="button"
-                    onclick="manualMemberCheckOut(${Number(visit.id)})">
-                    Check Out Visit #${Number(visit.id)}
+                <button
+                    class="remove-button attendance-checkout-button"
+                    type="button"
+                    onclick="checkoutAttendance(${Number(visit.id)})"
+                    aria-label="Check out visit ${Number(visit.id)} for ${escapeAttribute(member.full_name || "member")}">
+                    <svg class="attendance-button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M10 17 15 12 10 7"></path>
+                        <path d="M15 12H3"></path>
+                        <path d="M13 4h6a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"></path>
+                    </svg>
+                    Check Out
                 </button>
             `).join("")
             : eligible
-                ? `<button class="restore-button" type="button"
+                ? `<button class="restore-button attendance-checkin-button" type="button"
                     onclick="manualMemberCheckIn(${Number(member.id)})">
+                    <svg class="attendance-button-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M14 7 9 12l5 5"></path>
+                        <path d="M9 12h12"></path>
+                        <path d="M11 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h6"></path>
+                    </svg>
                     Check In
                   </button>`
                 : `<span class="attendance-ineligible-reason">
@@ -3318,7 +3575,7 @@ function renderAttendanceMembers() {
                 <td>${escapeHtml(member.member_id || "—")}</td>
                 <td>${escapeHtml(member.full_name || "—")}</td>
                 <td>${membershipStatus}</td>
-                <td>${escapeHtml(attendanceStatus)}</td>
+                <td>${attendanceStatus}</td>
                 <td>${checkInTime}</td>
                 <td><div class="attendance-actions">${actions}</div></td>
             </tr>
@@ -3527,7 +3784,7 @@ async function updateGuestCountdowns() {
             );
 
             element.textContent =
-                "TIMED OUT";
+                "TIME OUT";
 
             if (
                 element.dataset.timeoutRefreshed !== "true" &&
@@ -3647,73 +3904,6 @@ async function checkoutAttendance(attendanceId) {
     }
 }
 
-async function searchManualMembers(event) {
-    event.preventDefault();
-    const input = document.getElementById("manualAttendanceSearch");
-    const results = document.getElementById("manualAttendanceResults");
-    const query = input?.value.trim() || "";
-
-    if (!results || query.length < 2) {
-        return;
-    }
-
-    results.textContent = "Searching members...";
-    try {
-        const data = await apiRequest(
-            `/api/admin/members/search?query=${encodeURIComponent(query)}`
-        );
-        const members = data.members || [];
-        results.innerHTML = members.length
-            ? members.map(member => {
-                const openVisits = Array.isArray(member.open_visits)
-                    ? member.open_visits
-                    : [];
-                const expired = member.expired === true;
-                let actions;
-
-                if (openVisits.length) {
-                    actions = openVisits.map(visit => `
-                        <button class="small-btn" type="button"
-                            onclick="manualMemberCheckOut(${Number(visit.id)})">
-                            Check Out Visit #${Number(visit.id)} · ${escapeHtml(formatDateTime(visit.check_in))}
-                        </button>
-                    `).join("");
-                } else if (member.eligible) {
-                    actions = `
-                        <button class="restore-button" type="button"
-                            onclick="manualMemberCheckIn(${Number(member.id)})">
-                            Check In Member
-                        </button>
-                    `;
-                } else {
-                    actions = `<span class="status ${expired ? "expired" : getStatusClass(member.status)}">
-                        ${expired ? "EXPIRED" : escapeHtml(getStatus(member.status))}
-                    </span>`;
-                }
-
-                return `
-                    <article class="manual-attendance-result">
-                        <div>
-                            <strong>${escapeHtml(member.full_name || "-")}</strong>
-                            <span>${escapeHtml(member.member_id || "-")}</span>
-                            <span class="status ${getStatusClass(member.status)}">
-                                ${escapeHtml(getStatus(member.status))}
-                            </span>
-                            ${expired ? '<span class="status expired">EXPIRED</span>' : ""}
-                        </div>
-                        <div class="manual-attendance-actions">
-                            ${actions}
-                        </div>
-                    </article>
-                `;
-            }).join("")
-            : `<p class="empty-state">No matching members found.</p>`;
-    } catch (error) {
-        console.error("Manual attendance error:", error);
-        results.textContent = error.message || "Unable to search members.";
-    }
-}
-
 async function manualMemberCheckIn(memberRecordId) {
     if (!confirm("Record this member's check-in now?")) {
         return;
@@ -3722,17 +3912,6 @@ async function manualMemberCheckIn(memberRecordId) {
     await submitManualAttendance({
         action: "CHECK_IN",
         member_record_id: Number(memberRecordId)
-    });
-}
-
-async function manualMemberCheckOut(attendanceId) {
-    if (!confirm("Record the actual departure for this specific visit?")) {
-        return;
-    }
-
-    await submitManualAttendance({
-        action: "CHECK_OUT",
-        attendance_id: Number(attendanceId)
     });
 }
 
@@ -3750,10 +3929,6 @@ async function submitManualAttendance(payload) {
         );
 
         alert(data.message || "Attendance updated.");
-        const searchForm = document.getElementById("manualMemberSearchForm");
-        if (searchForm) {
-            await searchManualMembers({ preventDefault() {} });
-        }
         await Promise.all([
             loadAttendance(),
             loadAdminDashboard(),
@@ -5054,8 +5229,8 @@ async function loadReports(
                             <td>${formatVisitDuration(record.duration_seconds)}</td>
                             <td>${escapeHtml(record.guest_time_purchased || "-")}</td>
                             <td>
-                                <span class="${record.visit_status === "TIMED OUT" ? "timed-out-label" : "visit-status"}">
-                                    ${escapeHtml(record.visit_status || "-")}
+                                <span class="${record.visit_status === "TIMED OUT" || record.visit_status === "CHECKED OUT" ? "timed-out-label" : "visit-status checked-in"}">
+                                    ${escapeHtml(record.visit_status === "TIMED OUT" ? "TIME OUT" : record.visit_status || "-")}
                                 </span>
                             </td>
                         </tr>
@@ -5477,8 +5652,8 @@ function getStatusClass(
     if (
         normalized ===
         "APPROVED" ||
-        normalized ===
-        "VERIFIED"
+        normalized === "VERIFIED" ||
+        normalized === "CONFIRMED"
     ) {
 
         return "approved";

@@ -2356,6 +2356,8 @@ app.get(
                         qr_code
                     FROM members
                     WHERE user_id = $1
+                      AND archived_at IS NULL
+                      AND UPPER(status) <> 'REVOKED'
                     ORDER BY id DESC
                     LIMIT 1
                     `,
@@ -2594,6 +2596,10 @@ app.get(
 app.get(
     "/api/admin/applications/:applicationId/screenshot",
     async (req, res) => {
+        if (!requireAdministrator(req, res)) {
+            return;
+        }
+
         const applicationId =
             Number(req.params.applicationId);
 
@@ -4137,8 +4143,16 @@ app.get(
                         m.member_id,
                         u.full_name,
                         u.email,
+                        u.phone,
                         m.registration_type,
                         m.membership_plan,
+                        (
+                            SELECT mt.amount
+                            FROM member_transactions mt
+                            WHERE mt.user_id = m.user_id
+                            ORDER BY mt.transaction_date DESC NULLS LAST, mt.id DESC
+                            LIMIT 1
+                        ) AS amount,
                         m.start_date,
                         m.expiration_date,
                         m.paused_days_remaining,
@@ -5372,6 +5386,8 @@ app.get(
                 });
             }
 
+            await ensurePaymentScreenshotColumn();
+
             const result = await pool.query(
                 `
                 SELECT *
@@ -5380,6 +5396,7 @@ app.get(
                         'MEMBER-' || t.id::text AS transaction_id,
                         t.id AS record_id,
                         u.full_name AS customer_name,
+                        COALESCE(gym_member.member_id, '—') AS member_id,
                         'MEMBER'::text AS person_type,
                         'Membership Payment'::text AS description,
                         'Membership payment (not linked to an attendance visit)'::text
@@ -5387,6 +5404,7 @@ app.get(
                         NULL::timestamp without time zone AS check_in,
                         NULL::timestamp without time zone AS check_out,
                         NULL::text AS extension,
+                        'Monthly'::text AS access_type,
                         t.amount,
                         t.payment_method,
                         CASE
@@ -5401,10 +5419,26 @@ app.get(
                         END AS payment_status,
                         COALESCE(NULLIF(t.gcash_reference, ''), '—') AS reference,
                         COALESCE(t.transaction_date, t.created_at) AS transaction_date,
-                        NULL::bigint AS attendance_id
+                        NULL::bigint AS attendance_id,
+                        CASE
+                            WHEN app.payment_screenshot IS NULL THEN NULL
+                            ELSE '/api/admin/applications/' ||
+                                t.application_id::text || '/screenshot'
+                        END AS payment_screenshot
                     FROM member_transactions t
                     JOIN users u
                         ON u.id = t.user_id
+                    LEFT JOIN LATERAL (
+                        SELECT m.member_id
+                        FROM members m
+                        WHERE m.user_id = t.user_id
+                        ORDER BY
+                            CASE WHEN m.id = t.member_id THEN 0 ELSE 1 END,
+                            m.id DESC
+                        LIMIT 1
+                    ) gym_member ON TRUE
+                    LEFT JOIN applications app
+                        ON app.id = t.application_id
                     WHERE $1 <> 'guest'
 
                     UNION ALL
@@ -5413,6 +5447,7 @@ app.get(
                         'GUEST-' || gt.id::text AS transaction_id,
                         gt.id AS record_id,
                         gt.guest_name AS customer_name,
+                        NULL::text AS member_id,
                         'GUEST'::text AS person_type,
                         CASE
                             WHEN gt.extension_type = 'EXTRA_HOURS'
@@ -5442,12 +5477,14 @@ app.get(
                                     END
                             ELSE NULL
                         END AS extension,
+                        gt.visit_type AS access_type,
                         gt.amount,
                         gt.payment_method,
                         gt.payment_status,
                         COALESCE(NULLIF(gt.transaction_reference, ''), '—') AS reference,
                         gt.transaction_date,
-                        gt.attendance_id
+                        gt.attendance_id,
+                        NULL::text AS payment_screenshot
                     FROM guest_transactions gt
                     LEFT JOIN attendance a
                         ON a.id = gt.attendance_id

@@ -2009,3 +2009,156 @@ textarea:focus-visible {
     outline: 3px solid var(--color-primary);
     outline-offset: 2px;
 }
+
+:root[data-page="admin-dashboard"] .approve,
+:root[data-page="admin-dashboard"] .pending-row button.approve,
+:root[data-page="admin-dashboard"] .restore-button,
+:root[data-page="admin-dashboard"] .attendance-actions .restore-button {
+    border-color: #16A34A;
+    background: #16A34A;
+    color: #fff;
+}
+
+:root[data-page="admin-dashboard"] .approve:hover,
+:root[data-page="admin-dashboard"] .pending-row button.approve:hover,
+:root[data-page="admin-dashboard"] .restore-button:hover {
+    border-color: #15803D;
+    background: #15803D;
+    color: #fff;
+}
+
+:root[data-page="admin-dashboard"] .status.active,
+:root[data-page="admin-dashboard"] .membership-legend-active b {
+    border-color: #16A34A;
+    color: #16A34A;
+}
+
+:root[data-page="admin-dashboard"] #dashboardPendingCount,
+:root[data-page="admin-dashboard"] #dashboardPendingLegend {
+    color: #EAB308;
+}
+
+:root[data-page="admin-dashboard"] #dashboardOccupancy,
+:root[data-page="admin-dashboard"] #dashboardMembersInside,
+:root[data-page="admin-dashboard"] #dashboardGuestsInside,
+:root[data-page="admin-dashboard"] #attendanceOccupancy,
+:root[data-page="admin-dashboard"] #attendanceMembersInside,
+:root[data-page="admin-dashboard"] #attendanceGuestsInside,
+:root[data-page="admin-dashboard"] .occupancy-info b {
+    color: #16A34A;
+}
+
+:root[data-page="admin-dashboard"] .bar i {
+    background: #16A34A;
+}
+
+:root[data-page="customer-dashboard"] .membership-active-value {
+    color: #16A34A;
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .status {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3px 9px;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    background: var(--color-surface-raised);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.35;
+    white-space: nowrap;
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .status.active,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .status.approved,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .status.verified,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .status.confirmed {
+    border-color: rgb(22 163 74 / 55%);
+    background: rgb(22 163 74 / 12%);
+    color: #22c55e;
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .status.pending {
+    border-color: rgb(234 179 8 / 55%);
+    background: rgb(234 179 8 / 12%);
+    color: #eab308;
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .status.revoked,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .status.rejected,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .status.failed {
+    border-color: rgb(220 38 38 / 55%);
+    background: rgb(220 38 38 / 12%);
+    color: #ef4444;
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .status.expired,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .status.archived {
+    border-color: rgb(148 163 184 / 40%);
+    background: rgb(148 163 184 / 10%);
+    color: #94a3b8;
+}
+
+:root[data-page="admin-dashboard"] .members-list-table .remove-button,
+:root[data-page="admin-dashboard"] .members-list-toolbar #archiveSelectedMembersButton {
+    border: 1px solid #dc2626;
+    background: transparent;
+    color: #ef4444;
+}
+
+:root[data-page="admin-dashboard"] .members-list-table .remove-button:hover:not(:disabled),
+:root[data-page="admin-dashboard"] .members-list-toolbar #archiveSelectedMembersButton:hover:not(:disabled) {
+    border-color: #dc2626;
+    background: rgb(220 38 38 / 12%);
+    color: #ef4444;
+}
+
+:root[data-page="admin-dashboard"] .members-list-table .restore-button,
+:root[data-page="admin-dashboard"] .archived-members-list-table .restore-button,
+:root[data-page="admin-dashboard"] .member-list-toolbar #restoreSelectedArchivedMembersButton {
+    border: 1px solid #16a34a;
+    background: transparent;
+    color: #22c55e;
+}
+
+:root[data-page="admin-dashboard"] .members-list-table .restore-button:hover:not(:disabled),
+:root[data-page="admin-dashboard"] .archived-members-list-table .restore-button:hover:not(:disabled),
+:root[data-page="admin-dashboard"] .member-list-toolbar #restoreSelectedArchivedMembersButton:hover:not(:disabled) {
+    border-color: #16a34a;
+    background: rgb(22 163 74 / 12%);
+    color: #22c55e;
+}

@@ -62,13 +62,6 @@
             </button>
 
             <button
-                onclick="showPage('archived-members', this)">
-
-                🗄 Archived Members
-
-            </button>
-
-            <button
                 onclick="showPage('applications', this)">
 
                 📄 Applications
@@ -200,9 +193,15 @@
 
                 <div class="stats">
 
-                    <div class="card stat">
+                    <div class="card stat dashboard-stat-total">
 
                         <p>
+                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <circle cx="8" cy="8" r="3"></circle>
+                                <circle cx="17" cy="9" r="2.5"></circle>
+                                <path d="M2.5 19a5.5 5.5 0 0 1 11 0v1h-11z"></path>
+                                <path d="M15 14a4.5 4.5 0 0 1 6.5 4v2H16"></path>
+                            </svg>
                             Total Customer Accounts
                         </p>
 
@@ -219,9 +218,14 @@
 
                     </div>
 
-                    <div class="card stat">
+                    <div class="card stat dashboard-stat-active">
 
                         <p>
+                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <rect x="3" y="5" width="18" height="14" rx="2"></rect>
+                                <path d="M3 10h18"></path>
+                                <path d="M7 15h3"></path>
+                            </svg>
                             Active Memberships
                         </p>
 
@@ -238,9 +242,13 @@
 
                     </div>
 
-                    <div class="card stat">
+                    <div class="card stat dashboard-stat-pending">
 
                         <p>
+                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <circle cx="12" cy="12" r="9"></circle>
+                                <path d="M12 7v5l3 2"></path>
+                            </svg>
                             Pending Applications
                         </p>
 
@@ -257,9 +265,13 @@
 
                     </div>
 
-                    <div class="card stat">
+                    <div class="card stat dashboard-stat-rejected">
 
                         <p>
+                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <circle cx="12" cy="12" r="9"></circle>
+                                <path d="m9 9 6 6m0-6-6 6"></path>
+                            </svg>
                             Rejected Applications
                         </p>
 
@@ -278,12 +290,18 @@
 
                 </div>
 
-                <div class="grid">
+                <div class="grid dashboard-overview-grid">
 
                     <div
                         class="card occupancy">
 
                         <h3>
+                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <circle cx="8" cy="8" r="3"></circle>
+                                <circle cx="17" cy="9" r="2.5"></circle>
+                                <path d="M2.5 19a5.5 5.5 0 0 1 11 0v1h-11z"></path>
+                                <path d="M15 14a4.5 4.5 0 0 1 6.5 4v2H16"></path>
+                            </svg>
                             Current Gym Occupancy
                         </h3>
 
@@ -302,112 +320,96 @@
 
                         <div class="occupancy-info">
 
-                            <span>
-
-                                Members Inside
-
-                                <b
-                                    id="dashboardMembersInside">
-
-                                    0
-
-                                </b>
-
+                            <span class="occupancy-person-count">
+                                <span class="occupancy-person-label">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                        <circle cx="12" cy="7" r="3"></circle>
+                                        <path d="M5 20a7 7 0 0 1 14 0"></path>
+                                    </svg>
+                                    Members Inside
+                                </span>
+                                <b id="dashboardMembersInside">0</b>
                             </span>
 
-                            <span>
-
-                                Guests Inside
-
-                                <b
-                                    id="dashboardGuestsInside">
-
-                                    0
-
-                                </b>
-
+                            <span class="occupancy-person-count">
+                                <span class="occupancy-person-label">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                        <circle cx="8" cy="8" r="3"></circle>
+                                        <circle cx="17" cy="9" r="2.5"></circle>
+                                        <path d="M2.5 19a5.5 5.5 0 0 1 11 0v1h-11z"></path>
+                                        <path d="M15 14a4.5 4.5 0 0 1 6.5 4v2H16"></path>
+                                    </svg>
+                                    Guests Inside
+                                </span>
+                                <b id="dashboardGuestsInside">0</b>
                             </span>
 
                         </div>
 
-                        <small>
+                        <small class="occupancy-note">
+                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <circle cx="12" cy="12" r="9"></circle>
+                                <path d="M12 11v5m0-8h.01"></path>
+                            </svg>
                             Based on active attendance records.
                         </small>
 
                     </div>
 
-                    <div class="card">
+                    <div class="card dashboard-membership-card">
 
-                        <div class="card-header">
+                        <div class="card-header dashboard-panel-heading">
 
                             <h3>
+                                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                    <path d="M4 19V11m5 8V7m5 12V4m5 15V9"></path>
+                                </svg>
                                 Membership Status
                             </h3>
 
                         </div>
 
-                        <div
-                            class="donut"
-                            id="dashboardMembershipTotal">
-
-                            0
-
-                        </div>
-
-                        <div class="legend">
-
-                            <div class="membership-legend-active">
-
-                                🟢 ACTIVE
-
-                                <b
-                                    id="dashboardActiveLegend">
-
-                                    0
-
-                                </b>
-
+                        <div class="dashboard-membership-content">
+                            <div class="donut" id="dashboardMembershipTotal">
+                                <span class="donut-total">0</span>
+                                <small>Total</small>
                             </div>
 
-                            <div class="membership-legend-pending">
+                            <div class="legend">
 
-                                🟡 PENDING
+                                <div class="membership-legend-active">
+                                    <span><i aria-hidden="true"></i> ACTIVE</span>
+                                    <b id="dashboardActiveLegend">0</b>
+                                </div>
 
-                                <b
-                                    id="dashboardPendingLegend">
+                                <div class="membership-legend-pending">
+                                    <span><i aria-hidden="true"></i> PENDING</span>
+                                    <b id="dashboardPendingLegend">0</b>
+                                </div>
 
-                                    0
-
-                                </b>
-
-                            </div>
-
-                            <div class="membership-legend-revoked">
-
-                                🔴 REVOKED
-
-                                <b
-                                    id="dashboardRevokedLegend">
-
-                                    0
-
-                                </b>
+                                <div class="membership-legend-revoked">
+                                    <span><i aria-hidden="true"></i> REVOKED</span>
+                                    <b id="dashboardRevokedLegend">0</b>
+                                </div>
 
                             </div>
-
                         </div>
 
                     </div>
 
                 </div>
 
-                <div class="grid">
+                <div class="grid dashboard-detail-grid">
 
-                    <div class="card">
+                    <div class="card dashboard-decisions-card">
 
                         <div class="card-header">
 
                             <h3>
+                                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                    <rect x="5" y="4" width="14" height="17" rx="2"></rect>
+                                    <path d="M9 4V2h6v2m-6 5h6m-6 4h6m-6 4h4"></path>
+                                </svg>
                                 Recent Decisions
                             </h3>
 
@@ -460,12 +462,16 @@
 
                     </div>
 
-                    <div class="card">
+                    <div class="card dashboard-pending-card">
 
                         <div class="card-header">
 
-                            <h3>
-                                🔴 Pending Applications
+                            <h3 class="pending-applications-heading">
+                                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                    <circle cx="12" cy="12" r="9"></circle>
+                                    <path d="M12 7v5l3 2"></path>
+                                </svg>
+                                <span>Pending Applications</span>
                             </h3>
 
                             <button
@@ -511,16 +517,13 @@
                 </h1>
 
                 <p class="subtitle">
-
-                    Review the customer's
-                    ₱800 payment proof.
-
+                    Review the customer's membership application and payment proof before approving or rejecting.
                 </p>
 
-                <div class="card">
+                <div class="card applications-card">
 
                     <div class="table-scroll applications-table-scroll">
-                    <table>
+                    <table class="applications-table">
 
                         <thead>
 
@@ -531,7 +534,7 @@
                                 </th>
 
                                 <th>
-                                    Contact
+                                    Contact Information
                                 </th>
 
                                 <th>
@@ -543,7 +546,7 @@
                                 </th>
 
                                 <th>
-                                    Reference
+                                    Reference Number
                                 </th>
 
                                 <th>
@@ -551,7 +554,7 @@
                                 </th>
 
                                 <th>
-                                    Screenshot
+                                    Payment Proof
                                 </th>
 
                                 <th>
@@ -559,11 +562,7 @@
                                 </th>
 
                                 <th>
-                                    Action
-                                </th>
-
-                                <th>
-                                    Rejection Reason
+                                    Decision
                                 </th>
 
                             </tr>
@@ -576,7 +575,7 @@
                             <tr>
 
                                 <td
-                                    colspan="10"
+                                    colspan="9"
                                     style="text-align:center;">
 
                                     Loading applications...
@@ -588,6 +587,19 @@
                         </tbody>
 
                     </table>
+                    </div>
+                    <div class="applications-pagination">
+                        <span id="applicationsPageStatus">Page 1 of 1 · 0 applications</span>
+                        <div>
+                            <button id="applicationsPreviousPage" class="small-btn" type="button"
+                                onclick="changeApplicationsPage(-1)">
+                                Previous
+                            </button>
+                            <button id="applicationsNextPage" class="small-btn" type="button"
+                                onclick="changeApplicationsPage(1)">
+                                Next
+                            </button>
+                        </div>
                     </div>
 
                 </div>
@@ -618,17 +630,19 @@
 
                 </p>
 
-                <div class="table-toolbar">
-
-                    <label for="membersSearch">
-                        Search members
-                    </label>
-
-                    <input
-                        id="membersSearch"
-                        type="search"
-                        placeholder="Search name, member ID, plan, or status"
-                        oninput="filterTableRows('membersSearch', 'membersTableBody')">
+                <div class="table-toolbar member-list-toolbar">
+                    <div class="member-list-search">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                            <circle cx="10.8" cy="10.8" r="6.2"></circle>
+                            <path d="m15.4 15.4 4.2 4.2"></path>
+                        </svg>
+                        <input
+                            id="membersSearch"
+                            type="search"
+                            aria-label="Search members"
+                            placeholder="Search name, member ID, plan, or status"
+                            oninput="filterTableRows('membersSearch', 'membersTableBody')">
+                    </div>
 
                     <span id="membersSelectedCount">
                         0 selected
@@ -645,9 +659,9 @@
 
                 </div>
 
-                <div class="card">
-
-                    <table>
+                <div class="card member-table-card">
+                    <div class="table-scroll members-table-scroll">
+                    <table class="members-list-table">
 
                         <thead>
 
@@ -671,11 +685,11 @@
                                 </th>
 
                                 <th>
-                                    Registration
+                                    Contact Information
                                 </th>
 
                                 <th>
-                                    Plan
+                                    Plan &amp; Amount
                                 </th>
 
                                 <th>
@@ -697,7 +711,7 @@
                         <tbody
                             id="membersTableBody">
 
-                            <tr>
+                            <tr class="member-empty-row">
 
                                 <td
                                     colspan="8"
@@ -712,134 +726,93 @@
                         </tbody>
 
                     </table>
-
+                    </div>
+                    <div class="member-table-pagination">
+                        <span id="membersPageStatus">Page 1 of 1 · 0 members</span>
+                        <div>
+                            <button id="membersPreviousPage" class="small-btn" type="button"
+                                onclick="changeMemberTablePage('members', -1)">Previous</button>
+                            <button id="membersNextPage" class="small-btn" type="button"
+                                onclick="changeMemberTablePage('members', 1)">Next</button>
+                        </div>
+                    </div>
                 </div>
 
-            </div>
-
-        </section>
-
-
-        <!-- =====================================
-             ARCHIVED MEMBERS
-        ===================================== -->
-
-        <section
-            id="archived-members"
-            class="page">
-
-            <div class="content">
-
-                <h1>
-                    Archived Members
-                </h1>
-
-                <p class="subtitle">
-
-                    Revoked memberships and previously removed history.
-
-                </p>
-
-                <div class="table-toolbar">
-
-                    <label for="archivedMembersSearch">
-                        Search archived members
-                    </label>
-
-                    <input
-                        id="archivedMembersSearch"
-                        type="search"
-                        placeholder="Search name, member ID, plan, or status"
-                        oninput="filterTableRows('archivedMembersSearch', 'archivedMembersTableBody')">
-
-                    <span id="archivedMembersSelectedCount">
-                        0 selected
-                    </span>
-
-                    <button
-                        id="restoreSelectedArchivedMembersButton"
-                        class="restore-button"
-                        type="button"
-                        disabled
-                        onclick="restoreSelectedArchivedMembers()">
-                        Restore selected
-                    </button>
-
-                </div>
-
-                <div class="card">
-
-                    <table>
-
-                        <thead>
-
-                            <tr>
-
-                                <th>
-                                    <input
-                                        id="selectAllArchivedMembers"
-                                        type="checkbox"
-                                        disabled
-                                        aria-label="Select all visible archived members"
-                                        onchange="toggleSelectAllArchivedMembers(this.checked)">
-                                </th>
-
-                                <th>
-                                    Member ID
-                                </th>
-
-                                <th>
-                                    Name
-                                </th>
-
-                                <th>
-                                    Plan
-                                </th>
-
-                                <th>
-                                    Start Date
-                                </th>
-
-                                <th>
-                                    Expiration
-                                </th>
-
-                                <th>
-                                    Archived Date
-                                </th>
-
-                                <th>
-                                    Status
-                                </th>
-
-                                <th>
-                                    Action
-                                </th>
-
-                            </tr>
-
-                        </thead>
-
-                        <tbody
-                            id="archivedMembersTableBody">
-
-                            <tr>
-
-                                <td
-                                    colspan="9"
-                                    style="text-align:center;">
-
-                                    No archived memberships.
-
-                                </td>
-
-                            </tr>
-
-                        </tbody>
-
-                    </table>
-
-                </div>
+                <section id="archived-members" class="member-archive card">
+                    <h2>
+                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                            <path d="M3 7h18v13H3zM2 4h20v3H2z"></path>
+                            <path d="M9 12h6"></path>
+                        </svg>
+                        Archived Members
+                    </h2>
+                    <p class="subtitle">
+                        Restoring a record does not automatically reactivate a revoked membership.
+                    </p>
+                    <div class="table-toolbar member-list-toolbar archived-member-toolbar">
+                        <div class="member-list-search">
+                            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                                <circle cx="10.8" cy="10.8" r="6.2"></circle>
+                                <path d="m15.4 15.4 4.2 4.2"></path>
+                            </svg>
+                            <input
+                                id="archivedMembersSearch"
+                                type="search"
+                                aria-label="Search archived members"
+                                placeholder="Search archived members"
+                                oninput="filterTableRows('archivedMembersSearch', 'archivedMembersTableBody')">
+                        </div>
+                        <span id="archivedMembersSelectedCount">0 selected</span>
+                        <button
+                            id="restoreSelectedArchivedMembersButton"
+                            class="restore-button"
+                            type="button"
+                            disabled
+                            onclick="restoreSelectedArchivedMembers()">
+                            Restore selected
+                        </button>
+                    </div>
+                    <div class="table-scroll archived-members-table-scroll">
+                        <table class="archived-members-list-table">
+                            <thead>
+                                <tr>
+                                    <th>
+                                        <input
+                                            id="selectAllArchivedMembers"
+                                            type="checkbox"
+                                            disabled
+                                            aria-label="Select all visible archived members"
+                                            onchange="toggleSelectAllArchivedMembers(this.checked)">
+                                    </th>
+                                    <th>Member ID</th>
+                                    <th>Name</th>
+                                    <th>Plan</th>
+                                    <th>Start Date</th>
+                                    <th>Expiration</th>
+                                    <th>Archived Date</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="archivedMembersTableBody">
+                                <tr class="member-empty-row">
+                                    <td colspan="9" style="text-align:center;">
+                                        No archived memberships.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="member-table-pagination archived-member-pagination">
+                        <span id="archivedMembersPageStatus">Page 1 of 1 · 0 archived members</span>
+                        <div>
+                            <button id="archivedMembersPreviousPage" class="small-btn" type="button"
+                                onclick="changeMemberTablePage('archived', -1)">Previous</button>
+                            <button id="archivedMembersNextPage" class="small-btn" type="button"
+                                onclick="changeMemberTablePage('archived', 1)">Next</button>
+                        </div>
+                    </div>
+                </section>
 
             </div>
 
@@ -866,51 +839,55 @@
 
                 </p>
 
-                <div
-                    class="report-toggle transaction-filter"
-                    role="group"
-                    aria-label="Transaction type filter">
-                    <button type="button" data-transaction-filter="all"
-                        aria-pressed="true" onclick="loadTransactions('all')">
-                        All Transactions
-                    </button>
-                    <button type="button" data-transaction-filter="member"
-                        aria-pressed="false" onclick="loadTransactions('member')">
-                        Member Transactions
-                    </button>
-                    <button type="button" data-transaction-filter="guest"
-                        aria-pressed="false" onclick="loadTransactions('guest')">
-                        Guest Transactions
-                    </button>
+                <div class="table-toolbar transaction-filter">
+                    <label for="transactionTypeFilter">Show</label>
+                    <select
+                        id="transactionTypeFilter"
+                        onchange="loadTransactions(this.value)">
+                        <option value="all">All Transactions</option>
+                        <option value="member">Member Transactions</option>
+                        <option value="guest">Guest Transactions</option>
+                    </select>
                 </div>
 
-                <div class="card">
+                <div class="card transactions-card">
                     <div class="table-scroll transaction-table-scroll">
-                        <table>
+                        <table class="transactions-table">
                             <thead>
                                 <tr>
                                     <th scope="col">Transaction / Reference</th>
                                     <th scope="col">Customer</th>
                                     <th scope="col">Type</th>
                                     <th scope="col">Payment Description</th>
-                                    <th scope="col">Related Visit</th>
-                                    <th scope="col">Check-In</th>
-                                    <th scope="col">Check-Out</th>
-                                    <th scope="col">Extension</th>
+                                    <th scope="col">Plan / Access Type</th>
                                     <th scope="col">Amount</th>
                                     <th scope="col">Method</th>
                                     <th scope="col">Payment Status</th>
                                     <th scope="col">Transaction Date</th>
+                                    <th scope="col">Screenshot</th>
                                 </tr>
                             </thead>
                             <tbody id="transactionsTableBody">
                                 <tr>
-                                    <td colspan="12" style="text-align:center;">
+                                    <td colspan="10" style="text-align:center;">
                                         No transactions available.
                                     </td>
                                 </tr>
                             </tbody>
                         </table>
+                    </div>
+                    <div class="transaction-pagination">
+                        <span id="transactionsPageStatus">Page 1 of 1 · 0 transactions</span>
+                        <div>
+                            <button id="transactionsPreviousPage" class="small-btn" type="button"
+                                onclick="changeTransactionsPage(-1)">
+                                Previous
+                            </button>
+                            <button id="transactionsNextPage" class="small-btn" type="button"
+                                onclick="changeTransactionsPage(1)">
+                                Next
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -939,6 +916,46 @@
                     currently inside.
 
                 </p>
+
+                <div class="card">
+
+                    <h3>
+                        📷 Member QR Scanner
+                    </h3>
+
+                    <p
+                        id="qrScanStatus">
+
+                        Scan a member's QR code during the
+                        configured gym opening hours.
+                        Record checkout only when the
+                        member actually leaves.
+
+                    </p>
+
+                    <button
+                        class="red-button"
+                        type="button"
+                        onclick="scanCustomerQr()">
+
+                        📷 Scan QR
+
+                    </button>
+
+                    <button
+                        class="red-button"
+                        type="button"
+                        onclick="closeQrScanner()">
+
+                        Stop Scanner
+
+                    </button>
+
+                    <div
+                        id="qr-reader">
+                    </div>
+
+                </div>
 
                 <div
                     class="attendance-stats">
@@ -1010,55 +1027,37 @@
 
                 </div>
 
-                <p id="attendanceTimeoutAlert"
-                    class="attendance-timeout-alert"
-                    role="status"
-                    aria-live="polite">
-                </p>
-
-                <div class="card manual-attendance-card">
-                    <h3>Manual Member Attendance</h3>
-                    <p class="subtitle">
-                        Search by member name or ID when a member cannot present a cellphone or QR code.
-                    </p>
-                    <form id="manualMemberSearchForm"
-                        class="manual-attendance-search"
-                        onsubmit="searchManualMembers(event)">
-                        <label for="manualAttendanceSearch">Member name or ID</label>
-                        <input
-                            id="manualAttendanceSearch"
-                            type="search"
-                            autocomplete="off"
-                            minlength="2"
-                            placeholder="Enter at least two characters"
-                            required>
-                        <button class="small-btn" type="submit">Search Members</button>
-                    </form>
-                    <div id="manualAttendanceResults"
-                        class="manual-attendance-results"
-                        aria-live="polite">
-                    </div>
-                </div>
-
                 <div class="card attendance-members-card">
                     <h3>Member Attendance</h3>
                     <div class="table-toolbar attendance-member-toolbar">
-                        <label for="attendanceMemberSearch">Search members</label>
-                        <input
-                            id="attendanceMemberSearch"
-                            type="search"
-                            placeholder="Member name or Member ID"
-                            oninput="filterAttendanceMembers()">
-                        <label for="attendanceMemberFilter">Show</label>
-                        <select id="attendanceMemberFilter"
-                            onchange="filterAttendanceMembers()">
-                            <option value="all">All Members</option>
-                            <option value="inside">Inside Gym</option>
-                            <option value="not-inside">Not Checked In</option>
-                        </select>
+                        <div class="attendance-member-search-field">
+                            <label for="attendanceMemberSearch">Search Members</label>
+                            <div class="attendance-member-search-input">
+                                <span aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" focusable="false">
+                                        <circle cx="10.8" cy="10.8" r="6.2"></circle>
+                                        <path d="m15.4 15.4 4.2 4.2"></path>
+                                    </svg>
+                                </span>
+                                <input
+                                    id="attendanceMemberSearch"
+                                    type="search"
+                                    placeholder="Search member name or Member ID"
+                                    oninput="filterAttendanceMembers()">
+                            </div>
+                        </div>
+                        <div class="attendance-member-filter-field">
+                            <label for="attendanceMemberFilter">Show</label>
+                            <select id="attendanceMemberFilter"
+                                onchange="filterAttendanceMembers()">
+                                <option value="all">All Members</option>
+                                <option value="inside">Inside Gym</option>
+                                <option value="not-inside">Not Checked In</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="table-scroll attendance-members-table-scroll">
-                        <table>
+                        <table class="member-attendance-table">
                             <thead>
                                 <tr>
                                     <th>Member ID</th>
@@ -1066,7 +1065,7 @@
                                     <th>Membership Status</th>
                                     <th>Attendance Status</th>
                                     <th>Check-In Time</th>
-                                    <th>Attendance Action</th>
+                                    <th>Available Action</th>
                                 </tr>
                             </thead>
                             <tbody id="attendanceMembersTableBody">
@@ -1081,56 +1080,16 @@
                     <div class="attendance-member-pagination">
                         <span id="attendanceMembersPageStatus">Page 1 of 1</span>
                         <div>
-                            <button class="small-btn" type="button"
+                            <button id="attendanceMembersPreviousPage" class="small-btn" type="button"
                                 onclick="changeAttendanceMembersPage(-1)">
                                 Previous
                             </button>
-                            <button class="small-btn" type="button"
+                            <button id="attendanceMembersNextPage" class="small-btn" type="button"
                                 onclick="changeAttendanceMembersPage(1)">
                                 Next
                             </button>
                         </div>
                     </div>
-                </div>
-
-                <div class="card">
-
-                    <h3>
-                        📷 Member QR Scanner
-                    </h3>
-
-                    <p
-                        id="qrScanStatus">
-
-                        Scan a member's QR code during the
-                        configured gym opening hours.
-                        Record checkout only when the
-                        member actually leaves.
-
-                    </p>
-
-                    <button
-                        class="red-button"
-                        type="button"
-                        onclick="scanCustomerQr()">
-
-                        📷 Scan QR
-
-                    </button>
-
-                    <button
-                        class="red-button"
-                        type="button"
-                        onclick="closeQrScanner()">
-
-                        Stop Scanner
-
-                    </button>
-
-                    <div
-                        id="qr-reader">
-                    </div>
-
                 </div>
 
                 <div class="card">
@@ -1167,10 +1126,6 @@
                                 </th>
 
                                 <th>
-                                    Check-Out
-                                </th>
-
-                                <th>
                                     Visit Duration
                                 </th>
 
@@ -1196,7 +1151,7 @@
                             <tr>
 
                                 <td
-                                    colspan="8"
+                                    colspan="7"
                                     style="text-align:center;">
 
                                     No attendance data available yet.

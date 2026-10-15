@@ -1078,6 +1078,11 @@ function displayMembership(
         calculateDaysRemaining(
             expirationDate
         );
+    const isActive =
+        status === "ACTIVE" &&
+        (!expirationDate || daysRemaining >= 0);
+
+    setMembershipActiveStyle(isActive);
 
 
     // ---------------------------------
@@ -1238,6 +1243,8 @@ function displayMembership(
 
 function displayNoMembership() {
 
+    setMembershipActiveStyle(false);
+
     // ---------------------------------
     // DASHBOARD
     // ---------------------------------
@@ -1350,6 +1357,24 @@ function displayNoMembership() {
 
     displayNoQR();
 
+}
+
+
+function setMembershipActiveStyle(active) {
+    [
+        "dashboardMembershipStatus",
+        "dashboardPlan",
+        "dashboardDaysRemaining",
+        "dashboardMemberId",
+        "membershipPageStatus",
+        "membershipMemberId",
+        "membershipPlan",
+        "membershipDaysRemaining"
+    ].forEach(id => {
+        document
+            .getElementById(id)
+            ?.classList.toggle("membership-active-value", active);
+    });
 }
 
 

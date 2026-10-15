@@ -69,33 +69,131 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     const membershipChart = adminHtml.match(
         /<div class="legend">[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/
     )?.[0] || "";
+    const memberPage = adminHtml.match(
+        /<section\s+id="members"[\s\S]*?<\/section>/
+    )?.[0] || "";
+    const attendanceRenderer = adminJs.match(
+        /async function loadAttendance\([\s\S]*?\/\/ GUEST COUNTDOWN HELPERS/
+    )?.[0] || "";
+    const memberAttendanceRenderer = adminJs.match(
+        /function renderAttendanceMembers\([\s\S]*?\/\/ GUEST COUNTDOWN HELPERS/
+    )?.[0] || "";
+    const attendancePage = adminHtml.match(
+        /<section\s+id="attendance"[\s\S]*?<\/section>/
+    )?.[0] || "";
+    const customerJs = fs.readFileSync(
+        path.join(projectRoot, "frontend", "customer.js"),
+        "utf8"
+    );
 
-    assert.match(loginHtml, /id="adminEmail"[\s\S]*?value="admin@gmail\.com"/);
-    assert.match(loginHtml, /id="adminPassword"[\s\S]*?value="admin123"/);
+    assert.match(loginHtml, /<input\b(?=[^>]*id="adminEmail")(?=[^>]*value="admin@gmail\.com")[^>]*>/);
+    assert.match(loginHtml, /<input\b(?=[^>]*id="adminPassword")(?=[^>]*value="admin123")[^>]*>/);
     assert.match(adminJs, /class="approve"/);
     assert.match(adminJs, /class="reject"/);
     assert.match(membershipChart, /dashboardActiveLegend/);
     assert.match(membershipChart, /dashboardPendingLegend/);
     assert.match(membershipChart, /dashboardRevokedLegend/);
+    assert.match(adminHtml, /dashboard-overview-grid/);
+    assert.match(adminHtml, /dashboard-detail-grid/);
+    assert.match(adminHtml, /occupancy-person-count/);
+    assert.match(adminHtml, /dashboard-membership-content/);
+    assert.match(adminHtml, /donut-total/);
+    assert.match(adminCss, /#dashboard\.active \.dashboard-membership-content/);
+    assert.match(adminCss, /#dashboard\.active \.dashboard-empty-state/);
+    assert.match(adminJs, /querySelector\("\.donut-total"\)/);
+    assert.match(adminJs, /No pending applications\./);
     assert.doesNotMatch(membershipChart, /Expired/);
     assert.equal((reportSummary.match(/class="card"/g) || []).length, 4);
     assert.match(reportPage, /Visits by Hour/);
     assert.match(adminHtml, /id="attendanceMembersTableBody"/);
+    assert.doesNotMatch(adminHtml, /attendanceTimeoutAlert|manualMemberSearchForm|manualAttendanceSearch|manualAttendanceResults/);
+    assert.ok(
+        adminHtml.indexOf("id=\"qrScanStatus\"") <
+            adminHtml.indexOf("class=\"attendance-stats\""),
+        "Member QR scanner should appear above the attendance summary"
+    );
     assert.match(adminHtml, /applications-table-scroll/);
+    assert.match(adminHtml, /class="applications-table"/);
+    assert.match(adminHtml, /Reference Number/);
+    assert.match(adminHtml, /Payment Proof/);
+    assert.match(adminHtml, /id="applicationsPageStatus"/);
+    assert.match(adminHtml, /id="applicationsPreviousPage"/);
+    assert.match(adminHtml, /id="applicationsNextPage"/);
+    assert.match(adminJs, /applicationsPageSize = 5/);
+    assert.match(adminJs, /function renderApplicationsTable\(applications\)/);
+    assert.match(adminJs, /function changeApplicationsPage\(change\)/);
+    assert.match(adminJs, /application\.rejection_reason/);
+    assert.match(adminCss, /\.applications-table \.application-decision \.approve/);
+    assert.match(adminCss, /\.applications-pagination \.small-btn:disabled/);
     assert.match(adminHtml, /attendanceMemberSearch/);
+    assert.match(adminHtml, /attendance-member-search-field/);
+    assert.match(adminHtml, /attendance-member-filter-field/);
+    assert.match(adminHtml, /member-attendance-table/);
+    assert.match(adminHtml, /id="attendanceMembersPreviousPage"/);
+    assert.match(adminHtml, /id="attendanceMembersNextPage"/);
+    assert.match(adminCss, /\.attendance-members-card > h3::after/);
+    assert.match(adminCss, /\.member-attendance-table \.status::before/);
+    assert.match(adminCss, /\.member-attendance-state\.inside::before/);
     assert.match(adminHtml, /value="inside">Inside Gym/);
     assert.match(adminHtml, /value="not-inside">Not Checked In/);
     assert.match(adminHtml, /class="chart-scroll"/);
     assert.match(adminHtml, /class="table-scroll report-table-scroll"/);
     assert.match(adminHtml, /class="table-scroll attendance-table-scroll"/);
     assert.match(adminHtml, /class="table-scroll attendance-members-table-scroll"/);
-    assert.doesNotMatch(transactionPage, /<th[^>]*>\s*Action\s*<\/th>/i);
-    assert.doesNotMatch(transactionPage, /\b(?:View|View Proof|View Details|Delete)\b/i);
+    assert.match(transactionPage, /id="transactionTypeFilter"/);
+    assert.match(transactionPage, /class="transactions-table"/);
+    assert.match(transactionPage, /Plan \/ Access Type/);
+    assert.match(transactionPage, /id="transactionsPageStatus"/);
+    assert.match(transactionPage, /id="transactionsPreviousPage"/);
+    assert.match(transactionPage, /id="transactionsNextPage"/);
+    assert.match(adminJs, /transactionsPageSize = 8/);
+    assert.match(adminJs, /function renderTransactionsTable\(\)/);
+    assert.match(adminJs, /transaction\.member_id/);
+    assert.match(adminJs, /class="small-btn application-proof-button"/);
+    assert.doesNotMatch(transactionPage, /<th[^>]*>\s*Related Visit\s*<\/th>/i);
+    assert.doesNotMatch(transactionPage, /<th[^>]*>\s*Extension\s*<\/th>/i);
+    assert.match(transactionPage, /<th scope="col">Screenshot<\/th>/);
+    assert.match(adminJs, /View Payment<br>Screenshot/);
+    assert.match(adminJs, /transaction\.payment_screenshot/);
     assert.doesNotMatch(
         adminJs.match(/async function loadTransactions[\s\S]*?\/\/ ATTENDANCE/)?.[0] || "",
-        /<button|View Visit|openAttendanceVisit/
+        /View Visit|openAttendanceVisit/
     );
-    assert.match(adminJs, /attendanceMembersPageSize = 25/);
+    assert.match(memberPage, /Contact Information/);
+    assert.match(memberPage, /Plan &amp; Amount/);
+    assert.match(adminJs, /<span>Monthly<\/span>\s*<small>₱800<\/small>/);
+    assert.match(memberPage, /id="archived-members"/);
+    assert.match(memberPage, /id="selectAllMembers"/);
+    assert.match(memberPage, /class="member-list-search"/);
+    assert.match(memberPage, /class="members-list-table"/);
+    assert.match(memberPage, /id="membersPageStatus"/);
+    assert.match(memberPage, /id="membersPreviousPage"/);
+    assert.match(memberPage, /id="membersNextPage"/);
+    assert.match(memberPage, /id="archiveSelectedMembersButton"[\s\S]*?Archive selected/);
+    assert.match(adminJs, /data-selectable="member"/);
+    assert.match(memberPage, /id="selectAllArchivedMembers"/);
+    assert.match(memberPage, /class="archived-members-list-table"/);
+    assert.match(memberPage, /id="archivedMembersPageStatus"/);
+    assert.match(memberPage, /id="archivedMembersPreviousPage"/);
+    assert.match(memberPage, /id="archivedMembersNextPage"/);
+    assert.match(memberPage, /id="restoreSelectedArchivedMembersButton"[\s\S]*?Restore selected/);
+    assert.match(adminJs, /async function restoreSelectedArchivedMembers/);
+    assert.match(adminJs, /function applyMemberTablePagination\(tableName\)/);
+    assert.match(adminJs, /function changeMemberTablePage\(tableName, change\)/);
+    assert.match(adminCss, /\.members-list-table \.remove-button/);
+    assert.match(portalTheme, /\.members-list-table \.remove-button/);
+    assert.doesNotMatch(adminHtml, /<button\s+onclick="showPage\('archived-members'/);
+    assert.doesNotMatch(attendancePage, /<th[^>]*>\s*Check-Out\s*<\/th>/i);
+    assert.match(memberAttendanceRenderer, /checkoutAttendance\(\$\{Number\(visit\.id\)\}\)/);
+    assert.match(memberAttendanceRenderer, /class="remove-button attendance-checkout-button"/);
+    assert.match(memberAttendanceRenderer, /class="restore-button attendance-checkin-button"/);
+    assert.match(memberAttendanceRenderer, /member-attendance-state inside/);
+    assert.match(memberAttendanceRenderer, /member-attendance-state not-inside/);
+    assert.match(adminCss, /\.attendance-checkin-button,\s*\.attendance-checkout-button\s*\{[^}]*flex:\s*0 0 120px/s);
+    assert.match(attendanceRenderer, /TIME OUT/);
+    assert.match(attendanceRenderer, /class="attendance-action-link"/);
+    assert.doesNotMatch(attendanceRenderer, /TIMED OUT \/ OVERDUE/);
+    assert.match(adminJs, /attendanceMembersPageSize = 5/);
     assert.match(adminJs, /data\.membershipStatusCounts\?\.pending/);
     assert.match(adminJs, /async function viewScreenshot/);
     assert.match(adminJs, /headers: token\s*\?/);
@@ -108,6 +206,10 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(portalTheme, /\.status\.active\s*\{[^}]*#16A34A/s);
     assert.match(portalTheme, /\.status\.pending\s*\{[^}]*#EAB308/s);
     assert.match(portalTheme, /\.status\.revoked\s*\{[^}]*#DC2626/s);
+    assert.match(portalTheme, /#dashboardOccupancy[\s\S]*?#16A34A/);
+    assert.match(customerJs, /setMembershipActiveStyle\(isActive\)/);
+    assert.match(adminHtml, /pending-applications-heading[\s\S]*?<svg/);
+    assert.match(adminCss, /#dashboard\.active \.pending-applications-heading > svg[\s\S]*?#EAB308/);
 });
 
 if (!integrationEnabled) {
@@ -445,6 +547,14 @@ if (!integrationEnabled) {
     });
 
     test("manual check-in, visit-specific checkout, repeat visits, and no fake member payment", async () => {
+        const memberList = await api("/api/admin/members");
+        assert.equal(memberList.response.status, 200);
+        const listedMember = memberList.body.members.find(
+            member => Number(member.id) === Number(activeMemberId)
+        );
+        assert.equal(listedMember.email, "test-member@example.invalid");
+        assert.equal(listedMember.phone, "09111110002");
+
         const firstCheckIn = await api("/api/admin/attendance/manual", {
             method: "POST",
             body: JSON.stringify({
@@ -518,6 +628,16 @@ if (!integrationEnabled) {
     });
 
     test("membership eligibility and archived restoration preserve revoked status and dates", async () => {
+        const revokedMember = await pool.query(
+            "SELECT user_id FROM members WHERE id = $1",
+            [revokedMemberId]
+        );
+        const revokedCustomerDashboard = await api(
+            `/api/customer/${revokedMember.rows[0].user_id}`
+        );
+        assert.equal(revokedCustomerDashboard.response.status, 200);
+        assert.equal(revokedCustomerDashboard.body.membership, null);
+
         for (const memberId of [
             pendingMemberId,
             revokedMemberId,
@@ -927,8 +1047,8 @@ if (!integrationEnabled) {
             await pool.query(
                 `
                 INSERT INTO member_transactions
-                    (user_id, member_id, amount, payment_method, status)
-                VALUES ($1, $2, 500, 'CASH', 'VERIFIED')
+                    (user_id, member_id, amount, payment_method, gcash_reference, status)
+                VALUES ($1, $2, 500, 'GCASH', 'TEST-MEMBER-SUBMITTED-REF', 'VERIFIED')
                 `,
                 [activeUserId, activeMemberId]
             );
@@ -948,6 +1068,18 @@ if (!integrationEnabled) {
         assert.equal(guestTransactions.response.status, 200);
         assert.equal(allTransactions.response.status, 200);
         assert.equal(memberTransactions.body.transactions.length, 1);
+        assert.equal(
+            memberTransactions.body.transactions[0].member_id,
+            "TEST-ACTIVE-001"
+        );
+        assert.equal(
+            memberTransactions.body.transactions[0].reference,
+            "TEST-MEMBER-SUBMITTED-REF"
+        );
+        assert.equal(
+            memberTransactions.body.transactions[0].access_type,
+            "Monthly"
+        );
         assert.ok(guestTransactions.body.transactions.length >= 5);
         assert.equal(
             allTransactions.body.transactions.length,
@@ -1075,6 +1207,15 @@ if (!integrationEnabled) {
             authorizedScreenshot.headers.get("content-type") || "",
             /^image\/png/
         );
+        const memberTransactionsWithScreenshot = await api(
+            "/api/admin/transactions?type=member"
+        );
+        assert.equal(memberTransactionsWithScreenshot.response.status, 200);
+        assert.ok(memberTransactionsWithScreenshot.body.transactions.some(
+            transaction =>
+                transaction.payment_screenshot ===
+                `/api/admin/applications/${applicationId}/screenshot`
+        ));
 
         const rejectedApplication = await pool.query(
             `
