@@ -1422,7 +1422,7 @@ textarea:focus-visible {
 :root:is(
     [data-page="customer-dashboard"],
     [data-page="admin-dashboard"]
-) .card:has(table) {
+) .card:has(> table) {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
 }
@@ -1431,7 +1431,6 @@ textarea:focus-visible {
     [data-page="customer-dashboard"],
     [data-page="admin-dashboard"]
 ) table {
-    min-width: 600px;
     border-collapse: collapse;
 }
 
@@ -1909,13 +1908,6 @@ textarea:focus-visible {
     ) .theme-toggle {
         max-width: 108px;
         padding-inline: 8px;
-    }
-
-    :root:is(
-        [data-page="customer-dashboard"],
-        [data-page="admin-dashboard"]
-    ) table {
-        min-width: 560px;
     }
 
     :root:is(

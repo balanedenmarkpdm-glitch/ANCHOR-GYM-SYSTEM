@@ -53,6 +53,10 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
         path.join(projectRoot, "frontend", "portal-theme.css"),
         "utf8"
     );
+    const customerCss = fs.readFileSync(
+        path.join(projectRoot, "frontend", "customer.css"),
+        "utf8"
+    );
     const adminJs = fs.readFileSync(
         path.join(projectRoot, "frontend", "admin.js"),
         "utf8"
@@ -269,6 +273,13 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(adminJs, /function applyMemberTablePagination\(tableName\)/);
     assert.match(adminJs, /function changeMemberTablePage\(tableName, change\)/);
     assert.match(adminCss, /\.members-list-table \.remove-button/);
+    assert.match(adminCss, /@media\s*\(max-width:\s*700px\)\s*\{[\s\S]*?\.member-list-toolbar\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s*auto/);
+    assert.match(adminCss, /\.member-list-toolbar #revokeSelectedMembersButton,\s*\.member-list-toolbar #reactivateSelectedRevokedMembersButton\s*\{[^}]*width:\s*auto[^}]*min-width:\s*0/s);
+    assert.match(adminCss, /\.members-table-scroll \.members-list-table\s*\{\s*min-width:\s*900px/s);
+    assert.match(adminCss, /\.archived-members-list-table\s*\{\s*min-width:\s*980px/s);
+    assert.match(adminCss, /\.card:has\(> table\)/);
+    assert.match(customerCss, /\.card:has\(> table\)/);
+    assert.doesNotMatch(portalTheme, /\)\s*table\s*\{\s*min-width:\s*(?:560|600)px/);
     assert.match(adminCss, /\.member-list-toolbar #revokeSelectedMembersButton\s*\{[^}]*background:\s*#DC2626[^}]*color:\s*#ffffff/s);
     assert.match(adminCss, /\.members-list-table \.membership-action-button,[\s\S]*?\.member-attendance-table \.attendance-actions \.attendance-checkout-button\s*\{[^}]*width:\s*118px[^}]*min-height:\s*34px[^}]*font-size:\s*11px/s);
     assert.match(adminHtml, /id="reactivateSelectedRevokedMembersButton"[\s\S]*?attendance-button-icon[\s\S]*?Reactivate selected/);

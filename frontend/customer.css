@@ -1184,7 +1184,7 @@ a:hover {
         font-size: 24px;
     }
 
-    .card:has(table) {
+    .card:has(> table) {
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
     }
