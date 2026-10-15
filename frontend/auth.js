@@ -250,6 +250,25 @@ async function initializeGoogleLogin() {
         return;
     }
 
+    const hostname =
+        window.location.hostname.toLowerCase();
+    const isVercelPreview =
+        hostname.startsWith("anchor-gym-system-") &&
+        hostname.endsWith(".vercel.app") &&
+        hostname !== "anchor-gym-system.vercel.app";
+
+    if (isVercelPreview) {
+        googleLogin.addEventListener(
+            "click",
+            function() {
+                window.location.replace(
+                    "https://anchor-gym-system.vercel.app/login.html"
+                );
+            }
+        );
+        return;
+    }
+
     try {
         const configResponse =
             await fetch(
@@ -385,19 +404,6 @@ async function initializeGoogleLogin() {
             "click",
             function() {
                 setGoogleLoginMessage("");
-
-                const previewOriginPattern =
-                    /^anchor-gym-system-[a-z0-9-]+-brunheart\.vercel\.app$/;
-                if (
-                    previewOriginPattern.test(
-                        window.location.hostname.toLowerCase()
-                    )
-                ) {
-                    window.location.replace(
-                        "https://anchor-gym-system.vercel.app/login.html"
-                    );
-                    return;
-                }
 
                 try {
                     googleCodeClient.requestCode();
