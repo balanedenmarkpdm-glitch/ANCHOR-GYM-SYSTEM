@@ -15,6 +15,8 @@ const databaseSchema = process.env.DATABASE_SCHEMA || "public";
 if (!/^[a-z_][a-z0-9_]*$/.test(databaseSchema)) {
     throw new Error("DATABASE_SCHEMA must be a lowercase PostgreSQL schema identifier.");
 }
+const BUILT_IN_ADMIN_EMAIL = "admin@gmail.com";
+const BUILT_IN_ADMIN_PASSWORD = "admin123";
 const frontendOrigin =
     process.env.FRONTEND_URL ||
     "https://anchor-gym-system.vercel.app";
@@ -45,6 +47,17 @@ function requireAdministrator(req, res) {
     return false;
 }
 
+function isBuiltInAdminLogin(email, password) {
+    const submitted = Buffer.from(password);
+    const expected = Buffer.from(BUILT_IN_ADMIN_PASSWORD);
+
+    return (
+        email === BUILT_IN_ADMIN_EMAIL &&
+        submitted.length === expected.length &&
+        crypto.timingSafeEqual(submitted, expected)
+    );
+}
+
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     options: `-c timezone=Asia/Manila -c search_path=${databaseSchema}`,
@@ -52,6 +65,74 @@ const pool = new Pool({
     query_timeout: 15000,
     statement_timeout: 15000
 });
+
+async function ensureBuiltInAdminAccount() {
+    const client = await pool.connect();
+    let transactionStarted = false;
+
+    try {
+        await client.query("BEGIN");
+        transactionStarted = true;
+        await client.query(
+            "SELECT pg_advisory_xact_lock(hashtext($1))",
+            [`built-in-admin:${BUILT_IN_ADMIN_EMAIL}`]
+        );
+
+        const existing = await client.query(
+            `
+            SELECT id, full_name, email, role
+            FROM users
+            WHERE LOWER(email) = $1
+            ORDER BY CASE
+                WHEN LOWER(role) = 'admin' THEN 0
+                WHEN LOWER(role) = 'staff' THEN 1
+                ELSE 2
+            END, id
+            LIMIT 1
+            FOR UPDATE
+            `,
+            [BUILT_IN_ADMIN_EMAIL]
+        );
+
+        let user = existing.rows[0];
+        if (!user) {
+            const passwordHash = await bcrypt.hash(
+                BUILT_IN_ADMIN_PASSWORD,
+                12
+            );
+            const inserted = await client.query(
+                `
+                INSERT INTO users (full_name, email, password, phone, role)
+                VALUES ('ANCHOR Gym Administrator', $1, $2, '', 'admin')
+                RETURNING id, full_name, email, role
+                `,
+                [BUILT_IN_ADMIN_EMAIL, passwordHash]
+            );
+            user = inserted.rows[0];
+        }
+
+        if (!["admin", "staff"].includes(String(user.role).toLowerCase())) {
+            await client.query("ROLLBACK");
+            transactionStarted = false;
+            return null;
+        }
+
+        await client.query("COMMIT");
+        transactionStarted = false;
+        return user;
+    } catch (error) {
+        if (transactionStarted) {
+            try {
+                await client.query("ROLLBACK");
+            } catch (rollbackError) {
+                console.error("Built-in admin rollback error:", rollbackError);
+            }
+        }
+        throw error;
+    } finally {
+        client.release();
+    }
+}
 
 async function ensureDashboardSchema() {
     await pool.query(`
@@ -865,28 +946,51 @@ app.post("/api/admin/login", async (req, res) => {
             });
         }
 
-        const result = await pool.query(
-            `
-            SELECT id, full_name, email, password, role
-            FROM users
-            WHERE LOWER(email) = $1
-              AND LOWER(role) IN ('admin', 'staff')
-            LIMIT 1
-            `,
-            [email]
-        );
+        const isBuiltInAdmin =
+            isBuiltInAdminLogin(email, password);
+        let user;
 
-        if (
-            result.rows.length === 0 ||
-            !(await bcrypt.compare(password, result.rows[0].password))
-        ) {
+        if (isBuiltInAdmin) {
+            user = await ensureBuiltInAdminAccount();
+            if (!user) {
+                return res.status(409).json({
+                    success: false,
+                    message: "The built-in admin email belongs to a non-admin account. Ask an administrator to resolve the account conflict."
+                });
+            }
+        } else {
+            const result = await pool.query(
+                `
+                SELECT id, full_name, email, password, role
+                FROM users
+                WHERE LOWER(email) = $1
+                  AND LOWER(role) IN ('admin', 'staff')
+                ORDER BY id
+                LIMIT 1
+                `,
+                [email]
+            );
+
+            if (
+                result.rows.length === 0 ||
+                !(await bcrypt.compare(password, result.rows[0].password))
+            ) {
+                return res.status(401).json({
+                    success: false,
+                    message: "Invalid admin or staff email or password."
+                });
+            }
+
+            user = result.rows[0];
+        }
+
+        if (!user) {
             return res.status(401).json({
                 success: false,
                 message: "Invalid admin or staff email or password."
             });
         }
 
-        const user = result.rows[0];
         const token = crypto.randomBytes(32).toString("base64url");
         const tokenHash = crypto
             .createHash("sha256")

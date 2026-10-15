@@ -37,6 +37,10 @@ test("attendance reports retain scroll containers and required member-status col
         path.join(projectRoot, "frontend", "admin.html"),
         "utf8"
     );
+    const loginHtml = fs.readFileSync(
+        path.join(projectRoot, "frontend", "admin-login.html"),
+        "utf8"
+    );
     const adminCss = fs.readFileSync(
         path.join(projectRoot, "frontend", "admin.css"),
         "utf8"
@@ -50,6 +54,8 @@ test("attendance reports retain scroll containers and required member-status col
         "utf8"
     );
 
+    assert.match(loginHtml, /id="adminEmail"[\s\S]*?value="admin@gmail\.com"/);
+    assert.match(loginHtml, /id="adminPassword"[\s\S]*?value="admin123"/);
     assert.match(adminHtml, /class="chart-scroll"/);
     assert.match(adminHtml, /class="table-scroll report-table-scroll"/);
     assert.match(adminHtml, /class="table-scroll attendance-table-scroll"/);
@@ -320,6 +326,43 @@ if (!integrationEnabled) {
             })
         });
     }
+
+    test("hard-coded admin credentials authenticate without an existing admin database row", async () => {
+        const login = await fetch(`${baseUrl}/api/admin/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                email: "admin@gmail.com",
+                password: "admin123"
+            })
+        });
+        const result = await login.json();
+        assert.equal(login.status, 200, result.message);
+        assert.equal(result.user.email, "admin@gmail.com");
+        assert.equal(result.user.role, "admin");
+
+        const storedAccount = await pool.query(
+            `
+            SELECT password, role
+            FROM users
+            WHERE LOWER(email) = 'admin@gmail.com'
+            `
+        );
+        assert.equal(storedAccount.rows.length, 1);
+        assert.equal(storedAccount.rows[0].role, "admin");
+        assert.notEqual(storedAccount.rows[0].password, "admin123");
+        assert.match(storedAccount.rows[0].password, /^\$2[aby]\$/);
+
+        const authorized = await fetch(`${baseUrl}/api/admin/attendance`, {
+            headers: { Authorization: `Bearer ${result.token}` }
+        });
+        assert.equal(authorized.status, 200);
+
+        await fetch(`${baseUrl}/api/admin/logout`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${result.token}` }
+        });
+    });
 
     test("admin APIs require a valid session and sensitive membership actions require an administrator", async () => {
         const unauthenticated = await fetch(
