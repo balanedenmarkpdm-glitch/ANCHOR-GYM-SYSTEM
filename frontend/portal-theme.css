@@ -1613,7 +1613,8 @@ textarea:focus-visible {
 
 :root[data-page="forgot-password"] .verification-code-inputs {
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
+    gap: 12px;
     margin: 8px 0 18px;
 }
 
