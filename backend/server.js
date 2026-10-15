@@ -3,6 +3,7 @@ require("dotenv").config();
 const express = require("express");
 const { Pool } = require("pg");
 const bcrypt = require("bcrypt");
+const nodemailer = require("nodemailer");
 const { OAuth2Client } = require("google-auth-library");
 const fs = require("fs");
 const path = require("path");
@@ -414,6 +415,19 @@ async function ensureDashboardSchema() {
             expires_at TIMESTAMPTZ NOT NULL,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
+    `);
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS password_reset_tokens (
+            token_hash CHAR(64) PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            expires_at TIMESTAMPTZ NOT NULL,
+            used_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `);
+    await pool.query(`
+        CREATE INDEX IF NOT EXISTS password_reset_tokens_user_created_idx
+        ON password_reset_tokens (user_id, created_at DESC)
     `);
     await pool.query(`
         CREATE INDEX IF NOT EXISTS admin_sessions_expiration_idx
@@ -1342,6 +1356,318 @@ app.post(
             success: false,
             message: "Email verification is not used for signup."
         });
+    }
+);
+
+app.post(
+    "/api/auth/forgot-password",
+    async (req, res) => {
+        const email =
+            normalizeSignupEmail(req.body.email);
+
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            return res.status(400).json({
+                success: false,
+                message: "Enter a valid email address."
+            });
+        }
+
+        const smtpHost =
+            String(process.env.SMTP_HOST || "").trim();
+        const smtpUser =
+            String(process.env.SMTP_USER || "").trim();
+        const smtpPass =
+            String(process.env.SMTP_PASS || "");
+        const smtpPort =
+            Number(process.env.SMTP_PORT || 587);
+
+        if (
+            !smtpHost ||
+            !smtpUser ||
+            !smtpPass ||
+            !Number.isInteger(smtpPort) ||
+            smtpPort < 1 ||
+            smtpPort > 65535
+        ) {
+            return res.status(503).json({
+                success: false,
+                message: "Password reset email is not configured. Please contact the gym."
+            });
+        }
+
+        const transporter =
+            nodemailer.createTransport({
+                host: smtpHost,
+                port: smtpPort,
+                secure:
+                    String(process.env.SMTP_SECURE || "")
+                        .trim()
+                        .toLowerCase() === "true" ||
+                    smtpPort === 465,
+                auth: {
+                    user: smtpUser,
+                    pass: smtpPass
+                }
+            });
+
+        let client;
+        let tokenHash;
+        let recipient;
+        let resetUrl;
+
+        try {
+            await transporter.verify();
+
+            client = await pool.connect();
+            await client.query("BEGIN");
+            await client.query(
+                `
+                DELETE FROM password_reset_tokens
+                WHERE created_at < NOW() - INTERVAL '1 day'
+                `
+            );
+
+            const userResult =
+                await client.query(
+                    `
+                    SELECT id, full_name, email
+                    FROM users
+                    WHERE LOWER(email) = $1
+                      AND LOWER(role) = 'customer'
+                    LIMIT 1
+                    FOR UPDATE
+                    `,
+                    [email]
+                );
+
+            if (userResult.rows.length > 0) {
+                const user = userResult.rows[0];
+                const recentRequests =
+                    await client.query(
+                        `
+                        SELECT COUNT(*)::int AS count
+                        FROM password_reset_tokens
+                        WHERE user_id = $1
+                          AND created_at > NOW() - INTERVAL '15 minutes'
+                        `,
+                        [user.id]
+                    );
+
+                if (recentRequests.rows[0].count < 3) {
+                    const rawToken =
+                        crypto.randomBytes(32).toString("hex");
+                    tokenHash =
+                        crypto.createHash("sha256")
+                            .update(rawToken)
+                            .digest("hex");
+
+                    await client.query(
+                        `
+                        UPDATE password_reset_tokens
+                        SET used_at = NOW()
+                        WHERE user_id = $1
+                          AND used_at IS NULL
+                        `,
+                        [user.id]
+                    );
+
+                    await client.query(
+                        `
+                        INSERT INTO password_reset_tokens
+                            (token_hash, user_id, expires_at)
+                        VALUES ($1, $2, NOW() + INTERVAL '30 minutes')
+                        `,
+                        [tokenHash, user.id]
+                    );
+
+                    recipient = user.email;
+                    resetUrl = new URL(
+                        `reset-password.html?token=${rawToken}`,
+                        `${frontendOrigin.replace(/\/+$/, "")}/`
+                    ).toString();
+                }
+            }
+
+            await client.query("COMMIT");
+            client.release();
+            client = null;
+
+            if (recipient && resetUrl && tokenHash) {
+                const escapedUrl =
+                    resetUrl.replace(/&/g, "&amp;")
+                        .replace(/</g, "&lt;")
+                        .replace(/>/g, "&gt;")
+                        .replace(/"/g, "&quot;");
+
+                await transporter.sendMail({
+                    from: process.env.SMTP_FROM || smtpUser,
+                    to: recipient,
+                    subject: "Reset your ANCHOR Gym System password",
+                    text:
+                        `We received a request to reset your ANCHOR password. ` +
+                        `Use this link within 30 minutes: ${resetUrl}\n\n` +
+                        "If you did not request this, you can ignore this email.",
+                    html:
+                        `<p>We received a request to reset your ANCHOR password.</p>` +
+                        `<p><a href="${escapedUrl}">Reset your password</a></p>` +
+                        `<p>This link expires in 30 minutes. If you did not request this, you can ignore this email.</p>`
+                });
+            }
+
+            return res.json({
+                success: true,
+                message: "If an ANCHOR customer account exists for that email, a password reset link will be sent."
+            });
+        } catch (error) {
+            if (client) {
+                try {
+                    await client.query("ROLLBACK");
+                } catch (rollbackError) {
+                    console.error(
+                        "Password reset request rollback error:",
+                        rollbackError
+                    );
+                }
+            }
+
+            if (tokenHash) {
+                try {
+                    await pool.query(
+                        "DELETE FROM password_reset_tokens WHERE token_hash = $1",
+                        [tokenHash]
+                    );
+                } catch (cleanupError) {
+                    console.error(
+                        "Password reset token cleanup error:",
+                        cleanupError
+                    );
+                }
+            }
+
+            console.error("Password reset email request error:", error);
+            return res.status(503).json({
+                success: false,
+                message: "Unable to send a password reset email right now. Please try again later."
+            });
+        } finally {
+            if (client) {
+                client.release();
+            }
+            transporter.close();
+        }
+    }
+);
+
+app.post(
+    "/api/auth/reset-password",
+    async (req, res) => {
+        const token =
+            String(req.body.token || "").trim();
+        const password =
+            String(req.body.password || "");
+
+        if (!/^[a-f0-9]{64}$/i.test(token)) {
+            return res.status(400).json({
+                success: false,
+                message: "This password reset link is invalid or has expired. Request a new one."
+            });
+        }
+
+        if (
+            password.length < 6 ||
+            Buffer.byteLength(password, "utf8") > 72
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Password must be at least 6 characters and no more than 72 bytes."
+            });
+        }
+
+        const tokenHash =
+            crypto.createHash("sha256")
+                .update(token)
+                .digest("hex");
+        const client = await pool.connect();
+        let transactionStarted = false;
+
+        try {
+            await client.query("BEGIN");
+            transactionStarted = true;
+
+            const tokenResult =
+                await client.query(
+                    `
+                    SELECT reset.user_id
+                    FROM password_reset_tokens reset
+                    JOIN users u
+                        ON u.id = reset.user_id
+                    WHERE reset.token_hash = $1
+                      AND reset.expires_at > NOW()
+                      AND reset.used_at IS NULL
+                      AND LOWER(u.role) = 'customer'
+                    FOR UPDATE OF reset
+                    `,
+                    [tokenHash]
+                );
+
+            if (tokenResult.rows.length === 0) {
+                await client.query("ROLLBACK");
+                transactionStarted = false;
+                return res.status(400).json({
+                    success: false,
+                    message: "This password reset link is invalid or has expired. Request a new one."
+                });
+            }
+
+            const userId = tokenResult.rows[0].user_id;
+            const passwordHash =
+                await bcrypt.hash(password, 10);
+
+            await client.query(
+                `
+                UPDATE users
+                SET password = $2
+                WHERE id = $1
+                  AND LOWER(role) = 'customer'
+                `,
+                [userId, passwordHash]
+            );
+            await client.query(
+                `
+                UPDATE password_reset_tokens
+                SET used_at = NOW()
+                WHERE user_id = $1
+                  AND used_at IS NULL
+                `,
+                [userId]
+            );
+
+            await client.query("COMMIT");
+            transactionStarted = false;
+            return res.json({
+                success: true,
+                message: "Password reset successfully."
+            });
+        } catch (error) {
+            if (transactionStarted) {
+                try {
+                    await client.query("ROLLBACK");
+                } catch (rollbackError) {
+                    console.error(
+                        "Password reset rollback error:",
+                        rollbackError
+                    );
+                }
+            }
+
+            console.error("Password reset error:", error);
+            return res.status(500).json({
+                success: false,
+                message: "Unable to reset the password right now."
+            });
+        } finally {
+            client.release();
+        }
     }
 );
 

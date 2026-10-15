@@ -978,57 +978,149 @@ bindPasswordToggle(
 
 const forgotForm =
     document.getElementById("forgotForm");
-
+const forgotMessage =
+    document.getElementById("forgotMessage");
 
 if (forgotForm) {
-
     forgotForm.addEventListener(
         "submit",
-        function(event) {
-
+        async function(event) {
             event.preventDefault();
 
-
             const email =
-                document
-                    .getElementById("forgotEmail")
-                    .value
-                    .trim();
+                document.getElementById("forgotEmail").value.trim();
+            const submitButton =
+                forgotForm.querySelector('button[type="submit"]');
 
+            forgotMessage.textContent = "";
+            forgotMessage.dataset.state = "";
+            submitButton.disabled = true;
 
-            if (!email) {
-
-                alert(
-                    "Please enter your email."
+            try {
+                const response = await fetch(
+                    window.anchorApiUrl("/api/auth/forgot-password"),
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({ email })
+                    }
                 );
+                const data = await response.json();
 
+                if (!response.ok) {
+                    throw new Error(
+                        data.message || "Unable to send a password reset email."
+                    );
+                }
+
+                forgotMessage.textContent = data.message;
+            } catch (error) {
+                console.error("Forgot password request error:", error);
+                forgotMessage.textContent =
+                    error.message || "Unable to send a password reset email.";
+                forgotMessage.dataset.state = "error";
+            } finally {
+                submitButton.disabled = false;
+            }
+        }
+    );
+}
+
+const resetPasswordForm =
+    document.getElementById("resetPasswordForm");
+
+if (resetPasswordForm) {
+    const resetMessage =
+        document.getElementById("resetPasswordMessage");
+    const resetPasswordInput =
+        document.getElementById("resetPassword");
+    const resetPasswordConfirm =
+        document.getElementById("resetPasswordConfirm");
+    const resetToken =
+        new URLSearchParams(window.location.search).get("token");
+
+    if (!resetToken || !/^[a-f0-9]{64}$/i.test(resetToken)) {
+        resetMessage.textContent =
+            "This password reset link is invalid. Request a new one.";
+        resetMessage.dataset.state = "error";
+        resetPasswordForm.hidden = true;
+    }
+
+    const validateResetPasswordMatch = function() {
+        resetPasswordConfirm.setCustomValidity(
+            resetPasswordConfirm.value &&
+            resetPasswordConfirm.value !== resetPasswordInput.value
+                ? "Passwords do not match."
+                : ""
+        );
+    };
+
+    resetPasswordInput.addEventListener(
+        "input",
+        validateResetPasswordMatch
+    );
+    resetPasswordConfirm.addEventListener(
+        "input",
+        validateResetPasswordMatch
+    );
+
+    resetPasswordForm.addEventListener(
+        "submit",
+        async function(event) {
+            event.preventDefault();
+            validateResetPasswordMatch();
+
+            if (!resetPasswordForm.reportValidity()) {
                 return;
             }
 
+            const submitButton =
+                resetPasswordForm.querySelector('button[type="submit"]');
+            submitButton.disabled = true;
+            resetMessage.textContent = "";
+            resetMessage.dataset.state = "";
 
-            /*
-                REAL SYSTEM:
+            try {
+                const response = await fetch(
+                    window.anchorApiUrl("/api/auth/reset-password"),
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            token: resetToken,
+                            password: resetPasswordInput.value
+                        })
+                    }
+                );
+                const data = await response.json();
 
-                Forgot Password
-                       ↓
-                    server.js
-                       ↓
-                   Nodemailer
-                       ↓
-                   Email Link
-                       ↓
-                 New Password
-            */
+                if (!response.ok) {
+                    throw new Error(
+                        data.message || "Unable to reset your password."
+                    );
+                }
 
-
-            alert(
-                "Password reset link sent to " +
-                email
-            );
-
+                resetPasswordForm.hidden = true;
+                resetMessage.textContent =
+                    "Your password has been reset. You can now sign in.";
+                window.history.replaceState(
+                    {},
+                    document.title,
+                    window.location.pathname
+                );
+            } catch (error) {
+                console.error("Password reset error:", error);
+                resetMessage.textContent =
+                    error.message || "Unable to reset your password.";
+                resetMessage.dataset.state = "error";
+                submitButton.disabled = false;
+            }
         }
     );
-
 }
 
 

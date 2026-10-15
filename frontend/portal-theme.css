@@ -1561,6 +1561,23 @@ textarea:focus-visible {
 :root:is(
     [data-page="signup"],
     [data-page="forgot-password"]
+) .auth-card .auth-message {
+    min-height: 1.5em;
+    margin: 12px 0;
+    color: var(--color-muted);
+    font-size: 13px;
+}
+
+:root:is(
+    [data-page="signup"],
+    [data-page="forgot-password"]
+) .auth-card .auth-message[data-state="error"] {
+    color: var(--color-danger);
+}
+
+:root:is(
+    [data-page="signup"],
+    [data-page="forgot-password"]
 ) .auth-card label {
     color: var(--color-muted);
     font-size: 11px;
@@ -1702,7 +1719,7 @@ textarea:focus-visible {
 :root[data-page="admin-login"] .auth-card label[for="adminPassword"],
 :root[data-page="admin-login"] .auth-card label[for="adminEmail"],
 :root[data-page="signup"] .auth-card form label:not(.remember) {
-    color: #A9C7F5;
+    color: var(--color-placeholder);
 }
 
 :root:is(
@@ -1936,6 +1953,7 @@ textarea:focus-visible {
 
 :root[data-page="admin-login"] .auth-card label[for="adminEmail"],
 :root[data-page="admin-login"] .auth-card label[for="adminPassword"] {
+    color: var(--color-placeholder);
     font-family: Inter, "Segoe UI", Arial, sans-serif;
     font-size: 10px;
     font-weight: 700;

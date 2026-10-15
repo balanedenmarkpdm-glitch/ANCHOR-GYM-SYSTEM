@@ -85,9 +85,37 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
         path.join(projectRoot, "frontend", "customer.js"),
         "utf8"
     );
+    const authJs = fs.readFileSync(
+        path.join(projectRoot, "frontend", "auth.js"),
+        "utf8"
+    );
+    const forgotPasswordHtml = fs.readFileSync(
+        path.join(projectRoot, "frontend", "forgot-password.html"),
+        "utf8"
+    );
+    const resetPasswordHtml = fs.readFileSync(
+        path.join(projectRoot, "frontend", "reset-password.html"),
+        "utf8"
+    );
 
     assert.match(loginHtml, /<input\b(?=[^>]*id="adminEmail")(?=[^>]*value="admin@gmail\.com")[^>]*>/);
     assert.match(loginHtml, /<input\b(?=[^>]*id="adminPassword")(?=[^>]*value="admin123")[^>]*>/);
+    assert.match(forgotPasswordHtml, /id="forgotForm"/);
+    assert.match(forgotPasswordHtml, /id="forgotMessage"/);
+    assert.match(authJs, /\/api\/auth\/forgot-password/);
+    assert.match(authJs, /\/api\/auth\/reset-password/);
+    assert.match(resetPasswordHtml, /id="resetPasswordForm"/);
+    assert.match(backendServer, /CREATE TABLE IF NOT EXISTS password_reset_tokens/);
+    assert.match(backendServer, /NOW\(\) \+ INTERVAL '30 minutes'/);
+    assert.match(backendServer, /crypto\.createHash\("sha256"\)/);
+    assert.match(
+        portalTheme,
+        /:root\[data-page="admin-login"\] \.auth-card label\[for="adminEmail"\],[\s\S]*?label\[for="adminPassword"\]\s*\{[^}]*color:\s*var\(--color-placeholder\)/s
+    );
+    assert.match(
+        portalTheme,
+        /:root\[data-page="signup"\] \.auth-card form label:not\(\.remember\)\s*\{\s*color:\s*var\(--color-placeholder\)/
+    );
     assert.match(adminJs, /class="approve"/);
     assert.match(adminJs, /class="reject"/);
     assert.match(membershipChart, /dashboardActiveLegend/);
@@ -597,6 +625,62 @@ if (!integrationEnabled) {
             [activeMemberId]
         );
         assert.equal(unchanged.rows[0].status, "ACTIVE");
+    });
+
+    test("password reset rejects expired and used tokens", async () => {
+        const originalPassword = await pool.query(
+            "SELECT password FROM users WHERE id = $1",
+            [activeUserId]
+        );
+
+        for (const state of ["expired", "used"]) {
+            const token =
+                crypto.randomBytes(32).toString("hex");
+            const tokenHash =
+                crypto.createHash("sha256")
+                    .update(token)
+                    .digest("hex");
+
+            await pool.query(
+                `
+                INSERT INTO password_reset_tokens
+                    (token_hash, user_id, expires_at, used_at)
+                VALUES (
+                    $1,
+                    $2,
+                    CASE WHEN $3 = 'expired'
+                        THEN NOW() - INTERVAL '1 minute'
+                        ELSE NOW() + INTERVAL '30 minutes'
+                    END,
+                    CASE WHEN $3 = 'used' THEN NOW() ELSE NULL END
+                )
+                `,
+                [tokenHash, activeUserId, state]
+            );
+
+            const result = await api(
+                "/api/auth/reset-password",
+                {
+                    method: "POST",
+                    body: JSON.stringify({
+                        token,
+                        password: "new-valid-password"
+                    })
+                }
+            );
+
+            assert.equal(result.response.status, 400);
+            assert.match(result.body.message, /invalid or has expired/i);
+        }
+
+        const unchangedPassword = await pool.query(
+            "SELECT password FROM users WHERE id = $1",
+            [activeUserId]
+        );
+        assert.equal(
+            unchangedPassword.rows[0].password,
+            originalPassword.rows[0].password
+        );
     });
 
     test("manual check-in, visit-specific checkout, repeat visits, and no fake member payment", async () => {
