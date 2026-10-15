@@ -103,10 +103,15 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(forgotPasswordHtml, /id="forgotForm"/);
     assert.match(forgotPasswordHtml, /id="forgotMessage"/);
     assert.match(authJs, /\/api\/auth\/forgot-password/);
+    assert.match(authJs, /Sending reset link\. Please wait\.\.\./);
+    assert.match(authJs, /The request took too long\. Please try again\./);
     assert.match(authJs, /\/api\/auth\/reset-password/);
     assert.match(resetPasswordHtml, /id="resetPasswordForm"/);
     assert.match(backendServer, /CREATE TABLE IF NOT EXISTS password_reset_tokens/);
     assert.match(backendServer, /NOW\(\) \+ INTERVAL '30 minutes'/);
+    assert.match(backendServer, /connectionTimeout:\s*10000/);
+    assert.match(backendServer, /greetingTimeout:\s*10000/);
+    assert.match(backendServer, /socketTimeout:\s*15000/);
     assert.match(backendServer, /crypto\.createHash\("sha256"\)/);
     assert.match(
         portalTheme,

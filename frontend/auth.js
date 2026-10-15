@@ -994,13 +994,26 @@ if (forgotForm) {
 
             forgotMessage.textContent = "";
             forgotMessage.dataset.state = "";
+            forgotMessage.textContent =
+                "Sending reset link. Please wait...";
             submitButton.disabled = true;
+
+            const abortController =
+                new AbortController();
+            const requestTimeout =
+                window.setTimeout(
+                    function() {
+                        abortController.abort();
+                    },
+                    45000
+                );
 
             try {
                 const response = await fetch(
                     window.anchorApiUrl("/api/auth/forgot-password"),
                     {
                         method: "POST",
+                        signal: abortController.signal,
                         headers: {
                             "Content-Type": "application/json"
                         },
@@ -1019,9 +1032,13 @@ if (forgotForm) {
             } catch (error) {
                 console.error("Forgot password request error:", error);
                 forgotMessage.textContent =
-                    error.message || "Unable to send a password reset email.";
+                    error.name === "AbortError"
+                        ? "The request took too long. Please try again."
+                        : error.message ||
+                          "Unable to send a password reset email.";
                 forgotMessage.dataset.state = "error";
             } finally {
+                window.clearTimeout(requestTimeout);
                 submitButton.disabled = false;
             }
         }

@@ -1399,6 +1399,9 @@ app.post(
             nodemailer.createTransport({
                 host: smtpHost,
                 port: smtpPort,
+                connectionTimeout: 10000,
+                greetingTimeout: 10000,
+                socketTimeout: 15000,
                 secure:
                     String(process.env.SMTP_SECURE || "")
                         .trim()
