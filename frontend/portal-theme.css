@@ -236,6 +236,47 @@ button[type="submit"]:hover {
     color: #ffffff;
 }
 
+html[data-portal="admin"] .approve,
+html[data-portal="admin"] .pending-row button.approve,
+html[data-portal="admin"] .restore-button {
+    background-color: #16A34A;
+    border-color: #16A34A;
+    color: #ffffff;
+}
+
+html[data-portal="admin"] .approve:hover,
+html[data-portal="admin"] .pending-row button.approve:hover,
+html[data-portal="admin"] .restore-button:hover {
+    background-color: #15803D;
+    border-color: #15803D;
+}
+
+html[data-portal="admin"] .reject,
+html[data-portal="admin"] .pending-row button.reject {
+    background-color: #DC2626;
+    border-color: #DC2626;
+    color: #ffffff;
+}
+
+html[data-portal="admin"] .reject:hover,
+html[data-portal="admin"] .pending-row button.reject:hover {
+    background-color: #B91C1C;
+    border-color: #B91C1C;
+    color: #ffffff;
+}
+
+.membership-legend-active {
+    color: #16A34A;
+}
+
+.membership-legend-pending {
+    color: #EAB308;
+}
+
+.membership-legend-revoked {
+    color: #DC2626;
+}
+
 #qr-reader__dashboard_section_swaplink {
     color: var(--color-primary) !important;
 }

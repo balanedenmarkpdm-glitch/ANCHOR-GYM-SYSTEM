@@ -6,9 +6,13 @@ let refreshTimer = null;
 let countdownTimer = null;
 let qrScanner = null;
 let qrScanBusy = false;
+let guestTimeoutRefreshPending = false;
 let lastScannedQr = null;
 let reportPeriod = "daily";
 let attendanceRecords = [];
+let attendanceMembers = [];
+let attendanceMembersPage = 1;
+const attendanceMembersPageSize = 25;
 let transactionFilter = "all";
 let activeGuestExtensionId = null;
 let guestExtensionQuote = null;
@@ -436,29 +440,20 @@ async function loadAdminDashboard() {
 
         setText(
             "dashboardActiveLegend",
-            data.activeMembers ??
-            0
+            data.membershipStatusCounts?.active ?? 0
         );
-
-
         setText(
-            "dashboardExpiredLegend",
-            data.expiredMembers ??
-            0
+            "dashboardPendingLegend",
+            data.membershipStatusCounts?.pending ?? 0
         );
-
-
         setText(
             "dashboardRevokedLegend",
-            data.revokedMembers ??
-            0
+            data.membershipStatusCounts?.revoked ?? 0
         );
-
-
         updateMembershipPie({
-            active: data.activeMembers,
-            expired: data.expiredMembers,
-            revoked: data.revokedMembers
+            active: data.membershipStatusCounts?.active,
+            pending: data.membershipStatusCounts?.pending,
+            revoked: data.membershipStatusCounts?.revoked
         });
 
 
@@ -498,15 +493,15 @@ function updateMembershipPie(
     const segments = [
         {
             value: Number(counts.active) || 0,
-            color: "#19d87d"
+            color: "#16A34A"
         },
         {
-            value: Number(counts.expired) || 0,
-            color: "#f3ad29"
+            value: Number(counts.pending) || 0,
+            color: "#EAB308"
         },
         {
             value: Number(counts.revoked) || 0,
-            color: "#a78bfa"
+            color: "#DC2626"
         }
     ];
 
@@ -758,17 +753,14 @@ async function loadApplications() {
 
         if (tableBody) {
 
-            if (
-                pendingApplications.length ===
-                0
-            ) {
+            if (applications.length === 0) {
 
                 tableBody.innerHTML = `
                     <tr>
                         <td
-                            colspan="7"
+                            colspan="10"
                             style="text-align:center;">
-                            No pending applications.
+                            No applications found.
                         </td>
                     </tr>
                 `;
@@ -776,7 +768,7 @@ async function loadApplications() {
             } else {
 
                 tableBody.innerHTML =
-                    pendingApplications
+                    applications
                         .map(
                             application =>
                                 createApplicationRow(
@@ -849,12 +841,13 @@ function createApplicationRow(
         application.payment_screenshot
             ? `
                 <button
+                    class="small-btn application-proof-button"
                     type="button"
                     onclick="viewScreenshot('${escapeAttribute(
                         application.payment_screenshot
                     )}')">
 
-                    View
+                    View Payment Screenshot
 
                 </button>
             `
@@ -899,6 +892,15 @@ function createApplicationRow(
             </td>
 
             <td>
+                ${escapeHtml(application.email || "-")}
+                <small>${escapeHtml(application.phone || "-")}</small>
+            </td>
+
+            <td>
+                ${escapeHtml(application.membership_plan || "-")}
+            </td>
+
+            <td>
                 ₱${Number(
                     application.amount ||
                     0
@@ -937,6 +939,10 @@ function createApplicationRow(
 
             <td>
                 ${actions}
+            </td>
+
+            <td>
+                ${escapeHtml(application.rejection_reason || "-")}
             </td>
 
         </tr>
@@ -2814,19 +2820,11 @@ async function loadTransactions(
                         </span>
                     </td>
                     <td>${formatDateTime(transaction.transaction_date)}</td>
-                    <td>
-                        ${transaction.attendance_id
-                            ? `<button class="small-btn" type="button"
-                                onclick="openAttendanceVisit(${Number(transaction.attendance_id)})">
-                                View Visit
-                              </button>`
-                            : "—"}
-                    </td>
                 </tr>
             `).join("")
             : `
                 <tr>
-                    <td colspan="13" style="text-align:center;">
+                    <td colspan="12" style="text-align:center;">
                         No transactions found for this filter.
                     </td>
                 </tr>
@@ -2842,24 +2840,13 @@ async function loadTransactions(
         if (body) {
             body.innerHTML = `
                 <tr>
-                    <td colspan="13" style="text-align:center;">
+                    <td colspan="12" style="text-align:center;">
                         ${escapeHtml(error.message || "Unable to load transactions.")}
                     </td>
                 </tr>
             `;
         }
 
-    }
-
-    async function openAttendanceVisit(attendanceId) {
-        showPage("attendance");
-        await loadAttendance();
-        const row = document.getElementById(`attendance-row-${Number(attendanceId)}`);
-        if (row) {
-            row.scrollIntoView({ behavior: "smooth", block: "center" });
-            row.classList.add("attendance-row-highlight");
-            setTimeout(() => row.classList.remove("attendance-row-highlight"), 2500);
-        }
     }
 
 }
@@ -2948,7 +2935,7 @@ async function loadAttendance(
         setText(
             "attendanceTimeoutAlert",
             timedOutGuests > 0
-                ? `${timedOutGuests} guest visit(s) have timed out but remain checked in. Record checkout only after the guest actually leaves.`
+                ? `${timedOutGuests} guest access pass(es) have expired. They are TIMED OUT and excluded from occupancy; no checkout time is fabricated.`
                 : ""
         );
 
@@ -2981,12 +2968,14 @@ async function loadAttendance(
             return;
         }
 
+        await loadAttendanceMembers();
+
         if (attendance.length === 0) {
 
             body.innerHTML = `
                 <tr>
                     <td
-                        colspan="7"
+                        colspan="8"
                         style="text-align:center;"
                     >
                         No attendance records found.
@@ -3086,7 +3075,7 @@ async function loadAttendance(
                                             TIMED OUT / OVERDUE
                                         </span>
                                         <small class="countdown-note">
-                                            Still checked in; checkout not recorded
+                                            Paid access ended; not counted in occupancy
                                         </small>
                                     `;
                                 }
@@ -3105,14 +3094,7 @@ async function loadAttendance(
                                                 >
                                                     Extend Time / Upgrade to All-Day
                                                 </button>
-                                                <button
-                                                    type="button"
-                                                    class="small-btn"
-                                                    onclick="checkoutAttendance(${Number(record.id)})"
-                                                >
-                                                    Check Out
-                                                </button>
-                                              `
+                                                      `
                                             : ""
                                     }
 
@@ -3201,6 +3183,147 @@ async function loadAttendance(
         );
 
     }
+}
+
+async function loadAttendanceMembers() {
+    const body = document.getElementById("attendanceMembersTableBody");
+    if (!body) {
+        return;
+    }
+
+    try {
+        const data = await apiRequest("/api/admin/attendance/members");
+        attendanceMembers = data.members || [];
+        attendanceMembersPage = 1;
+        renderAttendanceMembers();
+    } catch (error) {
+        console.error("Attendance member list error:", error);
+        body.innerHTML = `
+            <tr>
+                <td colspan="6" style="text-align:center;">
+                    ${escapeHtml(error.message || "Unable to load members.")}
+                </td>
+            </tr>
+        `;
+    }
+}
+
+function filterAttendanceMembers() {
+    attendanceMembersPage = 1;
+    renderAttendanceMembers();
+}
+
+function changeAttendanceMembersPage(change) {
+    const totalPages = Math.max(
+        1,
+        Math.ceil(getFilteredAttendanceMembers().length / attendanceMembersPageSize)
+    );
+    attendanceMembersPage = Math.min(
+        totalPages,
+        Math.max(1, attendanceMembersPage + change)
+    );
+    renderAttendanceMembers();
+}
+
+function getFilteredAttendanceMembers() {
+    const query = (
+        document.getElementById("attendanceMemberSearch")?.value || ""
+    ).trim().toLowerCase();
+    const filter = document.getElementById("attendanceMemberFilter")?.value || "all";
+
+    return attendanceMembers.filter(member => {
+        const matchesQuery =
+            !query ||
+            String(member.full_name || "").toLowerCase().includes(query) ||
+            String(member.member_id || "").toLowerCase().includes(query);
+        const inside = Array.isArray(member.open_visits) &&
+            member.open_visits.length > 0;
+        const matchesFilter =
+            filter === "all" ||
+            (filter === "inside" && inside) ||
+            (filter === "not-inside" && !inside);
+
+        return matchesQuery && matchesFilter;
+    });
+}
+
+function renderAttendanceMembers() {
+    const body = document.getElementById("attendanceMembersTableBody");
+    if (!body) {
+        return;
+    }
+
+    const filteredMembers = getFilteredAttendanceMembers();
+    const totalPages = Math.max(
+        1,
+        Math.ceil(filteredMembers.length / attendanceMembersPageSize)
+    );
+    attendanceMembersPage = Math.min(attendanceMembersPage, totalPages);
+    const start = (attendanceMembersPage - 1) * attendanceMembersPageSize;
+    const pageMembers = filteredMembers.slice(
+        start,
+        start + attendanceMembersPageSize
+    );
+
+    setText(
+        "attendanceMembersPageStatus",
+        `Page ${attendanceMembersPage} of ${totalPages} · ${filteredMembers.length} member(s)`
+    );
+    if (pageMembers.length === 0) {
+        body.innerHTML = `
+            <tr>
+                <td colspan="6" style="text-align:center;">
+                    No members match this search or filter.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    body.innerHTML = pageMembers.map(member => {
+        const openVisits = Array.isArray(member.open_visits)
+            ? member.open_visits
+            : [];
+        const expired = member.expired === true;
+        const eligible = member.eligible === true;
+        const membershipStatus = expired
+            ? `<span class="status expired">EXPIRED</span>`
+            : `<span class="status ${getStatusClass(member.status)}">${escapeHtml(getStatus(member.status))}</span>`;
+        const attendanceStatus = openVisits.length > 1
+            ? `Multiple Open Visits (${openVisits.length})`
+            : openVisits.length === 1
+                ? "Inside Gym"
+                : "Not Checked In";
+        const checkInTime = openVisits.length
+            ? openVisits.map(visit => escapeHtml(formatDateTime(visit.check_in))).join("<br>")
+            : "—";
+        const actions = openVisits.length
+            ? openVisits.map(visit => `
+                <button class="small-btn" type="button"
+                    onclick="manualMemberCheckOut(${Number(visit.id)})">
+                    Check Out Visit #${Number(visit.id)}
+                </button>
+            `).join("")
+            : eligible
+                ? `<button class="restore-button" type="button"
+                    onclick="manualMemberCheckIn(${Number(member.id)})">
+                    Check In
+                  </button>`
+                : `<span class="attendance-ineligible-reason">
+                    ${expired ? "Membership expired" : `Membership ${escapeHtml(getStatus(member.status).toLowerCase())}`}
+                  </span>`;
+
+        return `
+            <tr>
+                <td>${escapeHtml(member.member_id || "—")}</td>
+                <td>${escapeHtml(member.full_name || "—")}</td>
+                <td>${membershipStatus}</td>
+                <td>${escapeHtml(attendanceStatus)}</td>
+                <td>${checkInTime}</td>
+                <td><div class="attendance-actions">${actions}</div></td>
+            </tr>
+        `;
+    }).join("");
 }
 
 // =====================================
@@ -3406,6 +3529,26 @@ async function updateGuestCountdowns() {
             element.textContent =
                 "TIMED OUT";
 
+            if (
+                element.dataset.timeoutRefreshed !== "true" &&
+                !guestTimeoutRefreshPending
+            ) {
+                element.dataset.timeoutRefreshed = "true";
+                guestTimeoutRefreshPending = true;
+                Promise.all([
+                    loadAttendance(),
+                    loadAdminDashboard(),
+                    loadReports()
+                ]).catch(error => {
+                    console.error(
+                        "Guest timeout refresh error:",
+                        error
+                    );
+                }).finally(() => {
+                    guestTimeoutRefreshPending = false;
+                });
+            }
+
             const row =
                 element.closest("tr");
 
@@ -3418,7 +3561,7 @@ async function updateGuestCountdowns() {
 
             if (endLabel) {
                 endLabel.textContent =
-                    "Overdue - guest still checked in";
+                    "Guest access expired";
             }
 
             continue;
@@ -4712,7 +4855,7 @@ async function closeQrScanner() {
 // VIEW SCREENSHOT
 // =====================================
 
-function viewScreenshot(
+async function viewScreenshot(
     url
 ) {
 
@@ -4722,12 +4865,41 @@ function viewScreenshot(
 
     }
 
+    const preview = window.open("about:blank", "_blank");
+    if (!preview) {
+        alert("Allow pop-ups to view the payment screenshot.");
+        return;
+    }
+    preview.opener = null;
 
-    window.open(
-        window.anchorApiUrl(url),
-        "_blank",
-        "noopener,noreferrer"
-    );
+    try {
+        const token = window.anchorSession.get("anchorAdminToken");
+        const response = await fetch(window.anchorApiUrl(url), {
+            cache: "no-store",
+            headers: token
+                ? { Authorization: ["Bearer", token].join(" ") }
+                : {}
+        });
+
+        if (!response.ok) {
+            let message = "Unable to load the payment screenshot.";
+            try {
+                const data = await response.json();
+                message = data.message || message;
+            } catch (error) {
+                console.error("Screenshot error response parse failed:", error);
+            }
+            throw new Error(message);
+        }
+
+        const imageUrl = URL.createObjectURL(await response.blob());
+        preview.location.href = imageUrl;
+        window.setTimeout(() => URL.revokeObjectURL(imageUrl), 60000);
+    } catch (error) {
+        preview.close();
+        console.error("Payment screenshot loading error:", error);
+        alert(error.message || "Unable to load the payment screenshot.");
+    }
 
 }
 
@@ -4746,6 +4918,13 @@ async function loadReports(
 
     const periodChanged = period !== reportPeriod;
     reportPeriod = period;
+    const chartTitle = {
+        daily: "Visits by Hour",
+        weekly: "Visits by Day",
+        monthly: "Visits by Week",
+        custom: "Visits by Date"
+    }[period];
+    setText("reportChartTitle", chartTitle);
     const dateRange = document.getElementById("reportDateRange");
     const startDate = document.getElementById("reportStartDate")?.value || "";
     const endDate = document.getElementById("reportEndDate")?.value || "";
@@ -4825,9 +5004,6 @@ async function loadReports(
             guestVisits
         );
 
-        setText("reportUniqueVisitors", Number(data.uniqueVisitors || 0));
-        setText("reportMemberVisitorCount", Number(data.memberVisitorCount || 0));
-        setText("reportGuestVisitorCount", Number(data.guestVisitorCount || 0));
         setText("reportCurrentOccupancy", Number(data.currentOccupancy || 0));
 
         updatePeakBars(
@@ -4846,8 +5022,8 @@ async function loadReports(
         if (reportMessage) {
 
             reportMessage.textContent =
-                `${totalVisits} visit(s) in the selected period; ` +
-                `${Number(data.uniqueVisitors || 0)} unique visitor(s).`;
+                `${totalVisits} visit(s) in the selected period: ` +
+                `${memberVisits} member visit(s) and ${guestVisits} guest visit(s).`;
 
         }
 
@@ -4918,9 +5094,6 @@ function clearReportData(message) {
         "reportTotalVisits",
         "reportMemberVisits",
         "reportGuestVisits",
-        "reportUniqueVisitors",
-        "reportMemberVisitorCount",
-        "reportGuestVisitorCount",
         "reportCurrentOccupancy"
     ].forEach(id => setText(id, "0"));
 
@@ -4971,6 +5144,12 @@ function updatePeakBars(
         monthly: "weekly attendance for the current month",
         custom: "daily attendance for the selected date range"
     }[period];
+    const chartTitle = {
+        daily: "Visits by Hour",
+        weekly: "Visits by Day",
+        monthly: "Visits by Week",
+        custom: "Visits by Date"
+    }[period];
 
     if (
         values.length === 0 ||
@@ -4978,14 +5157,14 @@ function updatePeakBars(
     ) {
         yAxis.innerHTML = "<span>0</span>";
         chart.innerHTML =
-            '<div class="chart-empty">No attendance data for this period.</div>';
+            `<div class="chart-empty">No attendance data for this period.</div>`;
         chart.setAttribute(
             "aria-label",
-            `Peak attendance chart showing ${periodDescription}; no attendance data`
+            `${chartTitle} chart showing ${periodDescription}; no attendance data`
         );
         if (description && (announcePeriodChange || !description.textContent)) {
             description.textContent =
-                `Peak attendance chart showing ${periodDescription}. No attendance data.`;
+                `${chartTitle} chart showing ${periodDescription}. No attendance data.`;
         }
         return;
     }
@@ -5025,11 +5204,11 @@ function updatePeakBars(
 
     chart.setAttribute(
         "aria-label",
-        `Peak attendance chart showing ${periodDescription}`
+        `${chartTitle} chart showing ${periodDescription}`
     );
     if (description && (announcePeriodChange || !description.textContent)) {
         description.textContent =
-            `Peak attendance chart showing ${periodDescription}. ` +
+            `${chartTitle} chart showing ${periodDescription}. ` +
             values.map(item => `${item.label}: ${item.visits} visits`).join("; ");
     }
 }

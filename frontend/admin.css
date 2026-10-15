@@ -442,7 +442,9 @@ table {
 }
 
 .attendance-table-scroll,
-.report-table-scroll {
+.report-table-scroll,
+.attendance-members-table-scroll,
+.applications-table-scroll {
     max-height: min(65vh, 760px);
     overflow-y: auto;
     overscroll-behavior: contain;
@@ -450,12 +452,23 @@ table {
 
 .attendance-table-scroll table,
 .report-table-scroll table,
+.attendance-members-table-scroll table {
+    min-width: 900px;
+}
+
+.applications-table-scroll table {
+    min-width: 1100px;
+}
+
+.transaction-table-scroll table,
 .transactions-grid .table-scroll table {
     min-width: 760px;
 }
 
 .attendance-table-scroll thead,
-.report-table-scroll thead {
+.report-table-scroll thead,
+.attendance-members-table-scroll thead,
+.applications-table-scroll thead {
     position: sticky;
     top: 0;
     z-index: 2;
@@ -499,6 +512,50 @@ table {
 
 .manual-attendance-card {
     margin-bottom: 18px;
+}
+
+.attendance-members-card {
+    margin-bottom: 18px;
+}
+
+.attendance-member-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin: 12px 0;
+}
+
+.attendance-member-toolbar input[type="search"] {
+    width: min(100%, 320px);
+    min-height: 40px;
+    padding: 8px 10px;
+}
+
+.attendance-member-pagination {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.attendance-member-pagination > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.attendance-ineligible-reason {
+    color: var(--color-danger);
+    font-weight: 600;
+}
+
+.application-proof-button {
+    width: auto;
+    min-width: 145px;
+    white-space: normal;
 }
 
 .manual-attendance-card > input {

@@ -32,7 +32,7 @@ let activeUserId;
 let testSchema;
 let memberTransactionSeeded = false;
 
-test("attendance reports retain scroll containers and required member-status colors", () => {
+test("admin UI exposes the required application, dashboard, report, attendance, and transaction rules", () => {
     const adminHtml = fs.readFileSync(
         path.join(projectRoot, "frontend", "admin.html"),
         "utf8"
@@ -53,14 +53,57 @@ test("attendance reports retain scroll containers and required member-status col
         path.join(projectRoot, "frontend", "admin.js"),
         "utf8"
     );
+    const backendServer = fs.readFileSync(
+        path.join(projectRoot, "backend", "server.js"),
+        "utf8"
+    );
+    const transactionPage = adminHtml.match(
+        /<section\s+id="transactions"[\s\S]*?<\/section>/
+    )?.[0] || "";
+    const reportPage = adminHtml.match(
+        /<section\s+id="reports"[\s\S]*?<\/section>/
+    )?.[0] || "";
+    const reportSummary = reportPage.match(
+        /<div class="attendance-stats report-stats">([\s\S]*?)<div class="card report">/
+    )?.[1] || "";
+    const membershipChart = adminHtml.match(
+        /<div class="legend">[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/
+    )?.[0] || "";
 
     assert.match(loginHtml, /id="adminEmail"[\s\S]*?value="admin@gmail\.com"/);
     assert.match(loginHtml, /id="adminPassword"[\s\S]*?value="admin123"/);
+    assert.match(adminJs, /class="approve"/);
+    assert.match(adminJs, /class="reject"/);
+    assert.match(membershipChart, /dashboardActiveLegend/);
+    assert.match(membershipChart, /dashboardPendingLegend/);
+    assert.match(membershipChart, /dashboardRevokedLegend/);
+    assert.doesNotMatch(membershipChart, /Expired/);
+    assert.equal((reportSummary.match(/class="card"/g) || []).length, 4);
+    assert.match(reportPage, /Visits by Hour/);
+    assert.match(adminHtml, /id="attendanceMembersTableBody"/);
+    assert.match(adminHtml, /applications-table-scroll/);
+    assert.match(adminHtml, /attendanceMemberSearch/);
+    assert.match(adminHtml, /value="inside">Inside Gym/);
+    assert.match(adminHtml, /value="not-inside">Not Checked In/);
     assert.match(adminHtml, /class="chart-scroll"/);
     assert.match(adminHtml, /class="table-scroll report-table-scroll"/);
     assert.match(adminHtml, /class="table-scroll attendance-table-scroll"/);
+    assert.match(adminHtml, /class="table-scroll attendance-members-table-scroll"/);
+    assert.doesNotMatch(transactionPage, /<th[^>]*>\s*Action\s*<\/th>/i);
+    assert.doesNotMatch(transactionPage, /\b(?:View|View Proof|View Details|Delete)\b/i);
+    assert.doesNotMatch(
+        adminJs.match(/async function loadTransactions[\s\S]*?\/\/ ATTENDANCE/)?.[0] || "",
+        /<button|View Visit|openAttendanceVisit/
+    );
+    assert.match(adminJs, /attendanceMembersPageSize = 25/);
+    assert.match(adminJs, /data\.membershipStatusCounts\?\.pending/);
+    assert.match(adminJs, /async function viewScreenshot/);
+    assert.match(adminJs, /headers: token\s*\?/);
+    assert.match(backendServer, /\/api\/admin\/applications\/' \|\| a\.id \|\| '\/screenshot/);
     assert.match(portalTheme, /\.chart-scroll\s*\{[^}]*overflow-x:\s*auto/s);
-    assert.match(adminCss, /\.attendance-table-scroll,\s*\.report-table-scroll\s*\{[^}]*max-height:[^}]*overflow-y:\s*auto/s);
+    assert.match(adminCss, /\.attendance-table-scroll,\s*\.report-table-scroll,\s*\.attendance-members-table-scroll,\s*\.applications-table-scroll\s*\{[^}]*max-height:[^}]*overflow-y:\s*auto/s);
+    assert.match(portalTheme, /html\[data-portal="admin"\]\s+\.approve[\s\S]*?#16A34A/);
+    assert.match(portalTheme, /html\[data-portal="admin"\]\s+\.reject[\s\S]*?#DC2626/);
     assert.match(adminJs, /for \(let value = axisMaximum; value >= 0; value -= step\)/);
     assert.match(portalTheme, /\.status\.active\s*\{[^}]*#16A34A/s);
     assert.match(portalTheme, /\.status\.pending\s*\{[^}]*#EAB308/s);
@@ -799,12 +842,12 @@ if (!integrationEnabled) {
         assert.equal(expiredResult.response.status, 200, expiredResult.body.message);
         assert.ok(new Date(expiredResult.body.new_expiration).getTime() > Date.now());
 
-        const checkedOut = await api(
+        const occupancyBeforeExpiry = await api("/api/admin/attendance");
+        const guestCheckout = await api(
             `/api/admin/attendance/${expiredGuest.body.attendance.id}/checkout`,
             { method: "PATCH", body: JSON.stringify({}) }
         );
-        assert.equal(checkedOut.response.status, 200, checkedOut.body.message);
-        assert.ok(checkedOut.body.attendance.check_out);
+        assert.equal(guestCheckout.response.status, 404);
 
         const expirationState = await pool.query(
             `
@@ -815,8 +858,21 @@ if (!integrationEnabled) {
             [expiredGuest.body.attendance.id]
         );
         assert.ok(expirationState.rows[0].check_in);
-        assert.ok(expirationState.rows[0].check_out);
+        assert.equal(expirationState.rows[0].check_out, null);
         assert.ok(expirationState.rows[0].expiration_time);
+        await pool.query(
+            `
+            UPDATE attendance
+            SET expiration_time = CURRENT_TIMESTAMP - INTERVAL '1 hour'
+            WHERE id = $1
+            `,
+            [expiredGuest.body.attendance.id]
+        );
+        const occupancyAfterExpiry = await api("/api/admin/attendance");
+        assert.equal(
+            occupancyAfterExpiry.body.currentOccupancy,
+            occupancyBeforeExpiry.body.currentOccupancy - 1
+        );
     });
 
     test("attendance filters, date reports, unique visitors, and transaction filters use persisted records", async () => {
@@ -910,5 +966,176 @@ if (!integrationEnabled) {
         assert.ok(guestTransactions.body.transactions.some(
             record => record.description === "Extra 3 Hours"
         ));
+
+        const attendanceMembers = await api("/api/admin/attendance/members");
+        assert.equal(attendanceMembers.response.status, 200);
+        const attendanceMemberIds = new Set(
+            attendanceMembers.body.members.map(member => member.member_id)
+        );
+        assert.ok(attendanceMemberIds.has("TEST-ACTIVE-001"));
+        assert.ok(attendanceMemberIds.has("TEST-PENDING-001"));
+        assert.ok(attendanceMemberIds.has("TEST-REVOKED-001"));
+        assert.ok(attendanceMemberIds.has("TEST-EXPIRED-001"));
+
+        const dashboard = await api("/api/admin/dashboard");
+        assert.equal(dashboard.response.status, 200);
+        const expectedStatusCounts = await pool.query(
+            `
+            SELECT
+                COUNT(*) FILTER (WHERE UPPER(status) = 'ACTIVE')::int AS active,
+                COUNT(*) FILTER (WHERE UPPER(status) = 'PENDING')::int AS pending,
+                COUNT(*) FILTER (WHERE UPPER(status) = 'REVOKED')::int AS revoked
+            FROM members
+            WHERE archived_at IS NULL
+            `
+        );
+        assert.deepEqual(
+            dashboard.body.membershipStatusCounts,
+            expectedStatusCounts.rows[0]
+        );
+
+        const application = await pool.query(
+            `
+            INSERT INTO applications (
+                user_id,
+                membership_plan,
+                amount,
+                gcash_reference,
+                payment_date,
+                payment_screenshot,
+                status
+            )
+            VALUES (
+                $1,
+                'Monthly',
+                800,
+                'ANCHOR-APPROVAL-TEST-001',
+                CURRENT_DATE,
+                'data:image/png;base64,iVBORw0KGgo=',
+                'PENDING'
+            )
+            RETURNING id
+            `,
+            [activeUserId]
+        );
+        const applicationId = application.rows[0].id;
+        const approval = await api(
+            `/api/admin/applications/${applicationId}/approve`,
+            { method: "POST" }
+        );
+        assert.equal(approval.response.status, 200, approval.body.message);
+        const duplicateApproval = await api(
+            `/api/admin/applications/${applicationId}/approve`,
+            { method: "POST" }
+        );
+        assert.equal(duplicateApproval.response.status, 400);
+        const approvedPayment = await pool.query(
+            `
+            SELECT status, amount, gcash_reference
+            FROM member_transactions
+            WHERE application_id = $1
+            `,
+            [applicationId]
+        );
+        assert.equal(approvedPayment.rows.length, 1);
+        assert.equal(approvedPayment.rows[0].status, "VERIFIED");
+        assert.equal(Number(approvedPayment.rows[0].amount), 800);
+        assert.equal(
+            approvedPayment.rows[0].gcash_reference,
+            "ANCHOR-APPROVAL-TEST-001"
+        );
+        const approvedApplication = await pool.query(
+            `
+            SELECT status, payment_screenshot
+            FROM applications
+            WHERE id = $1
+            `,
+            [applicationId]
+        );
+        assert.equal(approvedApplication.rows[0].status, "APPROVED");
+        assert.equal(
+            approvedApplication.rows[0].payment_screenshot,
+            "data:image/png;base64,iVBORw0KGgo="
+        );
+
+        const unauthorizedScreenshot = await fetch(
+            `${baseUrl}/api/admin/applications/${applicationId}/screenshot`
+        );
+        assert.equal(unauthorizedScreenshot.status, 401);
+        const authorizedScreenshot = await fetch(
+            baseUrl + "/api/admin/applications/" + applicationId + "/screenshot",
+            {
+                headers: {
+                    Authorization: ["Bearer", adminToken].join(" ")
+                }
+            }
+        );
+        assert.equal(authorizedScreenshot.status, 200);
+        assert.match(
+            authorizedScreenshot.headers.get("content-type") || "",
+            /^image\/png/
+        );
+
+        const rejectedApplication = await pool.query(
+            `
+            INSERT INTO applications (
+                user_id,
+                membership_plan,
+                amount,
+                gcash_reference,
+                payment_date,
+                payment_screenshot,
+                status
+            )
+            VALUES (
+                980003,
+                'Monthly',
+                800,
+                'ANCHOR-REJECT-TEST-001',
+                CURRENT_DATE,
+                'data:image/png;base64,iVBORw0KGgo=',
+                'PENDING'
+            )
+            RETURNING id
+            `
+        );
+        const rejectResponse = await api(
+            `/api/admin/applications/${rejectedApplication.rows[0].id}/reject`,
+            {
+                method: "POST",
+                body: JSON.stringify({
+                    reason: "Payment reference could not be verified."
+                })
+            }
+        );
+        assert.equal(rejectResponse.response.status, 200);
+        const rejectedState = await pool.query(
+            `
+            SELECT status, rejection_reason
+            FROM applications
+            WHERE id = $1
+            `,
+            [rejectedApplication.rows[0].id]
+        );
+        assert.equal(rejectedState.rows[0].status, "REJECTED");
+        assert.equal(
+            rejectedState.rows[0].rejection_reason,
+            "Payment reference could not be verified."
+        );
+        const rejectedPayment = await pool.query(
+            `
+            SELECT COUNT(*)::int AS count
+            FROM member_transactions
+            WHERE application_id = $1
+            `,
+            [rejectedApplication.rows[0].id]
+        );
+        assert.equal(rejectedPayment.rows[0].count, 0);
+
+        const deleteTransaction = await api(
+            `/api/admin/transactions/${approvedPayment.rows[0].id}`,
+            { method: "DELETE" }
+        );
+        assert.equal(deleteTransaction.response.status, 404);
     });
 }

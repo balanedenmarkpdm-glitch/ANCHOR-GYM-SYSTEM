@@ -808,6 +808,13 @@ async function getCurrentOccupancy(queryable = pool) {
                 ON g.id = a.guest_id
             WHERE a.check_out IS NULL
               AND UPPER(a.user_type) IN ('MEMBER', 'GUEST')
+              AND (
+                  UPPER(a.user_type) = 'MEMBER'
+                  OR (
+                      UPPER(a.user_type) = 'GUEST'
+                      AND ${GUEST_CLOSING_SQL} > ${GUEST_NOW_SQL}
+                  )
+              )
         ),
         people_inside AS (
             SELECT
@@ -2585,7 +2592,7 @@ app.get(
 // =====================================
 
 app.get(
-    "/api/applications/:applicationId/screenshot",
+    "/api/admin/applications/:applicationId/screenshot",
     async (req, res) => {
         const applicationId =
             Number(req.params.applicationId);
@@ -3132,7 +3139,7 @@ app.get(
                         a.gcash_reference,
                         CASE
                             WHEN a.payment_screenshot IS NULL THEN NULL
-                            ELSE '/api/applications/' || a.id || '/screenshot'
+                            ELSE '/api/admin/applications/' || a.id || '/screenshot'
                         END AS payment_screenshot,
                         a.payment_date,
                         a.status,
@@ -3332,16 +3339,11 @@ app.post(
                     ]
                 );
 
-            const today =
-                new Date();
-
-            const startDate =
-                today
-                    .toISOString()
-                    .slice(
-                        0,
-                        10
-                    );
+            const manilaDateResult = await client.query(
+                `SELECT (${GUEST_NOW_SQL})::date::text AS today`
+            );
+            const startDate = manilaDateResult.rows[0].today;
+            const today = new Date(`${startDate}T00:00:00.000Z`);
 
             let memberId =
                 null;
@@ -3378,8 +3380,8 @@ app.post(
                         baseDate
                     );
 
-                newExpiration.setMonth(
-                    newExpiration.getMonth() +
+                newExpiration.setUTCMonth(
+                    newExpiration.getUTCMonth() +
                     1
                 );
 
@@ -3431,8 +3433,8 @@ app.post(
                         today
                     );
 
-                expiration.setMonth(
-                    expiration.getMonth() +
+                expiration.setUTCMonth(
+                    expiration.getUTCMonth() +
                     1
                 );
 
@@ -3503,36 +3505,78 @@ app.post(
                 ]
             );
 
-            await client.query(
+            const priorTransactions = await client.query(
                 `
-                INSERT INTO member_transactions
-                (
-                    user_id,
-                    application_id,
-                    amount,
-                    payment_method,
-                    gcash_reference,
-                    transaction_date,
-                    status
-                )
-                VALUES
-                (
-                    $1,
-                    $2,
-                    $3,
-                    'GCASH',
-                    $4,
-                    NOW(),
-                    'VERIFIED'
-                )
+                SELECT id
+                FROM member_transactions
+                WHERE application_id = $1
+                ORDER BY id
+                FOR UPDATE
                 `,
-                [
-                    application.user_id,
-                    applicationId,
-                    application.amount,
-                    application.gcash_reference
-                ]
+                [applicationId]
             );
+
+            if (priorTransactions.rows.length > 1) {
+                await client.query("ROLLBACK");
+                transactionStarted = false;
+                return res.status(409).json({
+                    success: false,
+                    message: "This application already has duplicate payment records. Resolve the existing records before approval."
+                });
+            }
+
+            if (priorTransactions.rows.length === 1) {
+                await client.query(
+                    `
+                    UPDATE member_transactions
+                    SET
+                        user_id = $1,
+                        amount = $2,
+                        payment_method = 'GCASH',
+                        gcash_reference = $3,
+                        transaction_date = COALESCE(transaction_date, NOW()),
+                        status = 'VERIFIED'
+                    WHERE id = $4
+                    `,
+                    [
+                        application.user_id,
+                        application.amount,
+                        application.gcash_reference,
+                        priorTransactions.rows[0].id
+                    ]
+                );
+            } else {
+                await client.query(
+                    `
+                    INSERT INTO member_transactions
+                    (
+                        user_id,
+                        application_id,
+                        amount,
+                        payment_method,
+                        gcash_reference,
+                        transaction_date,
+                        status
+                    )
+                    VALUES
+                    (
+                        $1,
+                        $2,
+                        $3,
+                        'GCASH',
+                        $4,
+                        NOW(),
+                        'VERIFIED'
+                    )
+                    `,
+                    [
+                        application.user_id,
+                        applicationId,
+                        application.amount,
+                        application.gcash_reference
+                    ]
+                );
+            }
 
             await createNotification(
                 client,
@@ -3881,6 +3925,16 @@ app.get(
 
                         COUNT(*) FILTER (
                             WHERE archived_at IS NULL
+                              AND UPPER(status) = 'PENDING'
+                        )::int AS pending_members,
+
+                        COUNT(*) FILTER (
+                            WHERE archived_at IS NULL
+                              AND UPPER(status) = 'ACTIVE'
+                        )::int AS active_status_members,
+
+                        COUNT(*) FILTER (
+                            WHERE archived_at IS NULL
                               AND UPPER(status) = 'REVOKED'
                         )::int AS revoked_members
 
@@ -3957,6 +4011,20 @@ app.get(
                     0
                 );
 
+            const pendingMembers =
+                Number(
+                    membersResult.rows[0]
+                        .pending_members ||
+                    0
+                );
+
+            const activeStatusMembers =
+                Number(
+                    membersResult.rows[0]
+                        .active_status_members ||
+                    0
+                );
+
             const pendingApplications =
                 Number(
                     applicationsResult.rows[0]
@@ -3997,6 +4065,12 @@ app.get(
                 expiredMembers,
 
                 revokedMembers,
+
+                membershipStatusCounts: {
+                    active: activeStatusMembers,
+                    pending: pendingMembers,
+                    revoked: revokedMembers
+                },
 
                 pendingApplications,
 
@@ -5316,6 +5390,8 @@ app.get(
                         t.amount,
                         t.payment_method,
                         CASE
+                            WHEN UPPER(t.status) = 'VERIFIED'
+                                THEN 'VERIFIED'
                             WHEN UPPER(t.status) IN (
                                 'VERIFIED', 'CONFIRMED', 'APPROVED', 'SUCCESS', 'PAID'
                             ) THEN 'CONFIRMED'
@@ -6836,6 +6912,64 @@ app.post(
     }
 );
 
+app.get("/api/admin/attendance/members", async (req, res) => {
+    try {
+        const result = await pool.query(
+            `
+            SELECT
+                m.id,
+                m.member_id,
+                m.status,
+                m.expiration_date,
+                u.full_name,
+                (
+                    UPPER(m.status) = 'ACTIVE'
+                    AND m.archived_at IS NULL
+                    AND (
+                        m.expiration_date IS NULL
+                        OR m.expiration_date >= (${GUEST_NOW_SQL})::date
+                    )
+                ) AS eligible,
+                (
+                    UPPER(m.status) = 'ACTIVE'
+                    AND m.expiration_date IS NOT NULL
+                    AND m.expiration_date < (${GUEST_NOW_SQL})::date
+                ) AS expired,
+                COALESCE((
+                    SELECT json_agg(
+                        json_build_object(
+                            'id', a.id,
+                            'check_in', a.check_in
+                        )
+                        ORDER BY a.check_in DESC, a.id DESC
+                    )
+                    FROM attendance a
+                    WHERE a.member_id = m.id
+                      AND UPPER(a.user_type) = 'MEMBER'
+                      AND a.check_out IS NULL
+                ), '[]'::json) AS open_visits
+            FROM members m
+            JOIN users u
+                ON u.id = m.user_id
+            WHERE m.archived_at IS NULL
+              AND LOWER(u.role) = 'customer'
+            ORDER BY u.full_name, m.id DESC
+            `
+        );
+
+        return res.json({
+            success: true,
+            members: result.rows
+        });
+    } catch (error) {
+        console.error("Attendance member list error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Unable to load the attendance member list."
+        });
+    }
+});
+
 app.get("/api/admin/members/search", async (req, res) => {
     const query = String(req.query.query || "").trim();
     if (query.length < 2) {
@@ -7751,6 +7885,7 @@ app.patch(
                     FROM attendance
                     WHERE id = $1
                       AND check_out IS NULL
+                      AND UPPER(user_type) = 'MEMBER'
                     `,
                     [
                         attendanceId
@@ -7770,7 +7905,7 @@ app.patch(
                         false,
 
                     message:
-                        "Active attendance record not found."
+                        "Active member attendance record not found. Guest access ends automatically when its paid time expires."
 
                 });
 
@@ -7790,6 +7925,7 @@ app.patch(
                     WHERE
                         id = $1
                         AND check_out IS NULL
+                        AND UPPER(user_type) = 'MEMBER'
 
                     RETURNING
                         id,
@@ -7960,7 +8096,9 @@ app.get(
             const summaryResult = await pool.query(
                 `
                 SELECT
-                    COUNT(*)::int AS total_visits,
+                    COUNT(*) FILTER (
+                        WHERE UPPER(a.user_type) IN ('MEMBER', 'GUEST')
+                    )::int AS total_visits,
                     COUNT(*) FILTER (
                         WHERE UPPER(a.user_type) = 'MEMBER'
                     )::int AS member_visits,
@@ -8001,6 +8139,7 @@ app.get(
                 LEFT JOIN guests g
                     ON g.id = a.guest_id
                 WHERE ${rangeCondition}
+                  AND UPPER(a.user_type) IN ('MEMBER', 'GUEST')
                 `,
                 reportParameters
             );
@@ -8099,6 +8238,7 @@ app.get(
                 LEFT JOIN guests g
                     ON g.id = a.guest_id
                 WHERE ${rangeCondition}
+                  AND UPPER(a.user_type) IN ('MEMBER', 'GUEST')
                 ORDER BY a.check_in DESC, a.id DESC
                 `,
                 reportParameters
@@ -8122,6 +8262,7 @@ app.get(
                         COUNT(*)::int AS visits
                     FROM attendance a
                     WHERE ${rangeCondition}
+                      AND UPPER(a.user_type) IN ('MEMBER', 'GUEST')
                     GROUP BY DATE_TRUNC('${chartBucket}', a.check_in)
                 )
                 SELECT

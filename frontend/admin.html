@@ -203,7 +203,7 @@
                     <div class="card stat">
 
                         <p>
-                            Total Sign-Up
+                            Total Customer Accounts
                         </p>
 
                         <strong
@@ -222,7 +222,7 @@
                     <div class="card stat">
 
                         <p>
-                            Active Members
+                            Active Memberships
                         </p>
 
                         <strong
@@ -356,9 +356,9 @@
 
                         <div class="legend">
 
-                            <div>
+                            <div class="membership-legend-active">
 
-                                🟢 Active
+                                🟢 ACTIVE
 
                                 <b
                                     id="dashboardActiveLegend">
@@ -369,12 +369,12 @@
 
                             </div>
 
-                            <div>
+                            <div class="membership-legend-pending">
 
-                                🟡 Expired
+                                🟡 PENDING
 
                                 <b
-                                    id="dashboardExpiredLegend">
+                                    id="dashboardPendingLegend">
 
                                     0
 
@@ -382,9 +382,9 @@
 
                             </div>
 
-                            <div>
+                            <div class="membership-legend-revoked">
 
-                                🟠 Revoked
+                                🔴 REVOKED
 
                                 <b
                                     id="dashboardRevokedLegend">
@@ -519,6 +519,7 @@
 
                 <div class="card">
 
+                    <div class="table-scroll applications-table-scroll">
                     <table>
 
                         <thead>
@@ -526,7 +527,15 @@
                             <tr>
 
                                 <th>
-                                    Customer
+                                    Applicant
+                                </th>
+
+                                <th>
+                                    Contact
+                                </th>
+
+                                <th>
+                                    Membership Plan
                                 </th>
 
                                 <th>
@@ -553,6 +562,10 @@
                                     Action
                                 </th>
 
+                                <th>
+                                    Rejection Reason
+                                </th>
+
                             </tr>
 
                         </thead>
@@ -563,7 +576,7 @@
                             <tr>
 
                                 <td
-                                    colspan="7"
+                                    colspan="10"
                                     style="text-align:center;">
 
                                     Loading applications...
@@ -575,6 +588,7 @@
                         </tbody>
 
                     </table>
+                    </div>
 
                 </div>
 
@@ -887,12 +901,11 @@
                                     <th scope="col">Method</th>
                                     <th scope="col">Payment Status</th>
                                     <th scope="col">Transaction Date</th>
-                                    <th scope="col">Action</th>
                                 </tr>
                             </thead>
                             <tbody id="transactionsTableBody">
                                 <tr>
-                                    <td colspan="13" style="text-align:center;">
+                                    <td colspan="12" style="text-align:center;">
                                         No transactions available.
                                     </td>
                                 </tr>
@@ -1024,6 +1037,59 @@
                     <div id="manualAttendanceResults"
                         class="manual-attendance-results"
                         aria-live="polite">
+                    </div>
+                </div>
+
+                <div class="card attendance-members-card">
+                    <h3>Member Attendance</h3>
+                    <div class="table-toolbar attendance-member-toolbar">
+                        <label for="attendanceMemberSearch">Search members</label>
+                        <input
+                            id="attendanceMemberSearch"
+                            type="search"
+                            placeholder="Member name or Member ID"
+                            oninput="filterAttendanceMembers()">
+                        <label for="attendanceMemberFilter">Show</label>
+                        <select id="attendanceMemberFilter"
+                            onchange="filterAttendanceMembers()">
+                            <option value="all">All Members</option>
+                            <option value="inside">Inside Gym</option>
+                            <option value="not-inside">Not Checked In</option>
+                        </select>
+                    </div>
+                    <div class="table-scroll attendance-members-table-scroll">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Member ID</th>
+                                    <th>Member Name</th>
+                                    <th>Membership Status</th>
+                                    <th>Attendance Status</th>
+                                    <th>Check-In Time</th>
+                                    <th>Attendance Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="attendanceMembersTableBody">
+                                <tr>
+                                    <td colspan="6" style="text-align:center;">
+                                        Loading members...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="attendance-member-pagination">
+                        <span id="attendanceMembersPageStatus">Page 1 of 1</span>
+                        <div>
+                            <button class="small-btn" type="button"
+                                onclick="changeAttendanceMembersPage(-1)">
+                                Previous
+                            </button>
+                            <button class="small-btn" type="button"
+                                onclick="changeAttendanceMembersPage(1)">
+                                Next
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -1396,21 +1462,6 @@
                     <div class="card">
 
                         <p>
-                            Member Visits
-                        </p>
-
-                        <strong
-                            id="reportMemberVisits">
-
-                            0
-
-                        </strong>
-
-                    </div>
-
-                    <div class="card">
-
-                        <p>
                             Guest Visits
                         </p>
 
@@ -1424,18 +1475,18 @@
                     </div>
 
                     <div class="card">
-                        <p>Unique Visitors</p>
-                        <strong id="reportUniqueVisitors">0</strong>
-                    </div>
 
-                    <div class="card">
-                        <p>Member Visitor Count</p>
-                        <strong id="reportMemberVisitorCount">0</strong>
-                    </div>
+                        <p>
+                            Member Visits
+                        </p>
 
-                    <div class="card">
-                        <p>Guest Visitor Count</p>
-                        <strong id="reportGuestVisitorCount">0</strong>
+                        <strong
+                            id="reportMemberVisits">
+
+                            0
+
+                        </strong>
+
                     </div>
 
                     <div class="card">
@@ -1447,9 +1498,7 @@
 
                 <div class="card report">
 
-                    <h3>
-                        Peak Attendance
-                    </h3>
+                    <h3 id="reportChartTitle">Visits by Hour</h3>
 
                     <div
                         class="report-toggle"
@@ -1507,7 +1556,7 @@
                                 id="peakAttendanceChart"
                                 class="bars"
                                 role="list"
-                                aria-label="Daily peak attendance">
+                                aria-label="Visits by hour">
                             </div>
                         </div>
                     </div>
