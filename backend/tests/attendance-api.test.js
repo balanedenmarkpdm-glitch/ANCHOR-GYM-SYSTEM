@@ -41,6 +41,10 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
         path.join(projectRoot, "frontend", "admin-login.html"),
         "utf8"
     );
+    const customerLoginHtml = fs.readFileSync(
+        path.join(projectRoot, "frontend", "login.html"),
+        "utf8"
+    );
     const adminCss = fs.readFileSync(
         path.join(projectRoot, "frontend", "admin.css"),
         "utf8"
@@ -97,9 +101,16 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
         path.join(projectRoot, "frontend", "reset-password.html"),
         "utf8"
     );
+    const privacyPolicyHtml = fs.readFileSync(
+        path.join(projectRoot, "frontend", "privacy-policy.html"),
+        "utf8"
+    );
 
     assert.match(loginHtml, /<input\b(?=[^>]*id="adminEmail")(?=[^>]*value="admin@gmail\.com")[^>]*>/);
     assert.match(loginHtml, /<input\b(?=[^>]*id="adminPassword")(?=[^>]*value="admin123")[^>]*>/);
+    assert.match(customerLoginHtml, /href="privacy-policy\.html"/);
+    assert.match(privacyPolicyHtml, /Privacy Policy/);
+    assert.match(privacyPolicyHtml, /balanedenmark\.pdm@gmail\.com/);
     assert.match(forgotPasswordHtml, /id="forgotForm"/);
     assert.match(forgotPasswordHtml, /id="forgotMessage"/);
     assert.match(authJs, /\/api\/auth\/forgot-password/);
