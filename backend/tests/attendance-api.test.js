@@ -48,6 +48,25 @@ test("package scripts use the backend entry point and provide a JavaScript synta
     assert.match(packageJson.scripts.check, /node --check backend\/server\.js/);
 });
 
+test("frontend root opens the customer login page", () => {
+    const entryPage = fs.readFileSync(
+        path.join(projectRoot, "frontend", "index.html"),
+        "utf8"
+    );
+    const vercelConfig = JSON.parse(
+        fs.readFileSync(
+            path.join(projectRoot, "frontend", "vercel.json"),
+            "utf8"
+        )
+    );
+
+    assert.match(entryPage, /location\.replace\(["']login\.html["']\)/);
+    assert.equal(
+        vercelConfig.rewrites.find(route => route.source === "/")?.destination,
+        "/login.html"
+    );
+});
+
 test("admin UI exposes the required application, dashboard, report, attendance, and transaction rules", () => {
     const adminHtml = fs.readFileSync(
         path.join(projectRoot, "frontend", "admin.html"),
