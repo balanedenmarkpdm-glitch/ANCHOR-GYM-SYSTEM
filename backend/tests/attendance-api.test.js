@@ -298,18 +298,32 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.doesNotMatch(applicationDecisionActions, /"REJECTED"[\s\S]*?application-decision-placeholder/);
     assert.match(applicationRowRenderer, /No rejection reason recorded\./);
     assert.match(adminCss, /\.application-decision\s*\{[^}]*white-space:\s*normal[^}]*overflow-wrap:\s*anywhere/s);
-    assert.match(adminCss, /\.application-decision-placeholder\s*\{[^}]*font-size:\s*10px/s);
+    assert.match(adminCss, /\.application-decision-placeholder\s*\{[^}]*display:\s*inline-block/s);
     assert.match(adminCss, /\.applications-table th:nth-child\(2\)\s*\{\s*width:\s*24%;\s*\}/);
     assert.match(adminCss, /\.applications-table th:nth-child\(8\)\s*\{\s*width:\s*9%;\s*\}/);
     assert.match(adminCss, /\.applications-table th:nth-child\(9\)\s*\{\s*width:\s*10%;\s*\}/);
-    assert.match(adminCss, /\.applications-table th,\s*\.applications-table td\s*\{\s*text-align:\s*center;\s*\}/);
+    assert.match(adminCss, /\.applications-table td\.application-contact\s*\{\s*text-align:\s*left;\s*\}/);
     assert.match(adminCss, /\.application-contact > span\s*\{[^}]*justify-content:\s*flex-start[^}]*text-align:\s*left/s);
-    assert.match(adminCss, /\.application-payment-date small,\s*\.application-rejection-reason\s*\{[^}]*text-align:\s*center/s);
-    assert.match(adminCss, /\.main table th,\s*\.main table td\s*\{\s*text-align:\s*center;\s*\}/);
-    assert.match(adminCss, /\.main table td \.member-contact-cell span,\s*\.main table td \.attendance-actions\s*\{[^}]*justify-content:\s*center/s);
-    assert.match(adminCss, /\.main table td\.member-contact-cell\s*\{[^}]*text-align:\s*left/s);
+    assert.doesNotMatch(adminCss, /\.application-payment-date small,\s*\.application-rejection-reason\s*\{[^}]*text-align:\s*center/s);
+    assert.match(portalTheme, /\) \.main table th\s*\{\s*font-size:\s*13px;\s*font-weight:\s*700;\s*text-align:\s*left;\s*\}/);
+    assert.match(portalTheme, /\) \.main table td\s*\{\s*text-align:\s*left;\s*\}/);
+    assert.match(portalTheme, /padding:\s*12px 16px;\s*border-bottom:\s*1px solid var\(--color-border\);\s*font-size:\s*14px;\s*line-height:\s*1\.45;\s*vertical-align:\s*middle/);
+    assert.match(portalTheme, /\.applications-table :is\(th, td\):nth-child\(8\)/);
+    assert.match(portalTheme, /\.transactions-table :is\(th, td\):nth-child\(8\)/);
+    assert.match(portalTheme, /customer-transactions-card table :is\(th, td\):nth-child\(5\)/);
+    assert.match(portalTheme, /\.recent-decisions-table :is\(th, td\):nth-child\(2\)/);
+    assert.match(adminCss, /\.report-table-scroll \.admin-report-details-table\s*\{\s*min-width:\s*1200px/s);
+    assert.match(customerJs, /class="status \$\{getStatusClass\(status\)\}"/);
+    assert.match(adminJs, /function formatTableCurrency\(value\)[\s\S]*?Number\.isFinite\(amount\)[\s\S]*?return "—"/);
+    assert.match(customerJs, /function formatTableCurrency\(value\)[\s\S]*?Number\.isFinite\(amount\)[\s\S]*?return "—"/);
+    assert.match(adminJs, /formatTableCurrency\(application\.amount\)/);
+    assert.match(adminJs, /formatTableCurrency\(transaction\.amount\)/);
+    assert.match(customerJs, /formatTableCurrency\(transaction\.amount\)/);
+    assert.match(portalTheme, /@media \(max-width:\s*700px\)[\s\S]*?\.main table td \{\s*padding:\s*10px/s);
+    assert.doesNotMatch(adminCss, /\.main table td \.member-contact-cell span,\s*\.main table td \.attendance-actions\s*\{[^}]*justify-content:\s*center/s);
     assert.match(adminCss, /\.main table td \.member-contact-cell span\s*\{[^}]*justify-content:\s*flex-start[^}]*text-align:\s*left/s);
-    assert.match(adminCss, /\.main table td \.attendance-action-link\s*\{[^}]*text-align:\s*center/s);
+    assert.match(adminCss, /\.main table td \.attendance-action-link\s*\{[^}]*text-align:\s*left/s);
+    assert.match(adminCss, /\.main table td \.attendance-actions\s*\{[^}]*justify-content:\s*flex-start/s);
     assert.match(adminCss, /\.applications-table \.application-decision \.approve/);
     assert.match(adminCss, /\.applications-pagination \.small-btn:disabled/);
     assert.match(adminHtml, /attendanceMemberSearch/);
@@ -400,8 +414,8 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(adminCss, /\.members-list-table \.remove-button/);
     assert.match(adminCss, /@media\s*\(max-width:\s*700px\)\s*\{[\s\S]*?\.member-list-toolbar\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)\s*auto/);
     assert.match(adminCss, /\.member-list-toolbar #revokeSelectedMembersButton,\s*\.member-list-toolbar #reactivateSelectedRevokedMembersButton\s*\{[^}]*width:\s*auto[^}]*min-width:\s*0/s);
-    assert.match(adminCss, /\.members-table-scroll \.members-list-table\s*\{\s*min-width:\s*900px/s);
-    assert.match(adminCss, /\.archived-members-list-table\s*\{\s*min-width:\s*980px/s);
+    assert.match(adminCss, /\.members-table-scroll \.members-list-table\s*\{\s*min-width:\s*1100px/s);
+    assert.match(adminCss, /\.archived-members-list-table\s*\{\s*min-width:\s*1200px/s);
     assert.match(adminCss, /\.card:has\(> table\)/);
     assert.match(customerCss, /\.card:has\(> table\)/);
     assert.doesNotMatch(portalTheme, /\)\s*table\s*\{\s*min-width:\s*(?:560|600)px/);
@@ -449,13 +463,13 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(portalTheme, /\.admin-report-chart-card #reportMessage::before/);
     assert.match(portalTheme, /\.admin-report-details-card\s*\{[^}]*margin-top:\s*16px[^}]*padding:\s*14px/s);
     assert.match(portalTheme, /\.admin-report-details-card \.report-table-scroll\s*\{[^}]*max-width:\s*100%[^}]*overflow:\s*auto/s);
-    assert.match(portalTheme, /\.admin-report-details-table\s*\{[^}]*min-width:\s*900px[^}]*table-layout:\s*fixed/s);
+    assert.match(portalTheme, /\.admin-report-details-table\s*\{[^}]*min-width:\s*1200px[^}]*table-layout:\s*fixed/s);
     assert.match(portalTheme, /\.admin-report-details-table th:nth-child\(1\)\s*\{\s*width:\s*18%;\s*\}/);
     assert.match(portalTheme, /\.admin-report-details-table th:nth-child\(7\)\s*\{\s*width:\s*14%;\s*\}/);
     assert.match(portalTheme, /\.bars\s*\{[^}]*height:\s*270px/s);
     assert.match(adminCss, /\.attendance-table-scroll,\s*\.report-table-scroll,\s*\.attendance-members-table-scroll,\s*\.applications-table-scroll\s*\{[^}]*max-height:[^}]*overflow-y:\s*auto/s);
     assert.match(adminCss, /\.attendance-filter-toolbar\s*\{[^}]*align-items:\s*center[^}]*padding-inline:\s*0/s);
-    assert.match(adminCss, /\.attendance-records-table th,\s*\.attendance-records-table td\s*\{[^}]*padding:\s*14px 12px/s);
+    assert.match(adminCss, /\.attendance-records-table th,\s*\.attendance-records-table td\s*\{[^}]*border-bottom:\s*1px solid var\(--color-border\)[^}]*vertical-align:\s*middle/s);
     assert.match(adminCss, /#attendance \.attendance-records-card\s*\{[^}]*padding:\s*18px/s);
     assert.match(adminCss, /#attendance \.attendance-records-card\s*\{\s*overflow:\s*hidden\s*;/);
     assert.match(adminCss, /\.attendance-records-table\s*\{[^}]*table-layout:\s*fixed/s);
@@ -468,6 +482,10 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(customerCss, /\.sidebar nav\s*\{[^}]*scroll-behavior:\s*smooth/s);
     assert.match(customerCss, /\.upload input\[type="file"\]\s*\{[^}]*min-width:\s*0[^}]*max-width:\s*100%/s);
     assert.match(adminCss, /\.attendance-records-table th:nth-child\(7\)\s*\{\s*width:\s*11%/);
+    assert.match(adminCss, /\.members-list-table,\s*\.archived-members-list-table\s*\{[^}]*min-width:\s*1100px/s);
+    assert.match(adminCss, /\.applications-table-scroll table\s*\{\s*min-width:\s*1200px/s);
+    assert.match(customerCss, /\.customer-transactions-card table\s*\{\s*min-width:\s*820px/s);
+    assert.match(customerCss, /\.attendance-report-table\s*\{[^}]*min-width:\s*640px/s);
     assert.match(adminCss, /@media \(max-width:\s*700px\)\s*\{[\s\S]*?\.attendance-records-card\s*\{[^}]*padding:\s*14px[\s\S]*?\.attendance-members-card\s*\{[^}]*padding:\s*14px/s);
     assert.match(portalTheme, /html\[data-portal="admin"\]\s+\.approve[\s\S]*?#16A34A/);
     assert.match(portalTheme, /html\[data-portal="admin"\]\s+\.reject[\s\S]*?#DC2626/);
@@ -491,10 +509,14 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(customerHtml, /attendanceReportDaily/);
     assert.match(customerHtml, /attendanceReportWeekly/);
     assert.match(customerHtml, /attendanceReportMonthly/);
+    assert.match(customerHtml, /attendanceReportCustom/);
+    assert.match(customerHtml, /attendanceReportBars/);
+    assert.match(customerHtml, /attendanceReportStartDate/);
     assert.match(customerHtml, /Check In/);
     assert.match(customerHtml, /Check Out/);
     assert.match(customerJs, /\/api\/customer\/\$\{customerData\.id\}\/attendance/);
-    assert.match(customerJs, /period=\$\{requestedPeriod\}/);
+    assert.match(customerJs, /new URLSearchParams\(\{\s*period: requestedPeriod/);
+    assert.match(customerJs, /query\.set\("startDate", startDate\)/);
     assert.match(customerJs, /timeZone:\s*"Asia\/Manila"/);
     assert.match(backendServer, /\/api\/customer\/:userId\/attendance/);
     assert.match(backendServer, /DATE_TRUNC\('day', \$\{GUEST_NOW_SQL\}\)/);
@@ -1291,6 +1313,25 @@ if (!integrationEnabled) {
             );
         }
 
+        const currentManilaDate = await pool.query(
+            "SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Manila')::date::text AS today"
+        );
+        const customMemberAttendanceReport = await fetch(
+            `${baseUrl}/api/customer/${activeUserId}/attendance?period=custom&startDate=${currentManilaDate.rows[0].today}&endDate=${currentManilaDate.rows[0].today}`,
+            {
+                headers: {
+                    Authorization: `Bearer ${activeCustomerToken}`
+                }
+            }
+        );
+        const customMemberAttendanceBody =
+            await customMemberAttendanceReport.json();
+        assert.equal(customMemberAttendanceReport.status, 200);
+        assert.equal(customMemberAttendanceBody.period, "custom");
+        assert.equal(customMemberAttendanceBody.startDate, currentManilaDate.rows[0].today);
+        assert.equal(customMemberAttendanceBody.endDate, currentManilaDate.rows[0].today);
+        assert.equal(customMemberAttendanceBody.attendance.length, 3);
+
         const invalidMemberAttendanceReport = await fetch(
             `${baseUrl}/api/customer/not-a-customer/attendance`,
             {
@@ -1309,6 +1350,15 @@ if (!integrationEnabled) {
             }
         );
         assert.equal(invalidAttendancePeriod.status, 400);
+        const invalidCustomAttendanceRange = await fetch(
+            `${baseUrl}/api/customer/${activeUserId}/attendance?period=custom&startDate=2026-02-30&endDate=2026-03-01`,
+            {
+                headers: {
+                    Authorization: `Bearer ${activeCustomerToken}`
+                }
+            }
+        );
+        assert.equal(invalidCustomAttendanceRange.status, 400);
 
         const financialRecords = await pool.query(
             "SELECT COUNT(*)::int AS count FROM member_transactions"

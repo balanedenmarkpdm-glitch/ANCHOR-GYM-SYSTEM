@@ -8,6 +8,7 @@ let selectedNotificationIds = new Set();
 let profileEditMode = false;
 let selectedProfilePhotoData = null;
 let attendanceReportPeriod = "weekly";
+let attendanceReportRequestId = 0;
 let rotatingQrMemberId = null;
 let rotatingQrExpiry = 0;
 let rotatingQrTimeout = null;
@@ -288,20 +289,6 @@ async function loadCustomer() {
                 function() {
 
                     refreshCustomerData(true);
-
-                    const attendanceReportPage =
-                        document.getElementById(
-                            "attendance-report"
-                        );
-
-                    if (
-                        attendanceReportPage &&
-                        attendanceReportPage.classList.contains("active")
-                    ) {
-
-                        loadAttendanceReport();
-
-                    }
 
                 },
                 5000
@@ -2123,6 +2110,293 @@ function isNotificationRead(
 // LOAD ATTENDANCE REPORT
 // =====================================
 
+function getAttendanceReportDateRange(period) {
+    const [year, month, day] =
+        getCurrentManilaDate()
+            .split("-")
+            .map(Number);
+    const today =
+        new Date(Date.UTC(year, month - 1, day));
+    let start =
+        new Date(today);
+    let end =
+        new Date(today);
+
+    if (period === "weekly") {
+        const daysSinceMonday =
+            (today.getUTCDay() + 6) % 7;
+        start.setUTCDate(today.getUTCDate() - daysSinceMonday);
+        end.setUTCDate(start.getUTCDate() + 6);
+    } else if (period === "monthly") {
+        start =
+            new Date(Date.UTC(year, month - 1, 1));
+        end =
+            new Date(Date.UTC(year, month, 0));
+    }
+
+    return {
+        startDate: start.toISOString().slice(0, 10),
+        endDate: end.toISOString().slice(0, 10)
+    };
+}
+
+
+function formatAttendanceChartDate(date) {
+    return new Intl.DateTimeFormat(
+        "en-US",
+        {
+            timeZone: "UTC",
+            month: "2-digit",
+            day: "2-digit"
+        }
+    ).format(date);
+}
+
+
+function attendanceDateKey(date) {
+    return date.toISOString().slice(0, 10);
+}
+
+
+function getAttendanceDateKey(dateValue) {
+    const date =
+        new Date(dateValue);
+
+    if (Number.isNaN(date.getTime())) {
+        return "";
+    }
+
+    const parts =
+        new Intl.DateTimeFormat(
+            "en-US",
+            {
+                timeZone: "Asia/Manila",
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit"
+            }
+        ).formatToParts(date);
+    const values =
+        Object.fromEntries(
+            parts.map(part => [part.type, part.value])
+        );
+
+    return `${values.year}-${values.month}-${values.day}`;
+}
+
+
+function getAttendanceChartSeries(visits, period, startDate, endDate) {
+    const counts = new Map();
+
+    if (period === "daily") {
+        for (let hour = 0; hour < 24; hour += 1) {
+            counts.set(hour, 0);
+        }
+
+        visits.forEach(visit => {
+            const date =
+                new Date(visit.check_in);
+
+            if (!Number.isNaN(date.getTime())) {
+                const hour =
+                    Number(new Intl.DateTimeFormat(
+                        "en-US",
+                        {
+                            timeZone: "Asia/Manila",
+                            hour: "numeric",
+                            hourCycle: "h23"
+                        }
+                    ).format(date));
+                counts.set(hour, (counts.get(hour) || 0) + 1);
+            }
+        });
+
+        return Array.from(counts, ([hour, total]) => ({
+            label: new Intl.DateTimeFormat(
+                "en-US",
+                {
+                    timeZone: "UTC",
+                    hour: "numeric"
+                }
+            ).format(new Date(Date.UTC(2020, 0, 1, hour))),
+            visits: total
+        }));
+    }
+
+    let start =
+        new Date(`${startDate}T00:00:00.000Z`);
+    const end =
+        new Date(`${endDate}T00:00:00.000Z`);
+
+    if (period === "monthly") {
+        start.setUTCDate(
+            start.getUTCDate() -
+            ((start.getUTCDay() + 6) % 7)
+        );
+
+        for (
+            let date = new Date(start);
+            date <= end;
+            date.setUTCDate(date.getUTCDate() + 7)
+        ) {
+            const key =
+                attendanceDateKey(date);
+            counts.set(key, 0);
+        }
+    } else {
+        for (
+            let date = new Date(start);
+            date <= end;
+            date.setUTCDate(date.getUTCDate() + 1)
+        ) {
+            counts.set(attendanceDateKey(date), 0);
+        }
+    }
+
+    visits.forEach(visit => {
+        const dateKey =
+            getAttendanceDateKey(visit.check_in);
+
+        if (!dateKey) {
+            return;
+        }
+
+        let bucketKey = dateKey;
+        if (period === "monthly") {
+            const date =
+                new Date(`${dateKey}T00:00:00.000Z`);
+            date.setUTCDate(
+                date.getUTCDate() -
+                ((date.getUTCDay() + 6) % 7)
+            );
+            bucketKey =
+                attendanceDateKey(date);
+        }
+
+        if (counts.has(bucketKey)) {
+            counts.set(bucketKey, counts.get(bucketKey) + 1);
+        }
+    });
+
+    return Array.from(counts, ([dateKey, total]) => {
+        const date =
+            new Date(`${dateKey}T00:00:00.000Z`);
+        const monthDay =
+            formatAttendanceChartDate(date);
+        const label =
+            period === "weekly"
+                ? `${new Intl.DateTimeFormat("en-US", {
+                    timeZone: "UTC",
+                    weekday: "short"
+                }).format(date)} ${monthDay}`
+                : monthDay;
+
+        return {
+            label,
+            visits: total
+        };
+    });
+}
+
+
+function renderAttendanceReportChart(series, period) {
+    const chart =
+        document.getElementById("attendanceReportBars");
+    const yAxis =
+        document.getElementById("attendanceReportYAxis");
+    const description =
+        document.getElementById("attendanceReportChartDescription");
+    const title = {
+        daily: "Visits by Hour",
+        weekly: "Visits by Day",
+        monthly: "Visits by Week",
+        custom: "Visits by Date"
+    }[period];
+    const periodDescription = {
+        daily: "hourly visits today",
+        weekly: "visits by day this week",
+        monthly: "visits by week this month",
+        custom: "visits by date in the selected range"
+    }[period];
+
+    if (!chart || !yAxis) {
+        return;
+    }
+
+    setText("attendanceReportChartTitle", title);
+
+    if (
+        series.length === 0 ||
+        series.every(item => item.visits === 0)
+    ) {
+        yAxis.innerHTML = "<span>0</span>";
+        chart.innerHTML =
+            '<div class="attendance-report-chart-empty">No attendance data for this period.</div>';
+        chart.setAttribute(
+            "aria-label",
+            `${title} chart showing ${periodDescription}; no attendance data`
+        );
+
+        if (description) {
+            description.textContent =
+                `${title} chart showing ${periodDescription}. No attendance data.`;
+        }
+
+        return;
+    }
+
+    const max =
+        Math.max(1, ...series.map(item => item.visits));
+    const rawStep =
+        max / 4;
+    const magnitude =
+        10 ** Math.floor(Math.log10(rawStep));
+    const fraction =
+        rawStep / magnitude;
+    const stepFactor =
+        fraction <= 1 ? 1 :
+            fraction <= 2 ? 2 :
+                fraction <= 5 ? 5 : 10;
+    const step =
+        stepFactor * magnitude;
+    const axisMaximum =
+        Math.ceil(max / step) * step;
+    const ticks = [];
+
+    for (
+        let value = axisMaximum;
+        value >= 0;
+        value -= step
+    ) {
+        ticks.push(Number(value.toFixed(6)));
+    }
+
+    yAxis.innerHTML =
+        ticks.map(value => `<span>${value}</span>`).join("");
+    chart.innerHTML =
+        series.map(item => `
+            <div
+                class="attendance-report-bar"
+                role="listitem"
+                aria-label="${escapeHtml(`${item.label}: ${item.visits} visits`)}"
+                style="--bar-height:${item.visits === 0 ? 0 : item.visits / axisMaximum * 100}%">
+                <span class="attendance-report-bar-value">${item.visits}</span>
+                <span class="attendance-report-bar-label">${escapeHtml(item.label)}</span>
+            </div>
+        `).join("");
+    chart.setAttribute(
+        "aria-label",
+        `${title} chart showing ${periodDescription}`
+    );
+
+    if (description) {
+        description.textContent =
+            `${title} chart showing ${periodDescription}. ` +
+            series.map(item => `${item.label}: ${item.visits} visits`).join("; ");
+    }
+}
+
+
 async function loadAttendanceReport(period = attendanceReportPeriod) {
 
     const tableBody =
@@ -2146,7 +2420,7 @@ async function loadAttendanceReport(period = attendanceReportPeriod) {
 
     }
 
-    if (!["daily", "weekly", "monthly"].includes(period)) {
+    if (!["daily", "weekly", "monthly", "custom"].includes(period)) {
 
         return;
 
@@ -2154,8 +2428,32 @@ async function loadAttendanceReport(period = attendanceReportPeriod) {
 
     attendanceReportPeriod = period;
     const requestedPeriod = period;
+    const requestId =
+        ++attendanceReportRequestId;
+    const startDateInput =
+        document.getElementById("attendanceReportStartDate");
+    const endDateInput =
+        document.getElementById("attendanceReportEndDate");
 
-    ["daily", "weekly", "monthly"].forEach(reportPeriod => {
+    if (period !== "custom") {
+        const dateRange =
+            getAttendanceReportDateRange(period);
+
+        if (startDateInput) {
+            startDateInput.value = dateRange.startDate;
+        }
+
+        if (endDateInput) {
+            endDateInput.value = dateRange.endDate;
+        }
+    }
+
+    const startDate =
+        startDateInput?.value || "";
+    const endDate =
+        endDateInput?.value || "";
+
+    ["daily", "weekly", "monthly", "custom"].forEach(reportPeriod => {
 
         const button =
             document.getElementById(
@@ -2181,6 +2479,26 @@ async function loadAttendanceReport(period = attendanceReportPeriod) {
 
     });
 
+    if (
+        requestedPeriod === "custom" &&
+        (!startDate || !endDate || startDate > endDate)
+    ) {
+        status.textContent =
+            "Choose a valid start and end date, then apply the custom range.";
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="4" style="text-align:center;">
+                    Choose a valid start and end date.
+                </td>
+            </tr>
+        `;
+        setText("attendanceReportVisits", "0");
+        setText("attendanceReportCompleted", "0");
+        setText("attendanceReportActive", "0");
+        renderAttendanceReportChart([], requestedPeriod);
+        return;
+    }
+
     status.textContent =
         "Loading your attendance history...";
 
@@ -2194,10 +2512,20 @@ async function loadAttendanceReport(period = attendanceReportPeriod) {
 
     try {
 
+        const query =
+            new URLSearchParams({
+                period: requestedPeriod
+            });
+
+        if (requestedPeriod === "custom") {
+            query.set("startDate", startDate);
+            query.set("endDate", endDate);
+        }
+
         const response =
             await fetch(
                 window.anchorApiUrl(
-                    `/api/customer/${customerData.id}/attendance?period=${requestedPeriod}`
+                    `/api/customer/${customerData.id}/attendance?${query.toString()}`
                 ),
                 {
                     cache: "no-store",
@@ -2208,7 +2536,7 @@ async function loadAttendanceReport(period = attendanceReportPeriod) {
         const data =
             await response.json();
 
-        if (requestedPeriod !== attendanceReportPeriod) {
+        if (requestId !== attendanceReportRequestId) {
 
             return;
 
@@ -2233,6 +2561,22 @@ async function loadAttendanceReport(period = attendanceReportPeriod) {
         const periodLabel =
             requestedPeriod.charAt(0).toUpperCase() +
             requestedPeriod.slice(1);
+        const chartDateRange =
+            requestedPeriod === "custom"
+                ? { startDate, endDate }
+                : getAttendanceReportDateRange(requestedPeriod);
+        const chartSeries =
+            getAttendanceChartSeries(
+                visits,
+                requestedPeriod,
+                chartDateRange.startDate,
+                chartDateRange.endDate
+            );
+
+        renderAttendanceReportChart(
+            chartSeries,
+            requestedPeriod
+        );
 
         const completedVisits =
             visits.filter(
@@ -2269,7 +2613,7 @@ async function loadAttendanceReport(period = attendanceReportPeriod) {
             `;
 
             status.textContent =
-                `No visits recorded ${requestedPeriod === "daily" ? "today" : `this ${requestedPeriod === "weekly" ? "week" : "month"}`}.`;
+                `0 visit(s) in the selected period.`;
 
             return;
 
@@ -2296,11 +2640,11 @@ async function loadAttendanceReport(period = attendanceReportPeriod) {
                 .join("");
 
         status.textContent =
-            `${periodLabel} report: ${visits.length} ${visits.length === 1 ? "visit" : "visits"}, newest first.`;
+            `${visits.length} visit(s) in the selected ${periodLabel.toLowerCase()} period.`;
 
     } catch (error) {
 
-        if (requestedPeriod !== attendanceReportPeriod) {
+        if (requestId !== attendanceReportRequestId) {
 
             return;
 
@@ -2310,6 +2654,11 @@ async function loadAttendanceReport(period = attendanceReportPeriod) {
             "Attendance report loading error:",
             error
         );
+
+        renderAttendanceReportChart([], requestedPeriod);
+        setText("attendanceReportVisits", "0");
+        setText("attendanceReportCompleted", "0");
+        setText("attendanceReportActive", "0");
 
         tableBody.innerHTML = `
             <tr>
@@ -2575,10 +2924,7 @@ function createTransactionRow(
 
 
             <td>
-                ₱${Number(
-                    transaction.amount ||
-                    0
-                ).toLocaleString()}
+                ${formatTableCurrency(transaction.amount)}
             </td>
 
 
@@ -2594,7 +2940,7 @@ function createTransactionRow(
             <td>
 
                 <span
-                    class="${getStatusClass(status)}">
+                    class="status ${getStatusClass(status)}">
 
                     ${escapeHtml(status)}
 
@@ -2645,17 +2991,14 @@ function createRecentTransactionRow(
 
 
             <td>
-                ₱${Number(
-                    transaction.amount ||
-                    0
-                ).toLocaleString()}
+                ${formatTableCurrency(transaction.amount)}
             </td>
 
 
             <td>
 
                 <span
-                    class="${getStatusClass(status)}">
+                    class="status ${getStatusClass(status)}">
 
                     ${escapeHtml(status)}
 
@@ -3710,6 +4053,20 @@ function getInitials(
 // =====================================
 // FORMAT DATE
 // =====================================
+
+function formatTableCurrency(value) {
+    if (
+        (typeof value !== "number" && typeof value !== "string") ||
+        (typeof value === "string" && value.trim() === "")
+    ) {
+        return "—";
+    }
+
+    const amount = Number(value);
+    return Number.isFinite(amount)
+        ? `₱${amount.toLocaleString()}`
+        : "—";
+}
 
 function formatDate(
     dateValue

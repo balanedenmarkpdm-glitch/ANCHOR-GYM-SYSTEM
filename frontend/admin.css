@@ -357,6 +357,27 @@ nav button span {
     min-width: 0;
 }
 
+.recent-decisions-table-scroll,
+.equipment-demand-table-scroll {
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.recent-decisions-table,
+.equipment-demand-table {
+    table-layout: fixed;
+}
+
+.recent-decisions-table {
+    min-width: 620px;
+}
+
+.equipment-demand-table {
+    min-width: 700px;
+}
+
 .dashboard-pending-card .card-header {
     min-height: 58px;
     gap: 12px;
@@ -494,25 +515,27 @@ table {
 .attendance-table-scroll table,
 .report-table-scroll table,
 .attendance-members-table-scroll table {
-    min-width: 900px;
+    min-width: 1050px;
+}
+
+.report-table-scroll .admin-report-details-table {
+    min-width: 1200px;
 }
 
 .attendance-records-table {
     width: 100%;
+    min-width: 1050px;
     table-layout: fixed;
 }
 
 .attendance-records-table th,
 .attendance-records-table td {
-    padding: 14px 12px;
     border-bottom: 1px solid var(--color-border);
-    font-size: 11px;
     vertical-align: middle;
 }
 
 .attendance-records-table th {
     color: var(--color-muted);
-    font-size: 10px;
     font-weight: 700;
 }
 
@@ -525,11 +548,11 @@ table {
 .attendance-records-table th:nth-child(7) { width: 11%; }
 
 .applications-table-scroll table {
-    min-width: 920px;
+    min-width: 1200px;
 }
 
 .transaction-table-scroll table {
-    min-width: 920px;
+    min-width: 1320px;
 }
 
 .applications-table {
@@ -537,25 +560,21 @@ table {
     table-layout: fixed;
 }
 
-.applications-table th,
-.applications-table td {
-    text-align: center;
+.applications-table td.application-contact {
+    text-align: left;
 }
 
 .applications-table th,
 .applications-table td,
 .transactions-table th,
 .transactions-table td {
-    padding: 10px 9px;
     border-bottom: 1px solid var(--color-border);
-    font-size: 10px;
     vertical-align: middle;
 }
 
 .applications-table th,
 .transactions-table th {
     color: var(--color-muted);
-    font-size: 9px;
     font-weight: 700;
 }
 
@@ -629,7 +648,6 @@ table {
     font-size: 9px;
     line-height: 1.4;
     white-space: normal;
-    text-align: center;
     overflow-wrap: anywhere;
 }
 
@@ -657,7 +675,6 @@ table {
 .application-decision-placeholder {
     display: inline-block;
     color: var(--color-subtle);
-    font-size: 10px;
     line-height: 1.2;
 }
 
@@ -684,12 +701,12 @@ table {
     align-items: center;
     justify-content: center;
     min-width: 44px;
-    padding: 3px 6px;
+    padding: 4px 8px;
     border: 1px solid var(--color-border);
     border-radius: 5px;
     background: var(--color-surface-raised);
     color: var(--color-text);
-    font-size: 9px;
+    font-size: 12px;
     font-weight: 700;
 }
 
@@ -707,17 +724,19 @@ table {
 
 .applications-table .application-decision .approve,
 .applications-table .application-decision .reject {
-    width: 54px;
-    min-width: 54px;
-    min-height: 24px;
-    padding: 3px 5px;
+    display: block;
+    width: 100%;
+    min-width: 0;
+    min-height: 36px;
+    padding: 8px 10px;
     border-radius: 5px;
-    font-size: 9px;
+    font-size: 13px;
     line-height: 1.2;
+    white-space: nowrap;
 }
 
 .applications-table .application-decision .approve + .reject {
-    margin-left: 3px;
+    margin: 6px 0 0;
 }
 
 .applications-empty-state {
@@ -786,7 +805,6 @@ table {
     opacity: 0.5;
 }
 
-.transaction-table-scroll table,
 .transactions-grid .table-scroll table {
     min-width: 760px;
 }
@@ -925,21 +943,18 @@ table {
 
 .attendance-members-table-scroll .member-attendance-table {
     width: 100%;
-    min-width: 780px;
+    min-width: 900px;
     table-layout: fixed;
 }
 
 .member-attendance-table th,
 .member-attendance-table td {
-    padding: 14px 12px;
     border-bottom: 1px solid var(--color-border);
-    font-size: 11px;
     vertical-align: middle;
 }
 
 .member-attendance-table th {
     color: var(--color-muted);
-    font-size: 10px;
     font-weight: 700;
 }
 
@@ -1008,7 +1023,7 @@ table {
 
 .member-attendance-table .attendance-ineligible-reason {
     color: var(--color-danger);
-    font-size: 11px;
+    font-size: 13px;
     white-space: nowrap;
 }
 
@@ -1471,8 +1486,6 @@ button,
 
     #transactions .transactions-table th,
     #reports .admin-report-details-table th {
-        padding: 12px 10px;
-        font-size: 11px;
         line-height: 1.35;
         white-space: normal;
         overflow-wrap: anywhere;
@@ -1480,8 +1493,6 @@ button,
 
     #transactions .transactions-table td,
     #reports .admin-report-details-table td {
-        padding: 12px 10px;
-        font-size: 12px;
         line-height: 1.4;
         white-space: normal;
         overflow-wrap: anywhere;
@@ -1502,27 +1513,17 @@ button,
     }
 }
 
-.main table th,
-.main table td {
-    text-align: center;
-}
-
-.main table td .member-contact-cell span,
-.main table td .attendance-actions {
-    justify-content: center;
-}
-
-.main table td.member-contact-cell {
-    text-align: left;
-}
-
 .main table td .member-contact-cell span {
     justify-content: flex-start;
     text-align: left;
 }
 
 .main table td .attendance-action-link {
-    text-align: center;
+    text-align: left;
+}
+
+.main table td .attendance-actions {
+    justify-content: flex-start;
 }
 
 #dashboard.active .stats {
@@ -1807,15 +1808,14 @@ button,
 }
 
 #dashboard.active .dashboard-decisions-card table {
-    width: calc(100% - 24px);
-    margin: 0 12px 10px;
+    width: 100%;
+    margin: 0 0 10px;
     table-layout: fixed;
 }
 
 #dashboard.active .dashboard-decisions-card th,
 #dashboard.active .dashboard-decisions-card td {
-    padding: 7px 5px;
-    font-size: 10px;
+    vertical-align: middle;
 }
 
 #dashboard.active .dashboard-decisions-card th {
@@ -1825,7 +1825,6 @@ button,
 
 #dashboard.active .dashboard-decisions-card .status {
     padding: 3px 7px;
-    font-size: 9px;
 }
 
 #dashboard.active .dashboard-pending-card .card-header button {
@@ -1897,6 +1896,11 @@ button,
 .member-contact-cell,
 .member-plan-cell {
     min-width: 170px;
+}
+
+.members-list-table .member-contact-cell {
+    white-space: normal;
+    overflow-wrap: anywhere;
 }
 
 .member-contact-cell span,
@@ -2050,54 +2054,51 @@ button,
 .members-list-table,
 .archived-members-list-table {
     width: 100%;
-    min-width: 850px;
+    min-width: 1100px;
     table-layout: fixed;
     border-collapse: collapse;
 }
 
 .members-table-scroll .members-list-table {
-    min-width: 900px;
+    min-width: 1100px;
 }
 
 .archived-members-list-table {
-    min-width: 980px;
+    min-width: 1200px;
 }
 
 .members-list-table th,
 .members-list-table td,
 .archived-members-list-table th,
 .archived-members-list-table td {
-    padding: 9px 8px;
     border-bottom: 1px solid var(--color-border);
-    font-size: 10px;
     vertical-align: middle;
 }
 
 .members-list-table th,
 .archived-members-list-table th {
     color: var(--color-muted);
-    font-size: 9px;
     font-weight: 600;
 }
 
 .members-list-table th:nth-child(1) { width: 5%; }
 .members-list-table th:nth-child(2) { width: 12%; }
-.members-list-table th:nth-child(3) { width: 13%; }
-.members-list-table th:nth-child(4) { width: 20%; }
-.members-list-table th:nth-child(5) { width: 13%; }
+.members-list-table th:nth-child(3) { width: 14%; }
+.members-list-table th:nth-child(4) { width: 23%; }
+.members-list-table th:nth-child(5) { width: 10%; }
 .members-list-table th:nth-child(6) { width: 12%; }
-.members-list-table th:nth-child(7) { width: 9%; }
-.members-list-table th:nth-child(8) { width: 16%; }
+.members-list-table th:nth-child(7) { width: 11%; }
+.members-list-table th:nth-child(8) { width: 13%; }
 
 .archived-members-list-table th:nth-child(1) { width: 5%; }
 .archived-members-list-table th:nth-child(2) { width: 11%; }
-.archived-members-list-table th:nth-child(3) { width: 13%; }
-.archived-members-list-table th:nth-child(4) { width: 9%; }
+.archived-members-list-table th:nth-child(3) { width: 14%; }
+.archived-members-list-table th:nth-child(4) { width: 10%; }
 .archived-members-list-table th:nth-child(5) { width: 11%; }
 .archived-members-list-table th:nth-child(6) { width: 11%; }
-.archived-members-list-table th:nth-child(7) { width: 13%; }
-.archived-members-list-table th:nth-child(8) { width: 10%; }
-.archived-members-list-table th:nth-child(9) { width: 17%; }
+.archived-members-list-table th:nth-child(7) { width: 12%; }
+.archived-members-list-table th:nth-child(8) { width: 12%; }
+.archived-members-list-table th:nth-child(9) { width: 14%; }
 
 .members-list-table .member-contact-cell span,
 .members-list-table .member-plan-cell > span,
@@ -2130,7 +2131,6 @@ button,
 .members-list-table .member-plan-cell small {
     margin-top: 2px;
     color: var(--color-text);
-    font-size: 10px;
 }
 
 .members-list-table .membership-action-button,
@@ -2155,7 +2155,6 @@ button,
     padding: 3px 8px;
     border: 1px solid currentColor;
     border-radius: 5px;
-    font-size: 9px;
     line-height: 1.3;
 }
 
@@ -2258,10 +2257,6 @@ button,
 
 .attendance-members-table-scroll .attendance-actions {
     justify-content: center;
-}
-
-.member-attendance-table th:last-child {
-    text-align: center;
 }
 
 @media (max-width: 700px) {

@@ -505,14 +505,12 @@ textarea:focus-visible {
 
 .admin-report-details-table {
     width: 100%;
-    min-width: 900px;
+    min-width: 1200px;
     table-layout: fixed;
 }
 
 .admin-report-details-table th,
 .admin-report-details-table td {
-    padding: 10px 8px;
-    font-size: 10px;
     line-height: 1.4;
     overflow-wrap: anywhere;
 }
@@ -1635,8 +1633,144 @@ textarea:focus-visible {
 :root:is(
     [data-page="customer-dashboard"],
     [data-page="admin-dashboard"]
+) .main table th,
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .main table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--color-border);
+    font-size: 14px;
+    line-height: 1.45;
+    vertical-align: middle;
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .main table th {
+    font-size: 13px;
+    font-weight: 700;
+    text-align: left;
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .main table td {
+    text-align: left;
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .main table td button {
+    min-height: 36px;
+    padding: 8px 12px;
+    font-size: 13px;
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .main table td small {
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .main :is(
+    .recent-decisions-table :is(th, td):nth-child(4),
+    .applications-table :is(th, td):nth-child(8),
+    .transactions-table :is(th, td):nth-child(8),
+    .customer-recent-transactions-card table :is(th, td):nth-child(4),
+    .customer-transactions-card table :is(th, td):nth-child(5),
+    .applications-table :is(th, td):nth-child(7),
+    .applications-table :is(th, td):nth-child(9),
+    .members-list-table :is(th, td):nth-child(1),
+    .members-list-table :is(th, td):nth-child(7),
+    .members-list-table :is(th, td):nth-child(8),
+    .archived-members-list-table :is(th, td):nth-child(1),
+    .archived-members-list-table :is(th, td):nth-child(8),
+    .archived-members-list-table :is(th, td):nth-child(9),
+    .transactions-table :is(th, td):nth-child(3),
+    .transactions-table :is(th, td):nth-child(8),
+    .transactions-table :is(th, td):nth-child(10),
+    .attendance-records-table :is(th, td):nth-child(2),
+    .attendance-records-table :is(th, td):nth-child(6),
+    .attendance-records-table :is(th, td):nth-child(7),
+    .member-attendance-table :is(th, td):nth-child(3),
+    .member-attendance-table :is(th, td):nth-child(4),
+    .member-attendance-table :is(th, td):nth-child(6),
+    .admin-report-details-table :is(th, td):nth-child(8)
+) {
+    text-align: center;
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .main :is(
+    .recent-decisions-table :is(th, td):nth-child(2),
+    .applications-table :is(th, td):nth-child(4),
+    .transactions-table :is(th, td):nth-child(6),
+    .customer-recent-transactions-card table :is(th, td):nth-child(3),
+    .customer-transactions-card table :is(th, td):nth-child(3)
+) {
+    text-align: right;
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .main table td.member-plan-cell {
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) .main table td:is(.application-contact, .member-contact-cell) {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
+) tbody tr:nth-child(even) {
+    background: var(--color-surface-raised);
+}
+
+:root:is(
+    [data-page="customer-dashboard"],
+    [data-page="admin-dashboard"]
 ) tbody tr:hover {
     background: color-mix(in srgb, var(--color-primary) 5%, var(--color-card));
+}
+
+@media (max-width: 700px) {
+    :root:is(
+        [data-page="customer-dashboard"],
+        [data-page="admin-dashboard"]
+    ) .main table th,
+    :root:is(
+        [data-page="customer-dashboard"],
+        [data-page="admin-dashboard"]
+    ) .main table td {
+        padding: 10px;
+    }
+
+    :root:is(
+        [data-page="customer-dashboard"],
+        [data-page="admin-dashboard"]
+    ) .main table td button {
+        min-height: 40px;
+    }
 }
 
 :root:is(
@@ -2323,7 +2457,7 @@ textarea:focus-visible {
     border: 1px solid transparent;
     border-radius: 5px;
     background: var(--color-surface-raised);
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 700;
     line-height: 1.35;
     white-space: nowrap;

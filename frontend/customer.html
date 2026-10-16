@@ -441,7 +441,7 @@
 
                     <!-- RECENT TRANSACTIONS -->
 
-                    <div class="card">
+                    <div class="card customer-recent-transactions-card">
 
 
                         <div class="card-header">
@@ -878,7 +878,7 @@
                 </p>
 
 
-                <div class="card">
+                <div class="card customer-transactions-card">
 
 
                     <table>
@@ -964,36 +964,6 @@
                     Times are shown in Philippine time.
                 </p>
 
-                <div
-                    class="attendance-report-periods"
-                    role="group"
-                    aria-label="Attendance report period">
-                    <button
-                        class="attendance-report-period"
-                        id="attendanceReportDaily"
-                        type="button"
-                        aria-pressed="false"
-                        onclick="loadAttendanceReport('daily')">
-                        Daily
-                    </button>
-                    <button
-                        class="attendance-report-period active"
-                        id="attendanceReportWeekly"
-                        type="button"
-                        aria-pressed="true"
-                        onclick="loadAttendanceReport('weekly')">
-                        Weekly
-                    </button>
-                    <button
-                        class="attendance-report-period"
-                        id="attendanceReportMonthly"
-                        type="button"
-                        aria-pressed="false"
-                        onclick="loadAttendanceReport('monthly')">
-                        Monthly
-                    </button>
-                </div>
-
                 <div class="stats attendance-report-stats">
 
                     <div class="card stat">
@@ -1013,13 +983,98 @@
 
                 </div>
 
-                <p
-                    class="attendance-report-status"
-                    id="attendanceReportStatus"
-                    role="status"
-                    aria-live="polite">
-                    Loading your attendance history...
-                </p>
+                <div class="card attendance-report-chart-card">
+                    <h2 class="attendance-report-chart-title">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                            <path d="M4 19V9"></path>
+                            <path d="M10 19V5"></path>
+                            <path d="M16 19v-7"></path>
+                            <path d="M22 19V3"></path>
+                        </svg>
+                        <span id="attendanceReportChartTitle">Visits by Day</span>
+                    </h2>
+
+                    <div
+                        class="attendance-report-periods"
+                        role="group"
+                        aria-label="Attendance chart time range">
+                        <button
+                            class="attendance-report-period"
+                            id="attendanceReportDaily"
+                            type="button"
+                            aria-pressed="false"
+                            onclick="loadAttendanceReport('daily')">
+                            Daily
+                        </button>
+                        <button
+                            class="attendance-report-period active"
+                            id="attendanceReportWeekly"
+                            type="button"
+                            aria-pressed="true"
+                            onclick="loadAttendanceReport('weekly')">
+                            Weekly
+                        </button>
+                        <button
+                            class="attendance-report-period"
+                            id="attendanceReportMonthly"
+                            type="button"
+                            aria-pressed="false"
+                            onclick="loadAttendanceReport('monthly')">
+                            Monthly
+                        </button>
+                        <button
+                            class="attendance-report-period"
+                            id="attendanceReportCustom"
+                            type="button"
+                            aria-pressed="false"
+                            onclick="loadAttendanceReport('custom')">
+                            Custom Date Range
+                        </button>
+                    </div>
+
+                    <div class="attendance-report-date-range">
+                        <label for="attendanceReportStartDate">From</label>
+                        <input id="attendanceReportStartDate" type="date">
+                        <label for="attendanceReportEndDate">To</label>
+                        <input id="attendanceReportEndDate" type="date">
+                        <button
+                            class="attendance-report-apply"
+                            type="button"
+                            onclick="loadAttendanceReport('custom')">
+                            Apply Range
+                        </button>
+                    </div>
+
+                    <div class="attendance-report-chart">
+                        <div
+                            id="attendanceReportYAxis"
+                            class="attendance-report-chart-axis"
+                            aria-hidden="true">
+                        </div>
+                        <div class="attendance-report-chart-scroll">
+                            <div
+                                id="attendanceReportBars"
+                                class="attendance-report-bars"
+                                role="list"
+                                aria-label="Visits by day">
+                            </div>
+                        </div>
+                    </div>
+
+                    <p
+                        id="attendanceReportChartDescription"
+                        class="sr-only"
+                        aria-live="polite">
+                    </p>
+
+                    <p
+                        class="attendance-report-status"
+                        id="attendanceReportStatus"
+                        role="status"
+                        aria-live="polite">
+                        Loading your attendance history...
+                    </p>
+                </div>
 
                 <div class="card attendance-report-card">
 

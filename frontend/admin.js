@@ -708,10 +708,7 @@ async function loadApplications() {
                                     <div>
 
                                         <strong>
-                                            ₱${Number(
-                                                application.amount ||
-                                                0
-                                            ).toLocaleString()}
+                                            ${formatTableCurrency(application.amount)}
                                         </strong>
 
                                         <small>
@@ -848,12 +845,12 @@ function createRecentDecisionRow(
 
     return `
         <tr>
-            <td>${escapeHtml(application.full_name || "-")}</td>
-            <td>₱${Number(application.amount || 0).toLocaleString()}</td>
-            <td>${escapeHtml(application.gcash_reference || "-")}</td>
+            <td>${escapeHtml(application.full_name || "—")}</td>
+            <td>${formatTableCurrency(application.amount)}</td>
+            <td>${escapeHtml(application.gcash_reference || "—")}</td>
             <td>
                 <span class="status ${getStatusClass(status)}">
-                    ${escapeHtml(status)}
+                    ${escapeHtml(status || "—")}
                 </span>
             </td>
         </tr>
@@ -932,7 +929,7 @@ function createApplicationRow(
         <tr>
 
             <td class="application-applicant">
-                ${escapeHtml(application.full_name || "-")}
+                ${escapeHtml(application.full_name || "—")}
             </td>
 
             <td class="application-contact">
@@ -941,31 +938,28 @@ function createApplicationRow(
                         <rect x="3" y="5" width="18" height="14" rx="2"></rect>
                         <path d="m4 7 8 6 8-6"></path>
                     </svg>
-                    ${escapeHtml(application.email || "-")}
+                    ${escapeHtml(application.email || "—")}
                 </span>
                 <span>
                     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                         <path d="M7 3h3l2 5-2 1.5a14 14 0 0 0 4.5 4.5L16 12l5 2v3a2 2 0 0 1-2 2C10 19 5 14 5 5a2 2 0 0 1 2-2Z"></path>
                     </svg>
-                    ${escapeHtml(application.phone || "-")}
+                    ${escapeHtml(application.phone || "—")}
                 </span>
             </td>
 
             <td>
-                ${escapeHtml(application.membership_plan || "-")}
+                ${escapeHtml(application.membership_plan || "—")}
             </td>
 
             <td>
-                ₱${Number(
-                    application.amount ||
-                    0
-                ).toLocaleString()}
+                ${formatTableCurrency(application.amount)}
             </td>
 
             <td>
                 ${escapeHtml(
                     application.gcash_reference ||
-                    "-"
+                    "—"
                 )}
             </td>
 
@@ -986,7 +980,7 @@ function createApplicationRow(
                     class="status ${getStatusClass(status)}">
 
                     ${escapeHtml(
-                        status
+                        status || "—"
                     )}
 
                 </span>
@@ -994,7 +988,7 @@ function createApplicationRow(
             </td>
 
             <td class="application-decision">
-                ${actions}
+                ${actions || "—"}
                 ${
                     status === "REJECTED"
                         ? `<small class="application-rejection-reason">${escapeHtml(
@@ -1840,14 +1834,14 @@ async function loadMembers() {
                             <td>
                                 ${escapeHtml(
                                     member.member_id ||
-                                    "-"
+                                    "—"
                                 )}
                             </td>
 
                             <td>
                                 ${escapeHtml(
                                     member.full_name ||
-                                    "-"
+                                    "—"
                                 )}
                             </td>
 
@@ -1857,13 +1851,13 @@ async function loadMembers() {
                                         <rect x="3" y="5" width="18" height="14" rx="2"></rect>
                                         <path d="m4 7 8 6 8-6"></path>
                                     </svg>
-                                    ${escapeHtml(member.email || "-")}
+                                    ${escapeHtml(member.email || "—")}
                                 </span>
                                 <span>
                                     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                                         <path d="M7 3h3l2 5-2 1.5a14 14 0 0 0 4.5 4.5L16 12l5 2v3a2 2 0 0 1-2 2C10 19 5 14 5 5a2 2 0 0 1 2-2Z"></path>
                                     </svg>
-                                    ${escapeHtml(member.phone || "-")}
+                                    ${escapeHtml(member.phone || "—")}
                                 </span>
                             </td>
 
@@ -1888,7 +1882,7 @@ async function loadMembers() {
                                     ${escapeHtml(
                                         getStatus(
                                             member.status
-                                        )
+                                        ) || "—"
                                     )}
 
                                 </span>
@@ -2744,21 +2738,21 @@ async function loadArchivedMembers() {
                                 <td>
                                     ${escapeHtml(
                                         member.member_id ||
-                                        "-"
+                                        "—"
                                     )}
                                 </td>
 
                                 <td>
                                     ${escapeHtml(
                                         member.full_name ||
-                                        "-"
+                                        "—"
                                     )}
                                 </td>
 
                                 <td>
                                     ${escapeHtml(
                                         member.membership_plan ||
-                                        "-"
+                                        "—"
                                     )}
                                 </td>
 
@@ -3104,7 +3098,7 @@ function renderTransactionsTable() {
             const memberId =
                 transaction.member_id && transaction.person_type === "MEMBER"
                     ? `<small class="transaction-member-id">${escapeHtml(transaction.member_id)}</small>`
-                    : "";
+                    : "—";
             const accessType =
                 transaction.access_type ||
                 transaction.extension ||
@@ -3160,7 +3154,7 @@ function renderTransactionsTable() {
                         ${visitInfo}
                     </td>
                     <td>${escapeHtml(accessType)}</td>
-                    <td>₱${Number(transaction.amount || 0).toLocaleString()}</td>
+                    <td>${formatTableCurrency(transaction.amount)}</td>
                     <td>${escapeHtml(transaction.payment_method || "—")}</td>
                     <td>
                         <span class="status ${getStatusClass(transaction.payment_status)}">
@@ -3346,7 +3340,7 @@ async function loadAttendance(
                                     : "CHECKED IN";
 
                         let remainingHtml =
-                            "<span>-</span>";
+                            "<span>—</span>";
 
                         let actionHtml =
                             "";
@@ -3415,7 +3409,7 @@ async function loadAttendance(
                                                     Extend Time
                                                 </button>
                                                       `
-                                            : ""
+                                            : "—"
                                     }
 
                                 </div>
@@ -3425,7 +3419,7 @@ async function loadAttendance(
 
                             remainingHtml = "<span>—</span>";
 
-                            actionHtml = "";
+                            actionHtml = "—";
                         }
 
                         return `
@@ -3434,7 +3428,7 @@ async function loadAttendance(
                                 <td>
                                     ${escapeHtml(
                                         record.full_name ||
-                                        "-"
+                                        "—"
                                     )}
                                 </td>
 
@@ -3442,7 +3436,7 @@ async function loadAttendance(
                                     ${escapeHtml(
                                         String(
                                             record.user_type ||
-                                            "-"
+                                            "—"
                                         )
                                     )}
                                 </td>
@@ -5373,16 +5367,16 @@ async function loadReports(
 
                     rows.push(`
                         <tr>
-                            <td>${escapeHtml(record.visitor_name || "-")}</td>
-                            <td>${escapeHtml(record.user_type || "-")}</td>
+                            <td>${escapeHtml(record.visitor_name || "—")}</td>
+                            <td>${escapeHtml(record.user_type || "—")}</td>
                             <td>${escapeHtml(formatDate(record.check_in))}</td>
-                            <td>${record.check_in ? formatDateTime(record.check_in) : "-"}</td>
-                            <td>${record.check_out ? formatDateTime(record.check_out) : "-"}</td>
+                            <td>${record.check_in ? formatDateTime(record.check_in) : "—"}</td>
+                            <td>${record.check_out ? formatDateTime(record.check_out) : "—"}</td>
                             <td>${formatVisitDuration(record.duration_seconds)}</td>
-                            <td>${escapeHtml(record.guest_time_purchased || "-")}</td>
+                            <td>${escapeHtml(record.guest_time_purchased ?? "—")}</td>
                             <td>
                                 <span class="${record.visit_status === "TIMED OUT" || record.visit_status === "CHECKED OUT" ? "timed-out-label" : "visit-status checked-in"}">
-                                    ${escapeHtml(record.visit_status === "TIMED OUT" ? "TIME OUT" : record.visit_status || "-")}
+                                    ${escapeHtml(record.visit_status === "TIMED OUT" ? "TIME OUT" : record.visit_status || "—")}
                                 </span>
                             </td>
                         </tr>
@@ -5603,7 +5597,7 @@ async function loadEquipment() {
                             <td>
                                 ${escapeHtml(
                                     item.name ||
-                                    "-"
+                                    "—"
                                 )}
                             </td>
 
@@ -5611,7 +5605,7 @@ async function loadEquipment() {
                                 ${escapeHtml(
                                     item.category ||
                                     item.demand ||
-                                    "-"
+                                    "—"
                                 )}
                             </td>
 
@@ -5619,7 +5613,7 @@ async function loadEquipment() {
                                 ${escapeHtml(
                                     item.peak_time ||
                                     item.status ||
-                                    "-"
+                                    "—"
                                 )}
                             </td>
 
@@ -5627,7 +5621,7 @@ async function loadEquipment() {
                                 ${escapeHtml(
                                     item.recommendation ||
                                     item.usage ||
-                                    "-"
+                                    "—"
                                 )}
                             </td>
 
@@ -5881,13 +5875,27 @@ function getStatusClass(
 // FORMAT DATE
 // =====================================
 
+function formatTableCurrency(value) {
+    if (
+        (typeof value !== "number" && typeof value !== "string") ||
+        (typeof value === "string" && value.trim() === "")
+    ) {
+        return "—";
+    }
+
+    const amount = Number(value);
+    return Number.isFinite(amount)
+        ? `₱${amount.toLocaleString()}`
+        : "—";
+}
+
 function formatDate(
     value
 ) {
 
     if (!value) {
 
-        return "-";
+        return "—";
 
     }
 
@@ -5961,7 +5969,7 @@ function formatDate(
         )
     ) {
 
-        return "-";
+        return "—";
 
     }
 
@@ -5996,7 +6004,7 @@ function formatDateTime(
 
     if (!value) {
 
-        return "-";
+        return "—";
 
     }
 
@@ -6013,7 +6021,7 @@ function formatDateTime(
         )
     ) {
 
-        return "-";
+        return "—";
 
     }
 

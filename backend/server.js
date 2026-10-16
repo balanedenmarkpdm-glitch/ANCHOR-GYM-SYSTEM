@@ -3276,14 +3276,48 @@ app.get(
             monthly: `
                 a.check_in >= DATE_TRUNC('month', ${GUEST_NOW_SQL})
                 AND a.check_in < DATE_TRUNC('month', ${GUEST_NOW_SQL}) + INTERVAL '1 month'
-            `
+            `,
+            custom: "a.check_in >= $2::date AND a.check_in < ($3::date + INTERVAL '1 day')"
         };
 
         if (!Object.prototype.hasOwnProperty.call(periodRanges, period)) {
             return res.status(400).json({
                 success: false,
-                message: "Period must be daily, weekly, or monthly."
+                message: "Period must be daily, weekly, monthly, or custom."
             });
+        }
+
+        let queryParameters = [userId];
+        let startDate;
+        let endDate;
+
+        if (period === "custom") {
+            startDate = String(req.query.startDate || "");
+            endDate = String(req.query.endDate || "");
+            const isValidDate = value => {
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+                    return false;
+                }
+
+                const date = new Date(`${value}T00:00:00.000Z`);
+                return (
+                    !Number.isNaN(date.getTime()) &&
+                    date.toISOString().slice(0, 10) === value
+                );
+            };
+
+            if (
+                !isValidDate(startDate) ||
+                !isValidDate(endDate) ||
+                startDate > endDate
+            ) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Custom reports require valid startDate and endDate values in YYYY-MM-DD format."
+                });
+            }
+
+            queryParameters = [userId, startDate, endDate];
         }
 
         try {
@@ -3329,12 +3363,13 @@ app.get(
                   AND ${periodRanges[period]}
                 ORDER BY a.check_in DESC, a.id DESC
                 `,
-                [userId]
+                queryParameters
             );
 
             return res.json({
                 success: true,
                 period,
+                ...(period === "custom" ? { startDate, endDate } : {}),
                 attendance: attendanceResult.rows
             });
         } catch (error) {
