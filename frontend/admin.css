@@ -1463,6 +1463,15 @@ button,
     justify-content: center;
 }
 
+.main table td.member-contact-cell {
+    text-align: left;
+}
+
+.main table td .member-contact-cell span {
+    justify-content: flex-start;
+    text-align: left;
+}
+
 .main table td .attendance-action-link {
     text-align: center;
 }

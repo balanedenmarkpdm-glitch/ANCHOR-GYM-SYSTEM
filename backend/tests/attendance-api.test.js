@@ -219,6 +219,8 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(adminCss, /\.application-payment-date small,\s*\.application-rejection-reason\s*\{[^}]*text-align:\s*center/s);
     assert.match(adminCss, /\.main table th,\s*\.main table td\s*\{\s*text-align:\s*center;\s*\}/);
     assert.match(adminCss, /\.main table td \.member-contact-cell span,\s*\.main table td \.attendance-actions\s*\{[^}]*justify-content:\s*center/s);
+    assert.match(adminCss, /\.main table td\.member-contact-cell\s*\{[^}]*text-align:\s*left/s);
+    assert.match(adminCss, /\.main table td \.member-contact-cell span\s*\{[^}]*justify-content:\s*flex-start[^}]*text-align:\s*left/s);
     assert.match(adminCss, /\.main table td \.attendance-action-link\s*\{[^}]*text-align:\s*center/s);
     assert.match(adminCss, /\.applications-table \.application-decision \.approve/);
     assert.match(adminCss, /\.applications-pagination \.small-btn:disabled/);
