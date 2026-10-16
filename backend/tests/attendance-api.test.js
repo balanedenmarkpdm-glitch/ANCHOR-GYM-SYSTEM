@@ -22,6 +22,7 @@ let pool;
 let httpServer;
 let baseUrl;
 let adminToken;
+let activeCustomerToken;
 let activeMemberId;
 let pendingMemberId;
 let revokedMemberId;
@@ -91,6 +92,10 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     )?.[0] || "";
     const customerJs = fs.readFileSync(
         path.join(projectRoot, "frontend", "customer.js"),
+        "utf8"
+    );
+    const customerHtml = fs.readFileSync(
+        path.join(projectRoot, "frontend", "customer.html"),
         "utf8"
     );
     const authJs = fs.readFileSync(
@@ -310,7 +315,7 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
         /displayNoQR\(\)/
     );
     assert.match(
-        customerJs.match(/function displayNoQR\(\)[\s\S]*?\/\/ SUBMIT APPLICATION/)?.[0] || "",
+        customerJs.match(/function displayNoQR\([^)]*\)[\s\S]*?\/\/ SUBMIT APPLICATION/)?.[0] || "",
         /qrContainer\.innerHTML\s*=\s*"—"/
     );
     assert.match(
@@ -334,6 +339,31 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(portalTheme, /\.status\.revoked\s*\{[^}]*#DC2626/s);
     assert.match(portalTheme, /#dashboardOccupancy[\s\S]*?#16A34A/);
     assert.match(customerJs, /setMembershipActiveStyle\(isActive\)/);
+    assert.match(
+        customerJs.match(/function setMembershipActiveStyle\(active\)[\s\S]*?\/\/ MEMBERSHIP TITLE/)?.[0] || "",
+        /"membershipPageTitle"/
+    );
+    assert.match(customerHtml, /id="attendance-report"/);
+    assert.match(customerHtml, /id="attendanceReportBody"/);
+    assert.match(customerHtml, /id="qrRefreshCountdown"/);
+    assert.match(customerHtml, /attendanceReportDaily/);
+    assert.match(customerHtml, /attendanceReportWeekly/);
+    assert.match(customerHtml, /attendanceReportMonthly/);
+    assert.match(customerHtml, /Check In/);
+    assert.match(customerHtml, /Check Out/);
+    assert.match(customerJs, /\/api\/customer\/\$\{customerData\.id\}\/attendance/);
+    assert.match(customerJs, /period=\$\{requestedPeriod\}/);
+    assert.match(customerJs, /timeZone:\s*"Asia\/Manila"/);
+    assert.match(backendServer, /\/api\/customer\/:userId\/attendance/);
+    assert.match(backendServer, /DATE_TRUNC\('day', \$\{GUEST_NOW_SQL\}\)/);
+    assert.match(backendServer, /DATE_TRUNC\('week', \$\{GUEST_NOW_SQL\}\)/);
+    assert.match(backendServer, /DATE_TRUNC\('month', \$\{GUEST_NOW_SQL\}\)/);
+    assert.match(backendServer, /member_qr_tokens/);
+    assert.match(backendServer, /QR_TOKEN_LIFETIME_SECONDS = 30/);
+    assert.match(backendServer, /requireCustomerSession/);
+    assert.match(customerJs, /\/api\/customer\/attendance-qr/);
+    assert.match(customerJs, /Refreshes in \$\{secondsRemaining\} seconds/);
+    assert.match(customerJs, /can only be scanned once/);
     assert.match(adminHtml, /pending-applications-heading[\s\S]*?<svg/);
     assert.match(adminCss, /#dashboard\.active \.pending-applications-heading > svg[\s\S]*?#EAB308/);
 });
@@ -538,6 +568,7 @@ if (!integrationEnabled) {
         adminToken = loginBody.token;
         assert.ok(adminToken);
         assert.equal(Number(loginBody.user.id), Number(admin.rows[0].id));
+
     });
 
     after(async () => {
@@ -891,6 +922,108 @@ if (!integrationEnabled) {
         }
     });
 
+    test("member QR requires a session and expires after one scan", async () => {
+        const customerLogin = await fetch(`${baseUrl}/api/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                email: "test-member@example.invalid",
+                password: "integration-test-only"
+            })
+        });
+        const customerLoginBody = await customerLogin.json();
+        assert.equal(customerLogin.status, 200, customerLoginBody.message);
+        activeCustomerToken = customerLoginBody.token;
+        assert.ok(activeCustomerToken);
+
+        const unauthenticatedQr = await fetch(
+            `${baseUrl}/api/customer/attendance-qr`
+        );
+        assert.equal(unauthenticatedQr.status, 401);
+
+        const issuedQr = await fetch(
+            `${baseUrl}/api/customer/attendance-qr`,
+            {
+                headers: {
+                    Authorization: `Bearer ${activeCustomerToken}`
+                }
+            }
+        );
+        const issuedQrBody = await issuedQr.json();
+        assert.equal(issuedQr.status, 200, issuedQrBody.message);
+        assert.equal(issuedQrBody.expires_in, 30);
+        assert.match(
+            issuedQrBody.qr_image,
+            /^data:image\/png;base64,/
+        );
+        assert.ok(issuedQrBody.qr_code);
+
+        const scannedQr = await api("/api/admin/attendance/scan", {
+            method: "POST",
+            body: JSON.stringify({
+                qr_code: issuedQrBody.qr_code
+            })
+        });
+        assert.equal(scannedQr.response.status, 200, scannedQr.body.message);
+        assert.equal(scannedQr.body.action, "CHECKED_IN");
+
+        const replayedQr = await api("/api/admin/attendance/scan", {
+            method: "POST",
+            body: JSON.stringify({
+                qr_code: issuedQrBody.qr_code
+            })
+        });
+        assert.equal(replayedQr.response.status, 401);
+
+        const expiredQr = await fetch(
+            `${baseUrl}/api/customer/attendance-qr`,
+            {
+                headers: {
+                    Authorization: `Bearer ${activeCustomerToken}`
+                }
+            }
+        );
+        const expiredQrBody = await expiredQr.json();
+        assert.equal(expiredQr.status, 200);
+        await pool.query(
+            `
+            UPDATE member_qr_tokens
+            SET expires_at = NOW() - INTERVAL '1 second'
+            WHERE token_hash = $1
+            `,
+            [
+                crypto
+                    .createHash("sha256")
+                    .update(expiredQrBody.qr_code)
+                    .digest("hex")
+            ]
+        );
+        const expiredScan = await api("/api/admin/attendance/scan", {
+            method: "POST",
+            body: JSON.stringify({
+                qr_code: expiredQrBody.qr_code
+            })
+        });
+        assert.equal(expiredScan.response.status, 401);
+
+        const manualCheckout = await api("/api/admin/attendance/manual", {
+            method: "POST",
+            body: JSON.stringify({
+                action: "CHECK_OUT",
+                attendance_id: scannedQr.body.attendance.id
+            })
+        });
+        assert.equal(manualCheckout.response.status, 200);
+
+        const legacyQr = await api("/api/admin/attendance/scan", {
+            method: "POST",
+            body: JSON.stringify({
+                qr_code: "TEST-QR-ACTIVE"
+            })
+        });
+        assert.equal(legacyQr.response.status, 401);
+    });
+
     test("manual check-in, visit-specific checkout, repeat visits, and no fake member payment", async () => {
         const memberList = await api("/api/admin/members");
         assert.equal(memberList.response.status, 200);
@@ -963,8 +1096,55 @@ if (!integrationEnabled) {
             `,
             [activeMemberId]
         );
-        assert.equal(history.rows.length, 2);
+        assert.equal(history.rows.length, 3);
         assert.ok(history.rows.every(row => row.check_in && row.check_out));
+
+        for (const period of ["daily", "weekly", "monthly"]) {
+            const memberAttendanceReport = await fetch(
+                `${baseUrl}/api/customer/${activeUserId}/attendance?period=${period}`,
+                {
+                    headers: {
+                        Authorization: `Bearer ${activeCustomerToken}`
+                    }
+                }
+            );
+            const memberAttendanceBody =
+                await memberAttendanceReport.json();
+            assert.equal(memberAttendanceReport.status, 200);
+            assert.equal(memberAttendanceBody.success, true);
+            assert.equal(memberAttendanceBody.period, period);
+            assert.equal(memberAttendanceBody.attendance.length, 3);
+            assert.ok(memberAttendanceBody.attendance.every(
+                visit => visit.check_in && visit.check_out &&
+                    visit.check_in.endsWith("Z") &&
+                    visit.check_out.endsWith("Z") &&
+                    Number.isInteger(visit.duration_minutes) &&
+                    visit.duration_minutes >= 0
+            ));
+            assert.deepEqual(
+                memberAttendanceBody.attendance.map(visit => Number(visit.id)).sort(),
+                history.rows.map(visit => Number(visit.id)).sort()
+            );
+        }
+
+        const invalidMemberAttendanceReport = await fetch(
+            `${baseUrl}/api/customer/not-a-customer/attendance`,
+            {
+                headers: {
+                    Authorization: `Bearer ${activeCustomerToken}`
+                }
+            }
+        );
+        assert.equal(invalidMemberAttendanceReport.status, 400);
+        const invalidAttendancePeriod = await fetch(
+            `${baseUrl}/api/customer/${activeUserId}/attendance?period=yearly`,
+            {
+                headers: {
+                    Authorization: `Bearer ${activeCustomerToken}`
+                }
+            }
+        );
+        assert.equal(invalidAttendancePeriod.status, 400);
 
         const financialRecords = await pool.query(
             "SELECT COUNT(*)::int AS count FROM member_transactions"
@@ -989,8 +1169,11 @@ if (!integrationEnabled) {
         assert.equal(activeCustomerDashboard.response.status, 200);
         assert.equal(activeCustomerDashboard.body.membership.status, "ACTIVE");
         assert.equal(
-            activeCustomerDashboard.body.membership.qr_code,
-            "TEST-QR-ACTIVE"
+            Object.prototype.hasOwnProperty.call(
+                activeCustomerDashboard.body.membership,
+                "qr_code"
+            ),
+            false
         );
 
         const revoke = await api(
@@ -1019,14 +1202,6 @@ if (!integrationEnabled) {
         );
         assert.equal(restoredDashboard.response.status, 200);
         assert.equal(restoredDashboard.body.membership.status, "ACTIVE");
-        assert.equal(
-            restoredDashboard.body.membership.qr_code,
-            "TEST-QR-ACTIVE"
-        );
-        assert.match(
-            restoredDashboard.body.membership.qr_image,
-            /^data:image\/png;base64,/
-        );
 
         for (const memberId of [
             pendingMemberId,

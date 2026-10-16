@@ -7,6 +7,12 @@ let customerRefreshTimer = null;
 let selectedNotificationIds = new Set();
 let profileEditMode = false;
 let selectedProfilePhotoData = null;
+let attendanceReportPeriod = "weekly";
+let rotatingQrMemberId = null;
+let rotatingQrExpiry = 0;
+let rotatingQrTimeout = null;
+let rotatingQrCountdown = null;
+let rotatingQrLoading = false;
 
 
 // =====================================
@@ -139,6 +145,12 @@ function loadPageSpecificData(id, refreshData = true) {
     if (id === "transactions") {
 
         refreshCustomerData(false);
+
+    }
+
+    if (id === "attendance-report") {
+
+        loadAttendanceReport();
 
     }
 
@@ -276,6 +288,20 @@ async function loadCustomer() {
                 function() {
 
                     refreshCustomerData(true);
+
+                    const attendanceReportPage =
+                        document.getElementById(
+                            "attendance-report"
+                        );
+
+                    if (
+                        attendanceReportPage &&
+                        attendanceReportPage.classList.contains("active")
+                    ) {
+
+                        loadAttendanceReport();
+
+                    }
 
                 },
                 5000
@@ -1367,6 +1393,7 @@ function setMembershipActiveStyle(active) {
         "dashboardDaysRemaining",
         "dashboardMemberId",
         "membershipPageStatus",
+        "membershipPageTitle",
         "membershipMemberId",
         "membershipPlan",
         "membershipDaysRemaining"
@@ -2093,6 +2120,304 @@ function isNotificationRead(
 
 
 // =====================================
+// LOAD ATTENDANCE REPORT
+// =====================================
+
+async function loadAttendanceReport(period = attendanceReportPeriod) {
+
+    const tableBody =
+        document.getElementById(
+            "attendanceReportBody"
+        );
+
+    const status =
+        document.getElementById(
+            "attendanceReportStatus"
+        );
+
+    if (
+        !customerData ||
+        !customerData.id ||
+        !tableBody ||
+        !status
+    ) {
+
+        return;
+
+    }
+
+    if (!["daily", "weekly", "monthly"].includes(period)) {
+
+        return;
+
+    }
+
+    attendanceReportPeriod = period;
+    const requestedPeriod = period;
+
+    ["daily", "weekly", "monthly"].forEach(reportPeriod => {
+
+        const button =
+            document.getElementById(
+                `attendanceReport${reportPeriod.charAt(0).toUpperCase()}${reportPeriod.slice(1)}`
+            );
+
+        if (button) {
+
+            const isActive =
+                reportPeriod === attendanceReportPeriod;
+
+            button.classList.toggle(
+                "active",
+                isActive
+            );
+
+            button.setAttribute(
+                "aria-pressed",
+                String(isActive)
+            );
+
+        }
+
+    });
+
+    status.textContent =
+        "Loading your attendance history...";
+
+    tableBody.innerHTML = `
+        <tr>
+            <td colspan="4" style="text-align:center;">
+                Loading your attendance history...
+            </td>
+        </tr>
+    `;
+
+    try {
+
+        const response =
+            await fetch(
+                window.anchorApiUrl(
+                    `/api/customer/${customerData.id}/attendance?period=${requestedPeriod}`
+                ),
+                {
+                    cache: "no-store",
+                    headers: getCustomerAuthorizationHeaders()
+                }
+            );
+
+        const data =
+            await response.json();
+
+        if (requestedPeriod !== attendanceReportPeriod) {
+
+            return;
+
+        }
+
+        if (
+            !response.ok ||
+            !data.success ||
+            !Array.isArray(data.attendance)
+        ) {
+
+            throw new Error(
+                data.message ||
+                "Unable to load your attendance history."
+            );
+
+        }
+
+        const visits =
+            data.attendance;
+
+        const periodLabel =
+            requestedPeriod.charAt(0).toUpperCase() +
+            requestedPeriod.slice(1);
+
+        const completedVisits =
+            visits.filter(
+                visit => Boolean(visit.check_out)
+            ).length;
+
+        const activeVisits =
+            visits.length -
+            completedVisits;
+
+        setText(
+            "attendanceReportVisits",
+            String(visits.length)
+        );
+
+        setText(
+            "attendanceReportCompleted",
+            String(completedVisits)
+        );
+
+        setText(
+            "attendanceReportActive",
+            String(activeVisits)
+        );
+
+        if (visits.length === 0) {
+
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="4" style="text-align:center;">
+                        No attendance records yet.
+                    </td>
+                </tr>
+            `;
+
+            status.textContent =
+                `No visits recorded ${requestedPeriod === "daily" ? "today" : `this ${requestedPeriod === "weekly" ? "week" : "month"}`}.`;
+
+            return;
+
+        }
+
+        tableBody.innerHTML =
+            visits
+                .map(
+                    visit => `
+                        <tr>
+                            <td>${escapeHtml(formatAttendanceDate(visit.check_in))}</td>
+                            <td>${escapeHtml(formatAttendanceTime(visit.check_in))}</td>
+                            <td>
+                                ${
+                                    visit.check_out
+                                        ? escapeHtml(formatAttendanceTime(visit.check_out))
+                                        : '<span class="attendance-report-open">Still checked in</span>'
+                                }
+                            </td>
+                            <td>${escapeHtml(formatAttendanceDuration(visit.duration_minutes))}</td>
+                        </tr>
+                    `
+                )
+                .join("");
+
+        status.textContent =
+            `${periodLabel} report: ${visits.length} ${visits.length === 1 ? "visit" : "visits"}, newest first.`;
+
+    } catch (error) {
+
+        if (requestedPeriod !== attendanceReportPeriod) {
+
+            return;
+
+        }
+
+        console.error(
+            "Attendance report loading error:",
+            error
+        );
+
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="4" style="text-align:center;">
+                    Unable to load your attendance history.
+                </td>
+            </tr>
+        `;
+
+        status.textContent =
+            error.message ||
+            "Unable to load your attendance history.";
+
+    }
+
+}
+
+
+function formatAttendanceDate(dateValue) {
+
+    if (!dateValue) {
+
+        return "—";
+
+    }
+
+    const date =
+        new Date(dateValue);
+
+    if (Number.isNaN(date.getTime())) {
+
+        return "—";
+
+    }
+
+    return new Intl.DateTimeFormat(
+        "en-US",
+        {
+            timeZone: "Asia/Manila",
+            month: "short",
+            day: "numeric",
+            year: "numeric"
+        }
+    ).format(date);
+
+}
+
+
+function formatAttendanceTime(dateValue) {
+
+    if (!dateValue) {
+
+        return "—";
+
+    }
+
+    const date =
+        new Date(dateValue);
+
+    if (Number.isNaN(date.getTime())) {
+
+        return "—";
+
+    }
+
+    return new Intl.DateTimeFormat(
+        "en-US",
+        {
+            timeZone: "Asia/Manila",
+            hour: "numeric",
+            minute: "2-digit"
+        }
+    ).format(date);
+
+}
+
+
+function formatAttendanceDuration(durationMinutes) {
+
+    const minutes =
+        Number(durationMinutes);
+
+    if (!Number.isFinite(minutes) || minutes < 0) {
+
+        return "—";
+
+    }
+
+    const hours =
+        Math.floor(minutes / 60);
+
+    const remainingMinutes =
+        Math.floor(minutes % 60);
+
+    if (hours === 0) {
+
+        return `${remainingMinutes} min`;
+
+    }
+
+    return remainingMinutes === 0
+        ? `${hours} hr`
+        : `${hours} hr ${remainingMinutes} min`;
+
+}
+
+
+// =====================================
 // DISPLAY TRANSACTIONS
 // =====================================
 
@@ -2349,6 +2674,271 @@ function createRecentTransactionRow(
 // DISPLAY QR
 // =====================================
 
+function getCustomerAuthorizationHeaders() {
+
+    const token =
+        window.anchorSession.get(
+            "anchorCustomerToken"
+        );
+
+    return token
+        ? {
+            Authorization: `Bearer ${token}`
+        }
+        : {};
+
+}
+
+
+function clearRotatingQrTimers() {
+
+    if (rotatingQrTimeout) {
+
+        clearTimeout(rotatingQrTimeout);
+        rotatingQrTimeout = null;
+
+    }
+
+    if (rotatingQrCountdown) {
+
+        clearInterval(rotatingQrCountdown);
+        rotatingQrCountdown = null;
+
+    }
+
+}
+
+
+async function loadRotatingQr(memberId) {
+
+    if (rotatingQrLoading) {
+
+        return;
+
+    }
+
+    if (
+        !customerData ||
+        !customerData.id ||
+        !window.anchorSession.get("anchorCustomerToken")
+    ) {
+
+        displayNoQR(
+            "Please sign in again to load your rotating QR code."
+        );
+
+        return;
+
+    }
+
+    rotatingQrLoading = true;
+
+    const container =
+        document.getElementById(
+            "qrCodeContainer"
+        );
+
+    const status =
+        document.getElementById(
+            "qrStatus"
+        );
+
+    const description =
+        document.getElementById(
+            "qrDescription"
+        );
+
+    if (status) {
+
+        status.textContent =
+            "● REFRESHING";
+
+    }
+
+    try {
+
+        const response =
+            await fetch(
+                window.anchorApiUrl(
+                    "/api/customer/attendance-qr"
+                ),
+                {
+                    cache: "no-store",
+                    headers: getCustomerAuthorizationHeaders()
+                }
+            );
+
+        const data =
+            await response.json();
+
+        if (
+            !response.ok ||
+            !data.success ||
+            !data.qr_image ||
+            !data.expires_at
+        ) {
+
+            throw new Error(
+                data.message ||
+                "Unable to generate your rotating QR code."
+            );
+
+        }
+
+        if (Number(memberId) !== Number(rotatingQrMemberId)) {
+
+            rotatingQrLoading = false;
+            return;
+
+        }
+
+        const expiresAt =
+            new Date(data.expires_at).getTime();
+
+        if (
+            Number.isNaN(expiresAt) ||
+            expiresAt <= Date.now()
+        ) {
+
+            throw new Error(
+                "The QR code expired before it could be displayed. Please try again."
+            );
+
+        }
+
+        rotatingQrExpiry = expiresAt;
+        rotatingQrLoading = false;
+
+        if (container) {
+
+            container.innerHTML = `
+                <img
+                    src="${escapeAttribute(data.qr_image)}"
+                    alt="Rotating ANCHOR Gym member QR code"
+                    style="
+                        width:220px;
+                        max-width:100%;
+                        height:auto;
+                        display:block;
+                        margin:0 auto;
+                    "
+                >
+            `;
+
+        }
+
+        if (status) {
+
+            status.textContent =
+                "● ACTIVE - ROTATING";
+
+        }
+
+        if (description) {
+
+            description.textContent =
+                "Show this code to staff. It refreshes every 30 seconds and can only be scanned once.";
+
+        }
+
+        clearRotatingQrTimers();
+
+        const countdown =
+            document.getElementById(
+                "qrRefreshCountdown"
+            );
+
+        const updateCountdown = function() {
+
+            const secondsRemaining =
+                Math.max(
+                    0,
+                    Math.ceil(
+                        (rotatingQrExpiry - Date.now()) / 1000
+                    )
+                );
+
+            if (countdown) {
+
+                countdown.textContent =
+                    secondsRemaining > 0
+                        ? `Refreshes in ${secondsRemaining} seconds.`
+                        : "Refreshing QR code...";
+
+            }
+
+        };
+
+        updateCountdown();
+
+        rotatingQrCountdown =
+            setInterval(
+                updateCountdown,
+                1000
+            );
+
+        rotatingQrTimeout =
+            setTimeout(
+                function() {
+                    loadRotatingQr(memberId);
+                },
+                Math.max(
+                    0,
+                    expiresAt - Date.now()
+                )
+            );
+
+    } catch (error) {
+
+        rotatingQrLoading = false;
+
+        console.error(
+            "Rotating member QR loading error:",
+            error
+        );
+
+        if (status) {
+
+            status.textContent =
+                "● QR UNAVAILABLE";
+
+        }
+
+        if (description) {
+
+            description.textContent =
+                error.message ||
+                "Unable to generate your rotating QR code.";
+
+        }
+
+        const countdown =
+            document.getElementById(
+                "qrRefreshCountdown"
+            );
+
+        if (countdown) {
+
+            countdown.textContent =
+                "Trying again in 5 seconds...";
+
+        }
+
+        clearRotatingQrTimers();
+
+        rotatingQrTimeout =
+            setTimeout(
+                function() {
+                    loadRotatingQr(memberId);
+                },
+                5000
+            );
+
+    }
+
+}
+
+
 function displayQR(
     membership
 ) {
@@ -2368,12 +2958,6 @@ function displayQR(
     const qrTitle =
         document.getElementById(
             "qrTitle"
-        );
-
-
-    const qrDescription =
-        document.getElementById(
-            "qrDescription"
         );
 
 
@@ -2399,21 +2983,10 @@ function displayQR(
 
     }
 
+    const memberId =
+        Number(membership.id);
 
-    const qrImage =
-        membership.qr_image ||
-        membership.qrImage;
-
-
-    const qrCode =
-        membership.qr_code ||
-        membership.qrCode;
-
-
-    if (
-        !qrImage &&
-        !qrCode
-    ) {
+    if (!Number.isSafeInteger(memberId) || memberId <= 0) {
 
         displayNoQR();
 
@@ -2421,14 +2994,20 @@ function displayQR(
 
     }
 
+    if (rotatingQrMemberId !== memberId) {
+
+        clearRotatingQrTimers();
+        rotatingQrExpiry = 0;
+        rotatingQrMemberId = memberId;
+
+    }
 
     if (qrStatus) {
 
         qrStatus.textContent =
-            "● ACTIVE";
+            "● ACTIVE - ROTATING";
 
     }
-
 
     if (qrTitle) {
 
@@ -2437,53 +3016,19 @@ function displayQR(
 
     }
 
+    if (
+        qrContainer &&
+        rotatingQrExpiry <= Date.now()
+    ) {
 
-    if (qrDescription) {
-
-        qrDescription.textContent =
-            "Use this QR code for gym attendance and membership verification.";
+        qrContainer.textContent =
+            "Generating secure QR code...";
 
     }
 
+    if (rotatingQrExpiry <= Date.now() && !rotatingQrTimeout) {
 
-    if (qrContainer) {
-
-        if (qrImage) {
-
-            qrContainer.innerHTML = `
-
-                <img
-                    src="${escapeAttribute(qrImage)}"
-                    alt="ANCHOR Gym Membership QR Code"
-                    style="
-                        width:220px;
-                        max-width:100%;
-                        height:auto;
-                        display:block;
-                        margin:0 auto;
-                    "
-                >
-
-            `;
-
-        } else {
-
-            qrContainer.innerHTML = `
-
-                <div
-                    style="
-                        padding:20px;
-                        word-break:break-all;
-                        text-align:center;
-                    ">
-
-                    ${escapeHtml(qrCode)}
-
-                </div>
-
-            `;
-
-        }
+        loadRotatingQr(memberId);
 
     }
 
@@ -2494,7 +3039,11 @@ function displayQR(
 // NO QR
 // =====================================
 
-function displayNoQR() {
+function displayNoQR(message) {
+
+    clearRotatingQrTimers();
+    rotatingQrExpiry = 0;
+    rotatingQrMemberId = null;
 
     const qrStatus =
         document.getElementById(
@@ -2547,7 +3096,19 @@ function displayNoQR() {
     if (qrDescription) {
 
         qrDescription.textContent =
+            message ||
             "Your QR code will be generated after your membership application is approved.";
+
+    }
+
+    const countdown =
+        document.getElementById(
+            "qrRefreshCountdown"
+        );
+
+    if (countdown) {
+
+        countdown.textContent = "";
 
     }
 
@@ -3038,7 +3599,7 @@ if (
 }
 
 
-function logout() {
+async function logout() {
 
     const confirmed =
         confirm(
@@ -3061,9 +3622,55 @@ function logout() {
 
     }
 
+    clearRotatingQrTimers();
+
+    const customerToken =
+        window.anchorSession.get(
+            "anchorCustomerToken"
+        );
+
+    if (customerToken) {
+
+        try {
+
+            const response =
+                await fetch(
+                    window.anchorApiUrl(
+                        "/api/customer/logout"
+                    ),
+                    {
+                        method: "POST",
+                        headers: {
+                            Authorization: `Bearer ${customerToken}`
+                        }
+                    }
+                );
+
+            if (!response.ok) {
+
+                throw new Error(
+                    "Unable to end the customer session."
+                );
+
+            }
+
+        } catch (error) {
+
+            console.error(
+                "Customer logout error:",
+                error
+            );
+
+        }
+
+    }
 
     window.anchorSession.remove(
         "anchorUser"
+    );
+
+    window.anchorSession.remove(
+        "anchorCustomerToken"
     );
 
 

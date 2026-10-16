@@ -101,7 +101,11 @@ if (loginForm) {
 
                         body: JSON.stringify({
                             email: email,
-                            password: password
+                            password: password,
+                            remember_me: Boolean(
+                                rememberMe &&
+                                rememberMe.checked
+                            )
                         })
 
                     });
@@ -121,6 +125,22 @@ if (loginForm) {
                     return;
                 }
 
+                if (!data.token) {
+
+                    throw new Error(
+                        "Login succeeded without a customer session. Please try again."
+                    );
+
+                }
+
+                window.anchorSession.set(
+                    "anchorCustomerToken",
+                    data.token,
+                    Boolean(
+                        rememberMe &&
+                        rememberMe.checked
+                    )
+                );
 
                 window.anchorSession.set(
                     "anchorUser",
@@ -194,7 +214,10 @@ async function submitGoogleCredential(
                 },
                 body: JSON.stringify({
                     id_token: credential,
-                    phone: phone
+                    phone: phone,
+                    remember_me: Boolean(
+                        document.getElementById("rememberMe")?.checked
+                    )
                 })
             }
         );
@@ -223,6 +246,22 @@ async function submitGoogleCredential(
 
         return;
     }
+
+    if (!data.token) {
+
+        throw new Error(
+            "Google sign-in succeeded without a customer session. Please try again."
+        );
+
+    }
+
+    window.anchorSession.set(
+        "anchorCustomerToken",
+        data.token,
+        Boolean(
+            document.getElementById("rememberMe")?.checked
+        )
+    );
 
     window.anchorSession.set(
         "anchorUser",
@@ -338,7 +377,12 @@ async function initializeGoogleLogin() {
                                             "XmlHttpRequest"
                                     },
                                     body: JSON.stringify({
-                                        code: result.code
+                                        code: result.code,
+                                        remember_me: Boolean(
+                                            document.getElementById(
+                                                "rememberMe"
+                                            )?.checked
+                                        )
                                     })
                                 }
                             );
@@ -367,6 +411,24 @@ async function initializeGoogleLogin() {
                             );
                             return;
                         }
+
+                        if (!data.token) {
+
+                            throw new Error(
+                                "Google sign-in succeeded without a customer session. Please try again."
+                            );
+
+                        }
+
+                        window.anchorSession.set(
+                            "anchorCustomerToken",
+                            data.token,
+                            Boolean(
+                                document.getElementById(
+                                    "rememberMe"
+                                )?.checked
+                            )
+                        );
 
                         window.anchorSession.set(
                             "anchorUser",
@@ -871,6 +933,18 @@ if (signupForm) {
 
                     return;
                 }
+
+                if (!data.token) {
+                    throw new Error(
+                        "Account was created without a customer session. Please sign in."
+                    );
+                }
+
+                window.anchorSession.set(
+                    "anchorCustomerToken",
+                    data.token,
+                    false
+                );
 
                 window.anchorSession.set(
                     "anchorUser",

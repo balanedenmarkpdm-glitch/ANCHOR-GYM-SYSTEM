@@ -15,6 +15,7 @@ const databaseSchema = process.env.DATABASE_SCHEMA || "public";
 if (!/^[a-z_][a-z0-9_]*$/.test(databaseSchema)) {
     throw new Error("DATABASE_SCHEMA must be a lowercase PostgreSQL schema identifier.");
 }
+const QR_TOKEN_LIFETIME_SECONDS = 30;
 const BUILT_IN_ADMIN_EMAIL = "admin@gmail.com";
 const BUILT_IN_ADMIN_PASSWORD = "admin123";
 const frontendOrigin =
@@ -45,6 +46,157 @@ function requireAdministrator(req, res) {
         message: "Administrator authorization is required for this action."
     });
     return false;
+}
+
+function hashSessionToken(token) {
+    return crypto
+        .createHash("sha256")
+        .update(token)
+        .digest("hex");
+}
+
+async function createCustomerSession(userId, rememberMe = false) {
+    const token = crypto.randomBytes(32).toString("base64url");
+    const expiresIn = rememberMe ? 30 * 24 * 60 * 60 : 24 * 60 * 60;
+    const tokenHash = hashSessionToken(token);
+
+    await pool.query(
+        `
+        INSERT INTO customer_sessions (token_hash, user_id, expires_at)
+        VALUES ($1, $2, NOW() + ($3::int * INTERVAL '1 second'))
+        `,
+        [tokenHash, userId, expiresIn]
+    );
+
+    return { token, expires_in: expiresIn };
+}
+
+async function requireCustomerSession(req, res) {
+    const authorization = String(req.get("Authorization") || "");
+    const match = authorization.match(/^Bearer\s+([A-Za-z0-9_-]+)$/i);
+
+    if (!match) {
+        res.status(401).json({
+            success: false,
+            message: "Customer authentication is required."
+        });
+        return false;
+    }
+
+    try {
+        const result = await pool.query(
+            `
+            SELECT u.id, u.full_name, u.email, LOWER(u.role) AS role
+            FROM customer_sessions s
+            JOIN users u
+                ON u.id = s.user_id
+            WHERE s.token_hash = $1
+              AND s.expires_at > NOW()
+              AND LOWER(u.role) = 'customer'
+            `,
+            [hashSessionToken(match[1])]
+        );
+
+        if (result.rows.length === 0) {
+            res.status(401).json({
+                success: false,
+                message: "Customer session is invalid or expired. Sign in again."
+            });
+            return false;
+        }
+
+        req.customerUser = result.rows[0];
+        return true;
+    } catch (error) {
+        console.error("Customer session validation error:", error);
+        res.status(500).json({
+            success: false,
+            message: "Unable to verify the customer session."
+        });
+        return false;
+    }
+}
+
+function getQrTokenSecret() {
+    const secret =
+        process.env.QR_TOKEN_SECRET ||
+        process.env.DATABASE_URL ||
+        process.env.TEST_DATABASE_URL;
+
+    if (!secret) {
+        throw new Error(
+            "Set QR_TOKEN_SECRET or DATABASE_URL to sign member QR codes."
+        );
+    }
+
+    return crypto
+        .createHash("sha256")
+        .update(`ANCHOR_MEMBER_QR:${secret}`)
+        .digest();
+}
+
+function signMemberQrPayload(payload) {
+    return crypto
+        .createHmac("sha256", getQrTokenSecret())
+        .update(payload)
+        .digest("base64url");
+}
+
+function createMemberQrToken(memberId, expiresAt) {
+    const payload = Buffer.from(
+        JSON.stringify({
+            version: 1,
+            member_id: Number(memberId),
+            expires_at: expiresAt,
+            nonce: crypto.randomBytes(16).toString("hex")
+        })
+    ).toString("base64url");
+
+    return `${payload}.${signMemberQrPayload(payload)}`;
+}
+
+function verifyMemberQrToken(token) {
+    const [payload, signature, extra] = String(token).split(".");
+
+    if (!payload || !signature || extra) {
+        return null;
+    }
+
+    const expectedSignature = Buffer.from(
+        signMemberQrPayload(payload),
+        "base64url"
+    );
+    const suppliedSignature = Buffer.from(signature, "base64url");
+
+    if (
+        expectedSignature.length !== suppliedSignature.length ||
+        !crypto.timingSafeEqual(expectedSignature, suppliedSignature)
+    ) {
+        return null;
+    }
+
+    try {
+        const claims = JSON.parse(
+            Buffer.from(payload, "base64url").toString("utf8")
+        );
+        const nowSeconds = Math.floor(Date.now() / 1000);
+
+        if (
+            claims.version !== 1 ||
+            !Number.isSafeInteger(claims.member_id) ||
+            claims.member_id <= 0 ||
+            !Number.isSafeInteger(claims.expires_at) ||
+            claims.expires_at <= nowSeconds ||
+            claims.expires_at > nowSeconds + QR_TOKEN_LIFETIME_SECONDS + 2 ||
+            !/^[a-f0-9]{32}$/.test(claims.nonce || "")
+        ) {
+            return null;
+        }
+
+        return claims;
+    } catch {
+        return null;
+    }
 }
 
 function isBuiltInAdminLogin(email, password) {
@@ -412,6 +564,23 @@ async function ensureDashboardSchema() {
             token_hash CHAR(64) PRIMARY KEY,
             user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             expires_at TIMESTAMPTZ NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `);
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS customer_sessions (
+            token_hash CHAR(64) PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            expires_at TIMESTAMPTZ NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `);
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS member_qr_tokens (
+            token_hash CHAR(64) PRIMARY KEY,
+            member_id BIGINT NOT NULL REFERENCES members(id) ON DELETE CASCADE,
+            expires_at TIMESTAMPTZ NOT NULL,
+            consumed_at TIMESTAMPTZ,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
     `);
@@ -1328,7 +1497,8 @@ app.post(
             return res.status(201).json({
                 success: true,
                 message: "Account created. The email address was not verified.",
-                user: userResult.rows[0]
+                user: userResult.rows[0],
+                ...(await createCustomerSession(userResult.rows[0].id))
             });
         } catch (error) {
             if (error.code === "23505") {
@@ -1872,6 +2042,10 @@ app.post(
                 [userId, passwordHash]
             );
             await client.query(
+                "DELETE FROM customer_sessions WHERE user_id = $1",
+                [userId]
+            );
+            await client.query(
                 `
                 UPDATE password_reset_tokens
                 SET used_at = NOW()
@@ -2056,7 +2230,11 @@ app.post(
                 return res.json({
                     success: true,
                     message: "Google sign-in successful.",
-                    user: user
+                    user: user,
+                    ...(await createCustomerSession(
+                        user.id,
+                        req.body.remember_me === true
+                    ))
                 });
             }
 
@@ -2180,7 +2358,11 @@ app.post(
                 return res.json({
                     success: true,
                     message: "Google sign-in successful.",
-                    user: user
+                    user: user,
+                    ...(await createCustomerSession(
+                        user.id,
+                        req.body.remember_me === true
+                    ))
                 });
             }
 
@@ -2254,7 +2436,8 @@ app.post(
             return res.status(201).json({
                 success: true,
                 message: "Google account created successfully.",
-                user: userResult.rows[0]
+                user: userResult.rows[0],
+                ...(await createCustomerSession(userResult.rows[0].id))
             });
         } catch (error) {
             console.error(
@@ -2407,7 +2590,12 @@ app.post(
                 message:
                     "Login successful.",
 
-                user
+                user,
+
+                ...(await createCustomerSession(
+                    user.id,
+                    req.body.remember_me === true
+                ))
 
             });
 
@@ -2831,6 +3019,216 @@ app.delete(
 );
 
 app.get(
+    "/api/customer/attendance-qr",
+    async (req, res) => {
+        if (!(await requireCustomerSession(req, res))) {
+            return;
+        }
+
+        try {
+            const memberResult = await pool.query(
+                `
+                SELECT id
+                FROM members
+                WHERE user_id = $1
+                  AND archived_at IS NULL
+                  AND UPPER(status) = 'ACTIVE'
+                  AND (
+                      expiration_date IS NULL
+                      OR expiration_date >= (${GUEST_NOW_SQL})::date
+                  )
+                ORDER BY id DESC
+                LIMIT 1
+                `,
+                [req.customerUser.id]
+            );
+
+            if (memberResult.rows.length === 0) {
+                return res.status(404).json({
+                    success: false,
+                    message: "An active membership is required for a QR code."
+                });
+            }
+
+            const memberId = Number(memberResult.rows[0].id);
+            const expiresAt =
+                Math.floor(Date.now() / 1000) +
+                QR_TOKEN_LIFETIME_SECONDS;
+            const token =
+                createMemberQrToken(memberId, expiresAt);
+
+            await pool.query(
+                `
+                DELETE FROM member_qr_tokens
+                WHERE expires_at < NOW()
+                `
+            );
+            await pool.query(
+                `
+                INSERT INTO member_qr_tokens
+                    (token_hash, member_id, expires_at)
+                VALUES ($1, $2, $3)
+                `,
+                [
+                    hashSessionToken(token),
+                    memberId,
+                    new Date(expiresAt * 1000).toISOString()
+                ]
+            );
+
+            const qrImage = await QRCode.toDataURL(token);
+            return res.json({
+                success: true,
+                qr_image: qrImage,
+                qr_code: token,
+                expires_at: new Date(expiresAt * 1000).toISOString(),
+                expires_in: QR_TOKEN_LIFETIME_SECONDS
+            });
+        } catch (error) {
+            console.error("Member QR generation error:", error);
+            return res.status(500).json({
+                success: false,
+                message: "Unable to generate your rotating QR code."
+            });
+        }
+    }
+);
+
+app.post(
+    "/api/customer/logout",
+    async (req, res) => {
+        const authorization = String(req.get("Authorization") || "");
+        const match = authorization.match(/^Bearer\s+([A-Za-z0-9_-]+)$/i);
+
+        if (match) {
+            try {
+                await pool.query(
+                    "DELETE FROM customer_sessions WHERE token_hash = $1",
+                    [hashSessionToken(match[1])]
+                );
+            } catch (error) {
+                console.error("Customer logout error:", error);
+                return res.status(500).json({
+                    success: false,
+                    message: "Unable to end the customer session."
+                });
+            }
+        }
+
+        return res.json({ success: true });
+    }
+);
+
+app.get(
+    "/api/customer/:userId/attendance",
+    async (req, res) => {
+        if (!(await requireCustomerSession(req, res))) {
+            return;
+        }
+
+        const userId = Number(req.params.userId);
+        const period = String(req.query.period || "weekly")
+            .trim()
+            .toLowerCase();
+
+        if (!Number.isSafeInteger(userId) || userId <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid customer ID."
+            });
+        }
+
+        if (userId !== Number(req.customerUser.id)) {
+            return res.status(403).json({
+                success: false,
+                message: "You can only view your own attendance history."
+            });
+        }
+
+        const periodRanges = {
+            daily: `
+                a.check_in >= DATE_TRUNC('day', ${GUEST_NOW_SQL})
+                AND a.check_in < DATE_TRUNC('day', ${GUEST_NOW_SQL}) + INTERVAL '1 day'
+            `,
+            weekly: `
+                a.check_in >= DATE_TRUNC('week', ${GUEST_NOW_SQL})
+                AND a.check_in < DATE_TRUNC('week', ${GUEST_NOW_SQL}) + INTERVAL '7 days'
+            `,
+            monthly: `
+                a.check_in >= DATE_TRUNC('month', ${GUEST_NOW_SQL})
+                AND a.check_in < DATE_TRUNC('month', ${GUEST_NOW_SQL}) + INTERVAL '1 month'
+            `
+        };
+
+        if (!Object.prototype.hasOwnProperty.call(periodRanges, period)) {
+            return res.status(400).json({
+                success: false,
+                message: "Period must be daily, weekly, or monthly."
+            });
+        }
+
+        try {
+            const userResult = await pool.query(
+                `
+                SELECT id
+                FROM users
+                WHERE id = $1
+                  AND LOWER(role) = 'customer'
+                `,
+                [userId]
+            );
+
+            if (userResult.rows.length === 0) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Customer account not found."
+                });
+            }
+
+            const attendanceResult = await pool.query(
+                `
+                SELECT
+                    a.id,
+                    a.check_in AT TIME ZONE 'Asia/Manila' AS check_in,
+                    a.check_out AT TIME ZONE 'Asia/Manila' AS check_out,
+                    GREATEST(
+                        0,
+                        FLOOR(
+                            EXTRACT(
+                                EPOCH FROM (
+                                    COALESCE(a.check_out, ${GUEST_NOW_SQL}) -
+                                    a.check_in
+                                )
+                            ) / 60
+                        )
+                    )::int AS duration_minutes
+                FROM attendance a
+                JOIN members m
+                    ON m.id = a.member_id
+                WHERE m.user_id = $1
+                  AND UPPER(a.user_type) = 'MEMBER'
+                  AND ${periodRanges[period]}
+                ORDER BY a.check_in DESC, a.id DESC
+                `,
+                [userId]
+            );
+
+            return res.json({
+                success: true,
+                period,
+                attendance: attendanceResult.rows
+            });
+        } catch (error) {
+            console.error("Customer attendance report error:", error);
+            return res.status(500).json({
+                success: false,
+                message: "Unable to load your attendance history."
+            });
+        }
+    }
+);
+
+app.get(
     "/api/customer/:userId",
     async (req, res) => {
 
@@ -2917,8 +3315,7 @@ app.get(
                         membership_plan,
                         start_date,
                         expiration_date,
-                        status,
-                        qr_code
+                        status
                     FROM members
                     WHERE user_id = $1
                       AND archived_at IS NULL
@@ -2936,18 +3333,6 @@ app.get(
                 0
                     ? memberResult.rows[0]
                     : null;
-
-            if (
-                membership &&
-                membership.qr_code
-            ) {
-
-                membership.qr_image =
-                    await QRCode.toDataURL(
-                        membership.qr_code
-                    );
-
-            }
 
             await ensurePaymentScreenshotColumn();
 
@@ -7048,23 +7433,26 @@ app.post(
 
         try {
 
-            const qrCode =
+            const qrToken =
                 String(
                     req.body.qr_code ||
                     ""
                 ).trim();
 
-            if (!qrCode) {
+            const qrClaims =
+                verifyMemberQrToken(qrToken);
+
+            if (!qrClaims) {
 
                 return res.status(
-                    400
+                    401
                 ).json({
 
                     success:
                         false,
 
                     message:
-                        "QR code is required."
+                        "This QR code is invalid or expired. Ask the member to refresh their QR code."
 
                 });
 
@@ -7076,6 +7464,32 @@ app.post(
 
             transactionStarted =
                 true;
+
+            const issuedTokenResult =
+                await client.query(
+                    `
+                    SELECT token_hash, member_id
+                    FROM member_qr_tokens
+                    WHERE token_hash = $1
+                      AND member_id = $2
+                      AND expires_at > NOW()
+                      AND consumed_at IS NULL
+                    FOR UPDATE
+                    `,
+                    [
+                        hashSessionToken(qrToken),
+                        qrClaims.member_id
+                    ]
+                );
+
+            if (issuedTokenResult.rows.length === 0) {
+                await client.query("ROLLBACK");
+                transactionStarted = false;
+                return res.status(401).json({
+                    success: false,
+                    message: "This QR code has expired or was already used. Ask the member to refresh it."
+                });
+            }
 
             const gymHoursResult =
                 await client.query(
@@ -7136,19 +7550,18 @@ app.post(
                         ) AS membership_expired,
                         m.archived_at,
                         m.status,
-                        m.qr_code,
                         u.full_name,
                         u.email
                     FROM members m
                     JOIN users u
                         ON u.id = m.user_id
-                    WHERE m.qr_code = $1
+                    WHERE m.id = $1
                       AND m.archived_at IS NULL
                     LIMIT 1
                     FOR UPDATE
                     `,
                     [
-                        qrCode
+                        qrClaims.member_id
                     ]
                 );
 
@@ -7312,6 +7725,28 @@ app.post(
 
                 });
 
+            }
+
+            const consumeTokenResult =
+                await client.query(
+                    `
+                    UPDATE member_qr_tokens
+                    SET consumed_at = NOW()
+                    WHERE token_hash = $1
+                      AND consumed_at IS NULL
+                      AND expires_at > NOW()
+                    RETURNING token_hash
+                    `,
+                    [hashSessionToken(qrToken)]
+                );
+
+            if (consumeTokenResult.rows.length === 0) {
+                await client.query("ROLLBACK");
+                transactionStarted = false;
+                return res.status(401).json({
+                    success: false,
+                    message: "This QR code has expired or was already used. Ask the member to refresh it."
+                });
             }
 
             let action;

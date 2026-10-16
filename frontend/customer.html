@@ -66,9 +66,9 @@
 
 
             <button
-                onclick="showPage('membership', this)">
+                onclick="showPage('attendance-report', this)">
 
-                ◆ My Membership
+                ◷ Attendance Report
 
             </button>
 
@@ -82,9 +82,16 @@
 
 
             <button
-                onclick="showPage('transactions', this)">
+                onclick="showPage('membership', this)">
 
-                ▤ Transactions
+                ◆ My Membership
+
+            </button>
+
+            <button
+                onclick="showPage('profile', this)">
+
+                👤 My Profile
 
             </button>
 
@@ -110,9 +117,9 @@
 
 
             <button
-                onclick="showPage('profile', this)">
+                onclick="showPage('transactions', this)">
 
-                👤 My Profile
+                ▤ Transactions
 
             </button>
 
@@ -938,6 +945,112 @@
         </section>
 
 
+        <!-- =====================================
+             ATTENDANCE REPORT
+        ===================================== -->
+
+        <section
+            id="attendance-report"
+            class="page">
+
+            <div class="content">
+
+                <h1>
+                    Attendance Report
+                </h1>
+
+                <p class="subtitle">
+                    Review your gym visits, check-in and check-out times.
+                    Times are shown in Philippine time.
+                </p>
+
+                <div
+                    class="attendance-report-periods"
+                    role="group"
+                    aria-label="Attendance report period">
+                    <button
+                        class="attendance-report-period"
+                        id="attendanceReportDaily"
+                        type="button"
+                        aria-pressed="false"
+                        onclick="loadAttendanceReport('daily')">
+                        Daily
+                    </button>
+                    <button
+                        class="attendance-report-period active"
+                        id="attendanceReportWeekly"
+                        type="button"
+                        aria-pressed="true"
+                        onclick="loadAttendanceReport('weekly')">
+                        Weekly
+                    </button>
+                    <button
+                        class="attendance-report-period"
+                        id="attendanceReportMonthly"
+                        type="button"
+                        aria-pressed="false"
+                        onclick="loadAttendanceReport('monthly')">
+                        Monthly
+                    </button>
+                </div>
+
+                <div class="stats attendance-report-stats">
+
+                    <div class="card stat">
+                        <h3>Total Visits</h3>
+                        <strong id="attendanceReportVisits">0</strong>
+                    </div>
+
+                    <div class="card stat">
+                        <h3>Completed Visits</h3>
+                        <strong id="attendanceReportCompleted">0</strong>
+                    </div>
+
+                    <div class="card stat">
+                        <h3>Currently Checked In</h3>
+                        <strong id="attendanceReportActive">0</strong>
+                    </div>
+
+                </div>
+
+                <p
+                    class="attendance-report-status"
+                    id="attendanceReportStatus"
+                    role="status"
+                    aria-live="polite">
+                    Loading your attendance history...
+                </p>
+
+                <div class="card attendance-report-card">
+
+                    <table class="attendance-report-table">
+
+                        <thead>
+                            <tr>
+                                <th scope="col">Visit Date</th>
+                                <th scope="col">Check In</th>
+                                <th scope="col">Check Out</th>
+                                <th scope="col">Time in Gym</th>
+                            </tr>
+                        </thead>
+
+                        <tbody id="attendanceReportBody">
+                            <tr>
+                                <td colspan="4" style="text-align:center;">
+                                    Loading your attendance history...
+                                </td>
+                            </tr>
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
 
         <!-- =====================================
              QR CODE
@@ -993,6 +1106,11 @@
                         No QR Code Yet
 
                     </h2>
+
+                    <p
+                        id="qrRefreshCountdown"
+                        aria-live="polite">
+                    </p>
 
 
                     <p

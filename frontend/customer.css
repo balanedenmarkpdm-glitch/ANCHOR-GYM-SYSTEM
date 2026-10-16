@@ -369,6 +369,65 @@ nav button span {
     overflow: hidden;
 }
 
+.attendance-report-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin: 22px 0;
+}
+
+.attendance-report-periods {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 20px;
+}
+
+.attendance-report-period {
+    min-height: 40px;
+    padding: 8px 18px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: var(--color-surface);
+    color: var(--color-text);
+    cursor: pointer;
+    font: inherit;
+}
+
+.attendance-report-period.active {
+    border-color: var(--color-primary);
+    background: var(--color-primary);
+    color: #ffffff;
+}
+
+.attendance-report-period:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+.attendance-report-status {
+    color: var(--color-subtle);
+    font-size: 13px;
+    min-height: 20px;
+}
+
+.attendance-report-card {
+    overflow-x: auto;
+}
+
+.attendance-report-table {
+    width: 100%;
+}
+
+.attendance-report-open {
+    color: var(--color-accent);
+    font-weight: 600;
+}
+
+@media(max-width:700px) {
+    .attendance-report-stats {
+        grid-template-columns: 1fr;
+    }
+}
+
 
 .stat {
     padding: 18px;
