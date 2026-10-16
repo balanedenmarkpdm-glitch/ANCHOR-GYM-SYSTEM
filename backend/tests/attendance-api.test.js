@@ -458,10 +458,10 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(adminCss, /#attendance \.attendance-records-card\s*\{\s*overflow:\s*hidden\s*;/);
     assert.match(adminCss, /\.attendance-records-table\s*\{[^}]*table-layout:\s*fixed/s);
     assert.match(adminCss, /@media \(max-width:\s*920px\)\s*\{[\s\S]*?#dashboard\.active \.grid\.dashboard-overview-grid\s*\{\s*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
-    assert.match(adminCss, /@media \(max-width:\s*700px\)\s*\{[\s\S]*?#transactions \.transactions-table,\s*#reports \.admin-report-details-table\s*\{[^}]*min-width:\s*0/s);
-    assert.match(adminCss, /#transactions \.transactions-table td:nth-child\(6\)::before\s*\{\s*content:\s*"Amount"/);
-    assert.match(adminCss, /#reports \.admin-report-details-table tbody tr:not\(\.report-group-row\) td:nth-child\(7\)::before\s*\{\s*content:\s*"Time Purchased \/ Price"/);
-    assert.match(adminCss, /#reports \.admin-report-details-table tbody tr:not\(\.report-group-row\) td:nth-child\(8\)::before\s*\{\s*content:\s*"Visit Status"/);
+    assert.match(adminCss, /#transactions \.transaction-table-scroll,\s*#reports \.report-table-scroll\s*\{[^}]*overflow-x:\s*auto/s);
+    assert.match(adminCss, /#transactions \.transactions-table\s*\{\s*min-width:\s*1320px/s);
+    assert.match(adminCss, /#reports \.admin-report-details-table\s*\{\s*min-width:\s*1200px/s);
+    assert.match(adminCss, /#transactions \.transactions-table th,\s*#reports \.admin-report-details-table th\s*\{[^}]*white-space:\s*normal[^}]*overflow-wrap:\s*anywhere/s);
     assert.match(adminCss, /\.sidebar nav\s*\{[^}]*scroll-behavior:\s*smooth/s);
     assert.match(customerCss, /\.sidebar nav\s*\{[^}]*scroll-behavior:\s*smooth/s);
     assert.match(customerCss, /\.upload input\[type="file"\]\s*\{[^}]*min-width:\s*0[^}]*max-width:\s*100%/s);
