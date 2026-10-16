@@ -596,10 +596,11 @@ table {
 .application-contact > span {
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     gap: 6px;
     min-width: 0;
     color: var(--color-text);
+    text-align: left;
     line-height: 1.5;
     overflow-wrap: anywhere;
 }

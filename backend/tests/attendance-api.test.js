@@ -215,7 +215,7 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(adminCss, /\.applications-table th:nth-child\(8\)\s*\{\s*width:\s*10%;\s*\}/);
     assert.match(adminCss, /\.applications-table th:nth-child\(9\)\s*\{\s*width:\s*10%;\s*\}/);
     assert.match(adminCss, /\.applications-table th,\s*\.applications-table td\s*\{\s*text-align:\s*center;\s*\}/);
-    assert.match(adminCss, /\.application-contact > span\s*\{[^}]*justify-content:\s*center/s);
+    assert.match(adminCss, /\.application-contact > span\s*\{[^}]*justify-content:\s*flex-start[^}]*text-align:\s*left/s);
     assert.match(adminCss, /\.application-payment-date small,\s*\.application-rejection-reason\s*\{[^}]*text-align:\s*center/s);
     assert.match(adminCss, /\.main table th,\s*\.main table td\s*\{\s*text-align:\s*center;\s*\}/);
     assert.match(adminCss, /\.main table td \.member-contact-cell span,\s*\.main table td \.attendance-actions\s*\{[^}]*justify-content:\s*center/s);
