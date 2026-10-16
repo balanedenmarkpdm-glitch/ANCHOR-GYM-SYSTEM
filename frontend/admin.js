@@ -918,7 +918,14 @@ function createApplicationRow(
 
                 </button>
             `
-            : "—";
+            : status === "REJECTED"
+                ? ""
+                : "—";
+
+    const rejectionReason =
+        status === "REJECTED"
+            ? String(application.rejection_reason || "").trim()
+            : "";
 
 
     return `
@@ -989,8 +996,10 @@ function createApplicationRow(
             <td class="application-decision">
                 ${actions}
                 ${
-                    status === "REJECTED" && application.rejection_reason
-                        ? `<small class="application-rejection-reason">${escapeHtml(application.rejection_reason)}</small>`
+                    status === "REJECTED"
+                        ? `<small class="application-rejection-reason">${escapeHtml(
+                            rejectionReason || "No rejection reason recorded."
+                        )}</small>`
                         : ""
                 }
             </td>

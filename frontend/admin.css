@@ -640,7 +640,8 @@ table {
 }
 
 .application-decision {
-    white-space: nowrap;
+    white-space: normal;
+    overflow-wrap: anywhere;
 }
 
 .transaction-reference,
