@@ -975,6 +975,53 @@ const GUEST_CLOSING_SQL =
 const GUEST_NOW_SQL =
     `(CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Manila')`;
 
+async function checkoutMembersAtClosing(queryable = pool) {
+    const result = await queryable.query(
+        `
+        UPDATE attendance a
+        SET check_out =
+            DATE_TRUNC('day', a.check_in)
+            + INTERVAL '${GYM_CLOSING_INTERVAL}'
+        WHERE UPPER(a.user_type) = 'MEMBER'
+          AND a.check_out IS NULL
+          AND DATE_TRUNC('day', a.check_in)
+              + INTERVAL '${GYM_CLOSING_INTERVAL}'
+              <= ${GUEST_NOW_SQL}
+        RETURNING a.id
+        `
+    );
+
+    if (result.rowCount > 0) {
+        console.log(
+            `Automatically checked out ${result.rowCount} member visit(s) at closing.`
+        );
+    }
+
+    return result.rowCount;
+}
+
+const MEMBER_AUTO_CHECKOUT_INTERVAL_MS = 30_000;
+let memberAutoCheckoutTimer = null;
+
+function startMemberAutoCheckout() {
+    if (memberAutoCheckoutTimer) {
+        return;
+    }
+
+    const runCheckout = () => {
+        void checkoutMembersAtClosing().catch(error => {
+            console.error("Automatic member checkout error:", error);
+        });
+    };
+
+    runCheckout();
+    memberAutoCheckoutTimer = setInterval(
+        runCheckout,
+        MEMBER_AUTO_CHECKOUT_INTERVAL_MS
+    );
+    memberAutoCheckoutTimer.unref?.();
+}
+
 async function getCurrentOccupancy(queryable = pool) {
     const result = await queryable.query(`
         WITH open_visits AS (
@@ -9522,6 +9569,7 @@ app.use(
 
 async function startServer() {
     await ensureDashboardSchema();
+    startMemberAutoCheckout();
 
     app.listen(
         PORT,
@@ -9562,5 +9610,6 @@ module.exports = {
     app,
     pool,
     ensureDashboardSchema,
-    startServer
+    startServer,
+    checkoutMembersAtClosing
 };
