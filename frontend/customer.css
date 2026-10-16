@@ -1161,6 +1161,7 @@ a:hover {
         padding: 0;
         overflow-x: auto;
         overflow-y: hidden;
+        scroll-behavior: smooth;
         scrollbar-width: none;
         -webkit-overflow-scrolling: touch;
     }

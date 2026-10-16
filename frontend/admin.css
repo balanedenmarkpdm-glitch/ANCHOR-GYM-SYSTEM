@@ -1741,6 +1741,12 @@ button,
     color: #EF4444;
 }
 
+@media (max-width: 920px) {
+    #dashboard.active .grid.dashboard-overview-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
 #dashboard.active .dashboard-decisions-card,
 #dashboard.active .dashboard-pending-card {
     min-height: 202px;
@@ -3364,6 +3370,7 @@ svg {
         padding: 0;
         overflow-x: auto;
         overflow-y: hidden;
+        scroll-behavior: smooth;
         scrollbar-width: none;
         -webkit-overflow-scrolling: touch;
     }

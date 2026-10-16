@@ -46,6 +46,10 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
         path.join(projectRoot, "frontend", "login.html"),
         "utf8"
     );
+    const customerLoginCss = fs.readFileSync(
+        path.join(projectRoot, "frontend", "login.css"),
+        "utf8"
+    );
     const adminCss = fs.readFileSync(
         path.join(projectRoot, "frontend", "admin.css"),
         "utf8"
@@ -117,6 +121,8 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
 
     assert.match(loginHtml, /<input\b(?=[^>]*id="adminEmail")(?=[^>]*value="admin@gmail\.com")[^>]*>/);
     assert.match(loginHtml, /<input\b(?=[^>]*id="adminPassword")(?=[^>]*value="admin123")[^>]*>/);
+    assert.doesNotMatch(customerLoginCss, /min-width:\s*320px/);
+    assert.doesNotMatch(customerLoginCss, /body\.login-page\s*\{[^}]*overflow-x:\s*hidden/s);
     assert.match(customerLoginHtml, /href="privacy-policy\.html"/);
     assert.match(privacyPolicyHtml, /Privacy Policy/);
     assert.match(privacyPolicyHtml, /balanedenmark\.pdm@gmail\.com/);
@@ -356,6 +362,7 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
         /status\s*!==\s*"ACTIVE"[\s\S]*?displayNoQR\(\)/
     );
     assert.match(portalTheme, /\.chart-scroll\s*\{[^}]*overflow-x:\s*auto/s);
+    assert.match(portalTheme, /@media \(prefers-reduced-motion:\s*reduce\)\s*\{[\s\S]*?scroll-behavior:\s*auto !important/);
     assert.match(portalTheme, /\.admin-report-chart-card \.bars\s*\{[^}]*height:\s*155px[^}]*repeating-linear-gradient/s);
     assert.match(portalTheme, /\.admin-report-chart-card \.report-toggle button\s*\{[^}]*min-height:\s*28px/s);
     assert.match(portalTheme, /\.admin-report-chart-card #reportMessage::before/);
@@ -371,6 +378,9 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(adminCss, /#attendance \.attendance-records-card\s*\{[^}]*padding:\s*18px/s);
     assert.match(adminCss, /#attendance \.attendance-records-card\s*\{\s*overflow:\s*hidden\s*;/);
     assert.match(adminCss, /\.attendance-records-table\s*\{[^}]*table-layout:\s*fixed/s);
+    assert.match(adminCss, /@media \(max-width:\s*920px\)\s*\{[\s\S]*?#dashboard\.active \.grid\.dashboard-overview-grid\s*\{\s*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
+    assert.match(adminCss, /\.sidebar nav\s*\{[^}]*scroll-behavior:\s*smooth/s);
+    assert.match(customerCss, /\.sidebar nav\s*\{[^}]*scroll-behavior:\s*smooth/s);
     assert.match(adminCss, /\.attendance-records-table th:nth-child\(7\)\s*\{\s*width:\s*11%/);
     assert.match(adminCss, /@media \(max-width:\s*700px\)\s*\{[\s\S]*?\.attendance-records-card\s*\{[^}]*padding:\s*14px[\s\S]*?\.attendance-members-card\s*\{[^}]*padding:\s*14px/s);
     assert.match(portalTheme, /html\[data-portal="admin"\]\s+\.approve[\s\S]*?#16A34A/);
