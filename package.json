@@ -6,7 +6,7 @@
   "scripts": {
     "test": "node --test backend/tests/attendance-api.test.js",
     "start": "node backend/server.js",
-    "check": "node --check backend/server.js && node --check frontend/admin.js && node --check frontend/customer.js && node --check frontend/auth.js && node --check frontend/portal-theme.js && node --check frontend/api-config.js"
+    "check": "node --check backend/server.js && node --check backend/cors.js && node --check frontend/admin.js && node --check frontend/customer.js && node --check frontend/auth.js && node --check frontend/portal-theme.js && node --check frontend/api-config.js"
   },
   "keywords": [
     "gym",
