@@ -134,8 +134,10 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
         "utf8"
     );
 
-    assert.match(loginHtml, /<input\b(?=[^>]*id="adminEmail")(?=[^>]*value="admin@gmail\.com")[^>]*>/);
-    assert.match(loginHtml, /<input\b(?=[^>]*id="adminPassword")(?=[^>]*value="admin123")[^>]*>/);
+    assert.match(loginHtml, /<input\b(?=[^>]*id="adminEmail")(?=[^>]*autocomplete="username")[^>]*>/);
+    assert.match(loginHtml, /<input\b(?=[^>]*id="adminPassword")(?=[^>]*autocomplete="current-password")[^>]*>/);
+    assert.doesNotMatch(loginHtml, /<input\b(?=[^>]*id="adminEmail")(?=[^>]*value=)[^>]*>/);
+    assert.doesNotMatch(loginHtml, /<input\b(?=[^>]*id="adminPassword")(?=[^>]*value=)[^>]*>/);
     assert.doesNotMatch(customerLoginCss, /min-width:\s*320px/);
     assert.doesNotMatch(customerLoginCss, /body\.login-page\s*\{[^}]*overflow-x:\s*hidden/s);
     assert.match(customerLoginHtml, /href="privacy-policy\.html"/);
