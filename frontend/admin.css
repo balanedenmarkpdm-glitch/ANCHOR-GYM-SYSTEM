@@ -576,13 +576,13 @@ table {
 .transactions-table th:nth-child(10) { width: 11%; }
 
 .applications-table th:nth-child(1) { width: 10%; }
-.applications-table th:nth-child(2) { width: 18%; }
-.applications-table th:nth-child(3) { width: 10%; }
-.applications-table th:nth-child(4) { width: 7%; }
-.applications-table th:nth-child(5) { width: 12%; }
-.applications-table th:nth-child(6) { width: 10%; }
-.applications-table th:nth-child(7) { width: 13%; }
-.applications-table th:nth-child(8) { width: 10%; }
+.applications-table th:nth-child(2) { width: 24%; }
+.applications-table th:nth-child(3) { width: 9%; }
+.applications-table th:nth-child(4) { width: 6%; }
+.applications-table th:nth-child(5) { width: 11%; }
+.applications-table th:nth-child(6) { width: 9%; }
+.applications-table th:nth-child(7) { width: 12%; }
+.applications-table th:nth-child(8) { width: 9%; }
 .applications-table th:nth-child(9) { width: 10%; }
 
 .application-applicant {

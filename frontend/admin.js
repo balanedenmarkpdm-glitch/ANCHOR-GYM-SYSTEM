@@ -8,7 +8,7 @@ let qrScanner = null;
 let qrScanBusy = false;
 let guestTimeoutRefreshPending = false;
 let lastScannedQr = null;
-let reportPeriod = "daily";
+let reportPeriod = "weekly";
 let attendanceRecords = [];
 let attendanceMembers = [];
 let attendanceMembersPage = 1;
@@ -5148,6 +5148,44 @@ async function viewScreenshot(
 // REPORTS
 // =====================================
 
+function getReportPeriodDateRange(period) {
+    const dateParts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Manila",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+    }).formatToParts(new Date());
+    const dateValues = Object.fromEntries(
+        dateParts
+            .filter(part => part.type !== "literal")
+            .map(part => [part.type, Number(part.value)])
+    );
+    const today = new Date(Date.UTC(
+        dateValues.year,
+        dateValues.month - 1,
+        dateValues.day
+    ));
+    let start = new Date(today);
+    let end = new Date(today);
+
+    if (period === "weekly") {
+        const daysSinceMonday = (today.getUTCDay() + 6) % 7;
+        start.setUTCDate(today.getUTCDate() - daysSinceMonday);
+        end.setUTCDate(start.getUTCDate() + 6);
+    } else if (period === "monthly") {
+        start = new Date(Date.UTC(dateValues.year, dateValues.month - 1, 1));
+        end = new Date(Date.UTC(dateValues.year, dateValues.month, 0));
+    }
+
+    const toDateInputValue = date =>
+        date.toISOString().slice(0, 10);
+
+    return {
+        startDate: toDateInputValue(start),
+        endDate: toDateInputValue(end)
+    };
+}
+
 async function loadReports(
     period = reportPeriod
 ) {
@@ -5166,10 +5204,21 @@ async function loadReports(
     }[period];
     setText("reportChartTitle", chartTitle);
     const dateRange = document.getElementById("reportDateRange");
-    const startDate = document.getElementById("reportStartDate")?.value || "";
-    const endDate = document.getElementById("reportEndDate")?.value || "";
+    const startDateInput = document.getElementById("reportStartDate");
+    const endDateInput = document.getElementById("reportEndDate");
+    if (period !== "custom") {
+        const periodDates = getReportPeriodDateRange(period);
+        if (startDateInput) {
+            startDateInput.value = periodDates.startDate;
+        }
+        if (endDateInput) {
+            endDateInput.value = periodDates.endDate;
+        }
+    }
+    const startDate = startDateInput?.value || "";
+    const endDate = endDateInput?.value || "";
     if (dateRange) {
-        dateRange.hidden = period !== "custom";
+        dateRange.hidden = false;
     }
 
     document

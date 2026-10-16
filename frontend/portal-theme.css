@@ -478,6 +478,108 @@ textarea:focus-visible {
     margin-top: 20px;
 }
 
+.admin-report-chart-card {
+    padding: 14px;
+}
+
+.admin-report-details-card {
+    width: 100%;
+    min-width: 0;
+    margin-top: 16px;
+    padding: 14px;
+}
+
+.admin-report-details-card > h3 {
+    margin: 0 0 12px;
+    font-size: 14px;
+}
+
+.admin-report-details-card .report-table-scroll {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow: auto;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+}
+
+.admin-report-details-table {
+    width: 100%;
+    min-width: 900px;
+    table-layout: fixed;
+}
+
+.admin-report-details-table th,
+.admin-report-details-table td {
+    padding: 10px 8px;
+    font-size: 10px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+}
+
+.admin-report-details-table th:nth-child(1) { width: 18%; }
+.admin-report-details-table th:nth-child(2) { width: 8%; }
+.admin-report-details-table th:nth-child(3) { width: 11%; }
+.admin-report-details-table th:nth-child(4) { width: 14%; }
+.admin-report-details-table th:nth-child(5) { width: 14%; }
+.admin-report-details-table th:nth-child(6) { width: 10%; }
+.admin-report-details-table th:nth-child(7) { width: 14%; }
+.admin-report-details-table th:nth-child(8) { width: 11%; }
+
+.admin-report-details-table .report-group-row th {
+    padding: 9px 10px;
+    overflow-wrap: anywhere;
+}
+
+.admin-report-chart-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    font-size: 14px;
+}
+
+.admin-report-chart-title svg {
+    width: 16px;
+    height: 16px;
+    flex: 0 0 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-width: 2;
+}
+
+.admin-report-chart-card .report-toggle {
+    gap: 8px;
+    margin: 10px 0 4px;
+}
+
+.admin-report-chart-card .report-toggle button {
+    min-height: 28px;
+    padding: 4px 11px;
+    border-radius: 6px;
+    font-size: 10px;
+}
+
+.admin-report-chart-card .report-date-range {
+    gap: 7px;
+    margin-top: 4px;
+    font-size: 9px;
+}
+
+.admin-report-chart-card .report-date-range input {
+    width: 126px;
+    min-height: 27px;
+    padding: 4px 7px;
+    font-size: 10px;
+}
+
+.admin-report-chart-card .report-date-range .small-btn {
+    min-height: 27px;
+    padding: 4px 11px;
+    font-size: 10px;
+}
+
 .report-chart {
     display: grid;
     grid-template-columns: 42px minmax(0, 1fr);
@@ -541,6 +643,78 @@ textarea:focus-visible {
     font-size: 11px;
     text-align: center;
     transform: translateX(-50%);
+}
+
+.admin-report-chart-card .report-chart {
+    grid-template-columns: 24px minmax(0, 1fr);
+    gap: 5px;
+    margin-top: 10px;
+}
+
+.admin-report-chart-card .chart-axis-y {
+    padding-bottom: 24px;
+    font-size: 9px;
+}
+
+.admin-report-chart-card .bars {
+    height: 155px;
+    grid-auto-columns: minmax(36px, 1fr);
+    gap: 6px;
+    padding: 10px 4px 24px;
+    background: repeating-linear-gradient(
+        to bottom,
+        transparent 0,
+        transparent calc(25% - 1px),
+        var(--color-border) calc(25% - 1px),
+        var(--color-border) 25%
+    );
+}
+
+.admin-report-chart-card .bars .report-bar {
+    border-radius: 4px 4px 0 0;
+}
+
+.admin-report-chart-card .bars .report-bar-value,
+.admin-report-chart-card .bars .report-bar-label {
+    font-size: 9px;
+}
+
+.admin-report-chart-card #reportMessage {
+    position: relative;
+    margin: 7px 0 0;
+    padding: 7px 0 0 17px;
+    border-top: 1px solid var(--color-border);
+    color: var(--color-subtle);
+    font-size: 9px;
+}
+
+.admin-report-chart-card #reportMessage::before {
+    position: absolute;
+    top: 8px;
+    left: 0;
+    display: inline-grid;
+    width: 11px;
+    height: 11px;
+    place-items: center;
+    border: 1px solid currentColor;
+    border-radius: 50%;
+    content: "i";
+    font-size: 8px;
+    font-weight: 700;
+}
+
+@media (max-width: 700px) {
+    .admin-report-chart-card .report-date-range {
+        gap: 6px;
+    }
+
+    .admin-report-chart-card .report-date-range input {
+        width: 112px;
+    }
+
+    .admin-report-chart-card .bars {
+        min-width: max(620px, 100%);
+    }
 }
 
 .chart-empty {

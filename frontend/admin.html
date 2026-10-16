@@ -1458,9 +1458,17 @@
 
                 </div>
 
-                <div class="card report">
+                <div class="card report admin-report-chart-card">
 
-                    <h3 id="reportChartTitle">Visits by Hour</h3>
+                    <h3 class="admin-report-chart-title">
+                        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                            <path d="M4 19V9"></path>
+                            <path d="M10 19V5"></path>
+                            <path d="M16 19v-7"></path>
+                            <path d="M22 19V3"></path>
+                        </svg>
+                        <span id="reportChartTitle">Visits by Day</span>
+                    </h3>
 
                     <div
                         class="report-toggle"
@@ -1469,14 +1477,14 @@
                         <button
                             type="button"
                             data-report-period="daily"
-                            aria-pressed="true"
+                            aria-pressed="false"
                             onclick="loadReports('daily')">
                             Daily
                         </button>
                         <button
                             type="button"
                             data-report-period="weekly"
-                            aria-pressed="false"
+                            aria-pressed="true"
                             onclick="loadReports('weekly')">
                             Weekly
                         </button>
@@ -1496,7 +1504,7 @@
                         </button>
                     </div>
 
-                    <div class="report-date-range" id="reportDateRange" hidden>
+                    <div class="report-date-range" id="reportDateRange">
                         <label for="reportStartDate">From</label>
                         <input id="reportStartDate" type="date">
                         <label for="reportEndDate">To</label>
@@ -1518,7 +1526,7 @@
                                 id="peakAttendanceChart"
                                 class="bars"
                                 role="list"
-                                aria-label="Visits by hour">
+                                aria-label="Visits by day">
                             </div>
                         </div>
                     </div>
@@ -1538,10 +1546,10 @@
 
                 </div>
 
-                <div class="card">
+                <div class="card admin-report-details-card">
                     <h3>Attendance Details</h3>
                     <div class="table-scroll report-table-scroll">
-                        <table>
+                        <table class="admin-report-details-table">
                             <thead>
                                 <tr>
                                     <th>Visitor Name</th>

@@ -73,7 +73,7 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
         /<section\s+id="reports"[\s\S]*?<\/section>/
     )?.[0] || "";
     const reportSummary = reportPage.match(
-        /<div class="attendance-stats report-stats">([\s\S]*?)<div class="card report">/
+        /<div class="attendance-stats report-stats">([\s\S]*?)<div class="card report\b/
     )?.[1] || "";
     const membershipChart = adminHtml.match(
         /<div class="legend">[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/
@@ -175,7 +175,7 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(adminJs, /No pending applications\./);
     assert.doesNotMatch(membershipChart, /Expired/);
     assert.equal((reportSummary.match(/class="card"/g) || []).length, 4);
-    assert.match(reportPage, /Visits by Hour/);
+    assert.match(reportPage, /Visits by Day/);
     assert.match(adminHtml, /id="attendanceMembersTableBody"/);
     assert.doesNotMatch(adminHtml, /attendanceTimeoutAlert|manualMemberSearchForm|manualAttendanceSearch|manualAttendanceResults/);
     assert.match(adminHtml, /class="card attendance-scanner-card"/);
@@ -212,7 +212,8 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(applicationRowRenderer, /No rejection reason recorded\./);
     assert.match(adminCss, /\.application-decision\s*\{[^}]*white-space:\s*normal[^}]*overflow-wrap:\s*anywhere/s);
     assert.match(adminCss, /\.application-decision-placeholder\s*\{[^}]*font-size:\s*10px/s);
-    assert.match(adminCss, /\.applications-table th:nth-child\(8\)\s*\{\s*width:\s*10%;\s*\}/);
+    assert.match(adminCss, /\.applications-table th:nth-child\(2\)\s*\{\s*width:\s*24%;\s*\}/);
+    assert.match(adminCss, /\.applications-table th:nth-child\(8\)\s*\{\s*width:\s*9%;\s*\}/);
     assert.match(adminCss, /\.applications-table th:nth-child\(9\)\s*\{\s*width:\s*10%;\s*\}/);
     assert.match(adminCss, /\.applications-table th,\s*\.applications-table td\s*\{\s*text-align:\s*center;\s*\}/);
     assert.match(adminCss, /\.application-contact > span\s*\{[^}]*justify-content:\s*flex-start[^}]*text-align:\s*left/s);
@@ -238,6 +239,13 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(adminHtml, /value="not-inside">Not Checked In/);
     assert.match(adminHtml, /class="chart-scroll"/);
     assert.match(adminHtml, /class="table-scroll report-table-scroll"/);
+    assert.match(adminHtml, /class="card report admin-report-chart-card"/);
+    assert.match(adminHtml, /class="admin-report-chart-title"/);
+    assert.match(adminHtml, /class="card admin-report-details-card"/);
+    assert.match(adminHtml, /class="admin-report-details-table"/);
+    assert.doesNotMatch(adminHtml, /id="reportDateRange" hidden/);
+    assert.match(adminHtml, /id="reportChartTitle">Visits by Day/);
+    assert.match(adminHtml, /data-report-period="weekly"\s+aria-pressed="true"/);
     assert.match(adminHtml, /class="table-scroll attendance-table-scroll"/);
     assert.match(attendancePage, /class="card attendance-records-card"/);
     assert.match(attendancePage, /class="attendance-records-table"/);
@@ -250,6 +258,9 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(transactionPage, /id="transactionsPreviousPage"/);
     assert.match(transactionPage, /id="transactionsNextPage"/);
     assert.match(adminJs, /transactionsPageSize = 8/);
+    assert.match(adminJs, /let reportPeriod = "weekly"/);
+    assert.match(adminJs, /function getReportPeriodDateRange\(period\)/);
+    assert.match(adminJs, /timeZone:\s*"Asia\/Manila"/);
     assert.match(adminJs, /function renderTransactionsTable\(\)/);
     assert.match(adminJs, /transaction\.member_id/);
     assert.match(adminJs, /class="small-btn application-proof-button"/);
@@ -345,6 +356,15 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
         /status\s*!==\s*"ACTIVE"[\s\S]*?displayNoQR\(\)/
     );
     assert.match(portalTheme, /\.chart-scroll\s*\{[^}]*overflow-x:\s*auto/s);
+    assert.match(portalTheme, /\.admin-report-chart-card \.bars\s*\{[^}]*height:\s*155px[^}]*repeating-linear-gradient/s);
+    assert.match(portalTheme, /\.admin-report-chart-card \.report-toggle button\s*\{[^}]*min-height:\s*28px/s);
+    assert.match(portalTheme, /\.admin-report-chart-card #reportMessage::before/);
+    assert.match(portalTheme, /\.admin-report-details-card\s*\{[^}]*margin-top:\s*16px[^}]*padding:\s*14px/s);
+    assert.match(portalTheme, /\.admin-report-details-card \.report-table-scroll\s*\{[^}]*max-width:\s*100%[^}]*overflow:\s*auto/s);
+    assert.match(portalTheme, /\.admin-report-details-table\s*\{[^}]*min-width:\s*900px[^}]*table-layout:\s*fixed/s);
+    assert.match(portalTheme, /\.admin-report-details-table th:nth-child\(1\)\s*\{\s*width:\s*18%;\s*\}/);
+    assert.match(portalTheme, /\.admin-report-details-table th:nth-child\(7\)\s*\{\s*width:\s*14%;\s*\}/);
+    assert.match(portalTheme, /\.bars\s*\{[^}]*height:\s*270px/s);
     assert.match(adminCss, /\.attendance-table-scroll,\s*\.report-table-scroll,\s*\.attendance-members-table-scroll,\s*\.applications-table-scroll\s*\{[^}]*max-height:[^}]*overflow-y:\s*auto/s);
     assert.match(adminCss, /\.attendance-filter-toolbar\s*\{[^}]*align-items:\s*center[^}]*padding-inline:\s*0/s);
     assert.match(adminCss, /\.attendance-records-table th,\s*\.attendance-records-table td\s*\{[^}]*padding:\s*14px 12px/s);
