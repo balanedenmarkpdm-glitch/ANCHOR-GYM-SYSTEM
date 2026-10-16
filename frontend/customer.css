@@ -959,9 +959,17 @@ th {
 
 
 .upload input {
+
     background: none;
 
     border: 0;
+}
+
+.upload input[type="file"] {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
 }
 
 .upload-preview {

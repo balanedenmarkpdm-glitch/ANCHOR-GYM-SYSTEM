@@ -33,6 +33,21 @@ let activeUserId;
 let testSchema;
 let memberTransactionSeeded = false;
 
+test("package scripts use the backend entry point and provide a JavaScript syntax check", () => {
+    const packageJson = JSON.parse(
+        fs.readFileSync(path.join(projectRoot, "package.json"), "utf8")
+    );
+
+    assert.equal(packageJson.name, "anchor-gym-system");
+    assert.equal(packageJson.main, "backend/server.js");
+    assert.equal(packageJson.scripts.start, "node backend/server.js");
+    assert.equal(
+        fs.existsSync(path.join(projectRoot, packageJson.main)),
+        true
+    );
+    assert.match(packageJson.scripts.check, /node --check backend\/server\.js/);
+});
+
 test("admin UI exposes the required application, dashboard, report, attendance, and transaction rules", () => {
     const adminHtml = fs.readFileSync(
         path.join(projectRoot, "frontend", "admin.html"),
@@ -381,6 +396,7 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(adminCss, /@media \(max-width:\s*920px\)\s*\{[\s\S]*?#dashboard\.active \.grid\.dashboard-overview-grid\s*\{\s*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
     assert.match(adminCss, /\.sidebar nav\s*\{[^}]*scroll-behavior:\s*smooth/s);
     assert.match(customerCss, /\.sidebar nav\s*\{[^}]*scroll-behavior:\s*smooth/s);
+    assert.match(customerCss, /\.upload input\[type="file"\]\s*\{[^}]*min-width:\s*0[^}]*max-width:\s*100%/s);
     assert.match(adminCss, /\.attendance-records-table th:nth-child\(7\)\s*\{\s*width:\s*11%/);
     assert.match(adminCss, /@media \(max-width:\s*700px\)\s*\{[\s\S]*?\.attendance-records-card\s*\{[^}]*padding:\s*14px[\s\S]*?\.attendance-members-card\s*\{[^}]*padding:\s*14px/s);
     assert.match(portalTheme, /html\[data-portal="admin"\]\s+\.approve[\s\S]*?#16A34A/);
