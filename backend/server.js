@@ -6861,8 +6861,16 @@ app.get(
                         ON g.id =
                         a.guest_id
 
-                    WHERE $1 = 'all'
-                       OR UPPER(a.user_type) = $2
+                    WHERE (
+                        $1 = 'all'
+                        OR UPPER(a.user_type) = $2
+                    )
+                      AND a.check_in >= DATE_TRUNC('day', ${GUEST_NOW_SQL})
+                      AND a.check_in < DATE_TRUNC('day', ${GUEST_NOW_SQL})
+                          + INTERVAL '1 day'
+                      AND ${GUEST_NOW_SQL} <
+                          DATE_TRUNC('day', ${GUEST_NOW_SQL})
+                          + INTERVAL '${GYM_CLOSING_INTERVAL}'
 
                     ORDER BY
                         a.check_in DESC,
