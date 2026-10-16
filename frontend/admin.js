@@ -918,9 +918,7 @@ function createApplicationRow(
 
                 </button>
             `
-            : status === "REJECTED"
-                ? ""
-                : "—";
+            : "";
 
     const rejectionReason =
         status === "REJECTED"
