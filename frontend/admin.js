@@ -3310,6 +3310,18 @@ async function loadAttendance(
 
         }
 
+        const now = Date.now();
+        const previousCountdowns = new Map(
+            [...document.querySelectorAll('[data-guest-countdown="true"]')]
+                .map(element => [
+                    String(element.dataset.attendanceId),
+                    {
+                        endTime: element.dataset.guestEndTime,
+                        remainingSeconds: getCurrentGuestCountdown(element, now)
+                    }
+                ])
+        );
+
         body.innerHTML =
             attendance
                 .map(
@@ -3328,10 +3340,43 @@ async function loadAttendance(
                             Boolean(
                                 record.check_out
                             );
+                        const endTime = String(
+                            record.guest_end_time_epoch ||
+                            record.guest_end_time ||
+                            ""
+                        );
+                        let remainingSeconds = Number(record.remaining_seconds);
+                        const hasRemainingSeconds =
+                            record.remaining_seconds !== null &&
+                            record.remaining_seconds !== undefined &&
+                            Number.isFinite(remainingSeconds);
+                        const previousCountdown = previousCountdowns.get(
+                            String(Number(record.id))
+                        );
+
+                        if (
+                            isGuest &&
+                            !isCheckedOut &&
+                            hasRemainingSeconds &&
+                            previousCountdown?.endTime === endTime &&
+                            Number.isFinite(previousCountdown.remainingSeconds)
+                        ) {
+                            remainingSeconds = Math.min(
+                                remainingSeconds,
+                                previousCountdown.remainingSeconds
+                            );
+                        }
+
                         const isTimedOut =
                             isGuest &&
                             !isCheckedOut &&
-                            record.timed_out === true;
+                            (
+                                record.timed_out === true ||
+                                (
+                                    hasRemainingSeconds &&
+                                    remainingSeconds <= 0
+                                )
+                            );
                         const visitStatus =
                             isCheckedOut
                                 ? "CHECKED OUT"
@@ -3353,16 +3398,8 @@ async function loadAttendance(
                                 `;
 
                             } else {
-                                const remainingSeconds =
-                                    Number(
-                                        record.remaining_seconds
-                                    );
-
                                 if (
-                                    Number.isFinite(
-                                        remainingSeconds
-                                    ) &&
-                                    remainingSeconds > 0
+                                    hasRemainingSeconds
                                 ) {
 
                                     remainingHtml = `
@@ -3372,23 +3409,24 @@ async function loadAttendance(
                                             data-attendance-id="${escapeAttribute(
                                                 record.id
                                             )}"
+                                            data-guest-end-time="${escapeAttribute(
+                                                endTime
+                                            )}"
                                             data-remaining-seconds="${escapeAttribute(
                                                 remainingSeconds
                                             )}"
+                                            data-timeout-refreshed="${remainingSeconds <= 0 ? "true" : "false"}"
                                             data-countdown-last-update=""
                                         >
-                                            ${formatCountdown(
-                                                remainingSeconds
-                                            )}
+                                            ${remainingSeconds <= 0 ? "TIME OUT" : formatCountdown(remainingSeconds)}
                                         </span>
 
                                         <small class="countdown-note">
-                                            CHECKED IN · Expires ${escapeHtml(
-                                                formatGuestEndLabel(
-                                                    record.guest_end_time_epoch ||
-                                                    record.guest_end_time
-                                                )
-                                            )}
+                                            ${remainingSeconds <= 0
+                                                ? "Guest access expired"
+                                                : `CHECKED IN · Expires ${escapeHtml(
+                                                    formatGuestEndLabel(endTime)
+                                                )}`}
                                         </small>
                                     `;
 
@@ -3905,6 +3943,23 @@ async function updateGuestCountdowns() {
             );
         }
     }
+}
+
+function getCurrentGuestCountdown(element, now) {
+    const remainingSeconds = Number(element.dataset.remainingSeconds);
+    if (!Number.isFinite(remainingSeconds)) {
+        return NaN;
+    }
+
+    const lastUpdate = Number(element.dataset.countdownLastUpdate);
+    if (!Number.isFinite(lastUpdate)) {
+        return remainingSeconds;
+    }
+
+    return Math.max(
+        0,
+        remainingSeconds - Math.floor((now - lastUpdate) / 1000)
+    );
 }
 
 

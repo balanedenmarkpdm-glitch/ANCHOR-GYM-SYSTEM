@@ -437,6 +437,10 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(portalTheme, /\.attendance-actions \.attendance-checkout-button\s*\{[^}]*background:\s*#dc2626[^}]*color:\s*#ffffff/s);
     assert.match(attendanceRenderer, /TIME OUT/);
     assert.match(attendanceRenderer, /class="attendance-action-link"/);
+    assert.match(attendanceRenderer, /data-guest-end-time/);
+    assert.match(attendanceRenderer, /previousCountdown\?\.endTime === endTime[\s\S]*?remainingSeconds = Math\.min\(/);
+    assert.match(attendanceRenderer, /remainingSeconds <= 0[\s\S]*?TIME OUT/);
+    assert.match(adminJs, /function getCurrentGuestCountdown\(element, now\)[\s\S]*?Math\.floor\(\(now - lastUpdate\) \/ 1000\)/);
     assert.doesNotMatch(attendanceRenderer, /TIMED OUT \/ OVERDUE/);
     assert.match(adminJs, /attendanceMembersPageSize = 5/);
     assert.match(adminJs, /data\.membershipStatusCounts\?\.pending/);
