@@ -9366,26 +9366,17 @@ app.get(
                             COALESCE(a.check_out, ${GUEST_NOW_SQL}) - a.check_in
                         )))
                     )::int AS duration_seconds,
-                    CASE
-                        WHEN UPPER(a.user_type) <> 'GUEST' THEN NULL
-                        WHEN EXISTS (
-                            SELECT 1
-                            FROM guest_visit_extensions e
-                            WHERE e.attendance_id = a.id
-                              AND e.extension_type = 'ALL_DAY'
-                              AND e.payment_status = 'CONFIRMED'
-                        ) THEN 'All-day access'
-                        WHEN UPPER(g.visit_type) = 'DAY PASS' THEN 'All-day pass'
-                        ELSE (
-                            COALESCE(g.hours, 0) + COALESCE((
-                                SELECT SUM(e.additional_hours)
-                                FROM guest_visit_extensions e
-                                WHERE e.attendance_id = a.id
-                                  AND e.extension_type = 'EXTRA_HOURS'
-                                  AND e.payment_status = 'CONFIRMED'
-                            ), 0)
-                        )::text || ' hour(s)'
-                    END AS guest_time_purchased,
+                    UPPER(g.visit_type) AS guest_visit_type,
+                    g.hours AS guest_hours,
+                    COALESCE(g.amount_paid, 0)::numeric AS guest_amount_paid,
+                    COALESCE(guest_extensions.extra_hours, 0)::int
+                        AS guest_extra_hours,
+                    COALESCE(guest_extensions.all_day_access, false)
+                        AS guest_all_day_access,
+                    COALESCE(guest_extensions.extension_amount, 0)::numeric
+                        AS guest_extension_amount,
+                    COALESCE(guest_transactions.total_amount, 0)::numeric
+                        AS guest_transaction_amount,
                     CASE
                         WHEN a.check_out IS NOT NULL THEN 'CHECKED OUT'
                         WHEN UPPER(a.user_type) = 'GUEST'
@@ -9400,6 +9391,23 @@ app.get(
                     ON u.id = m.user_id
                 LEFT JOIN guests g
                     ON g.id = a.guest_id
+                LEFT JOIN LATERAL (
+                    SELECT
+                        SUM(e.additional_hours) FILTER (
+                            WHERE e.extension_type = 'EXTRA_HOURS'
+                        ) AS extra_hours,
+                        BOOL_OR(e.extension_type = 'ALL_DAY') AS all_day_access,
+                        SUM(e.amount) AS extension_amount
+                    FROM guest_visit_extensions e
+                    WHERE e.attendance_id = a.id
+                      AND e.payment_status = 'CONFIRMED'
+                ) guest_extensions ON true
+                LEFT JOIN LATERAL (
+                    SELECT SUM(gt.amount) AS total_amount
+                    FROM guest_transactions gt
+                    WHERE gt.attendance_id = a.id
+                      AND gt.payment_status = 'CONFIRMED'
+                ) guest_transactions ON true
                 WHERE ${rangeCondition}
                   AND UPPER(a.user_type) IN ('MEMBER', 'GUEST')
                 ORDER BY a.check_in DESC, a.id DESC
@@ -9444,6 +9452,64 @@ app.get(
             );
             const occupancy = await getCurrentOccupancy();
             const summary = summaryResult.rows[0];
+            const currencyFormatter = new Intl.NumberFormat("en-PH", {
+                maximumFractionDigits: 2
+            });
+            const records = detailResult.rows.map(record => {
+                if (record.user_type !== "GUEST") {
+                    return {
+                        ...record,
+                        guest_time_purchased: null
+                    };
+                }
+
+                const extensionAmount =
+                    Number(record.guest_extension_amount || 0);
+                const transactionAmount =
+                    Number(record.guest_transaction_amount || 0);
+                const baseAmount =
+                    Number(record.guest_amount_paid || 0);
+                const amountPaid = Math.max(
+                    transactionAmount,
+                    baseAmount + extensionAmount
+                );
+                const displayAmount = currencyFormatter.format(
+                    amountPaid ||
+                        (record.guest_visit_type === "DAY PASS"
+                            ? 100
+                            : (
+                                Number(record.guest_hours || 0) +
+                                Number(record.guest_extra_hours || 0)
+                            ) * 30)
+                );
+
+                if (record.guest_all_day_access) {
+                    return {
+                        ...record,
+                        guest_time_purchased:
+                            `All-day access (₱${displayAmount})`
+                    };
+                }
+
+                if (record.guest_visit_type === "DAY PASS") {
+                    return {
+                        ...record,
+                        guest_time_purchased:
+                            `All-day pass (₱${displayAmount})`
+                    };
+                }
+
+                const purchasedHours =
+                    Number(record.guest_hours || 0) +
+                    Number(record.guest_extra_hours || 0);
+
+                return {
+                    ...record,
+                    guest_time_purchased:
+                        `${purchasedHours} ${purchasedHours === 1 ? "hour" : "hours"} ` +
+                        `(₱${displayAmount})`
+                };
+            });
 
             return res.json({
                 success: true,
@@ -9460,7 +9526,7 @@ app.get(
                 membersInside: occupancy.membersInside,
                 guestsInside: occupancy.guestsInside,
                 series: seriesResult.rows,
-                records: detailResult.rows
+                records
             });
 
         } catch (error) {

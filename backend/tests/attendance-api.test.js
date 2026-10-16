@@ -1543,6 +1543,39 @@ if (!integrationEnabled) {
         );
         assert.equal(allDayExtension.rows[0].additional_hours, null);
 
+        const report = await api("/api/admin/reports?period=daily");
+        assert.equal(report.response.status, 200, report.body.message);
+        const hourlyReportRecord = report.body.records.find(
+            record => Number(record.id) === Number(attendanceId)
+        );
+        const allDayReportRecord = report.body.records.find(
+            record => Number(record.id) === Number(allDayGuest.body.attendance.id)
+        );
+        assert.equal(
+            hourlyReportRecord.guest_time_purchased,
+            "8 hours (₱240)"
+        );
+        assert.equal(
+            allDayReportRecord.guest_time_purchased,
+            "All-day access (₱100)"
+        );
+
+        const dayPassGuest = await createGuest({
+            key: "suite-report-day-pass",
+            phone: "09222220008",
+            name: "Day Pass Report Guest",
+            visitType: "DAY PASS"
+        });
+        assert.equal(dayPassGuest.response.status, 201, dayPassGuest.body.message);
+        const dayPassReport = await api("/api/admin/reports?period=daily");
+        const dayPassReportRecord = dayPassReport.body.records.find(
+            record => Number(record.id) === Number(dayPassGuest.body.attendance.id)
+        );
+        assert.equal(
+            dayPassReportRecord.guest_time_purchased,
+            "All-day pass (₱100)"
+        );
+
         const expiredGuest = await createGuest({
             key: "suite-expired-entry",
             phone: "09222220007",
