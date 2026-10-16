@@ -90,7 +90,11 @@ test("package scripts use the backend entry point and provide a JavaScript synta
     assert.match(packageJson.scripts.check, /node --check backend\/server\.js/);
 });
 
-test("hosted frontend root routes to the customer login page", () => {
+test("frontend root routes to the customer login page locally and when hosted", () => {
+    const entryPage = fs.readFileSync(
+        path.join(projectRoot, "frontend", "index.html"),
+        "utf8"
+    );
     const vercelConfig = JSON.parse(
         fs.readFileSync(
             path.join(projectRoot, "frontend", "vercel.json"),
@@ -98,6 +102,8 @@ test("hosted frontend root routes to the customer login page", () => {
         )
     );
 
+    assert.match(entryPage, /url=login\.html/);
+    assert.match(entryPage, /location\.replace\(["']login\.html["']\)/);
     assert.equal(
         vercelConfig.rewrites.find(route => route.source === "/")?.destination,
         "/login.html"
