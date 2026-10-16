@@ -538,6 +538,11 @@ table {
 }
 
 .applications-table th,
+.applications-table td {
+    text-align: center;
+}
+
+.applications-table th,
 .applications-table td,
 .transactions-table th,
 .transactions-table td {
@@ -591,6 +596,7 @@ table {
 .application-contact > span {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 6px;
     min-width: 0;
     color: var(--color-text);
@@ -622,7 +628,7 @@ table {
     font-size: 9px;
     line-height: 1.4;
     white-space: normal;
-    text-align: left;
+    text-align: center;
     overflow-wrap: anywhere;
 }
 
@@ -630,14 +636,14 @@ table {
 .transactions-table .application-proof-button {
     display: inline-flex;
     align-items: center;
-    justify-content: flex-start;
+    justify-content: center;
     gap: 7px;
     width: 100%;
     min-width: 0;
     min-height: 36px;
     padding: 5px 7px;
     font-size: 9px;
-    text-align: left;
+    text-align: center;
     white-space: normal;
 }
 

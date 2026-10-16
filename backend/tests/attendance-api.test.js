@@ -214,6 +214,9 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(adminCss, /\.application-decision-placeholder\s*\{[^}]*font-size:\s*10px/s);
     assert.match(adminCss, /\.applications-table th:nth-child\(8\)\s*\{\s*width:\s*10%;\s*\}/);
     assert.match(adminCss, /\.applications-table th:nth-child\(9\)\s*\{\s*width:\s*10%;\s*\}/);
+    assert.match(adminCss, /\.applications-table th,\s*\.applications-table td\s*\{\s*text-align:\s*center;\s*\}/);
+    assert.match(adminCss, /\.application-contact > span\s*\{[^}]*justify-content:\s*center/s);
+    assert.match(adminCss, /\.application-payment-date small,\s*\.application-rejection-reason\s*\{[^}]*text-align:\s*center/s);
     assert.match(adminCss, /\.applications-table \.application-decision \.approve/);
     assert.match(adminCss, /\.applications-pagination \.small-btn:disabled/);
     assert.match(adminHtml, /attendanceMemberSearch/);
