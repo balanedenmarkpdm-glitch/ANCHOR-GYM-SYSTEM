@@ -8,6 +8,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const QRCode = require("qrcode");
+const { isAllowedFrontendOrigin } = require("./cors");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -21,20 +22,11 @@ const BUILT_IN_ADMIN_PASSWORD = "admin123";
 const frontendOrigin =
     process.env.FRONTEND_URL ||
     "https://anchor-gym-system.vercel.app";
-
-function isAllowedFrontendOrigin(origin) {
-    return (
-        origin === frontendOrigin ||
-        /^https:\/\/anchor-gym-system-[a-z0-9]+-brunheart\.vercel\.app$/.test(
-            origin || ""
-        ) ||
-        (process.env.GOOGLE_ALLOWED_ORIGINS || "")
-            .split(",")
-            .map(value => value.trim())
-            .filter(Boolean)
-            .includes(origin)
-    );
-}
+const additionalFrontendOrigins =
+    (process.env.GOOGLE_ALLOWED_ORIGINS || "")
+        .split(",")
+        .map(value => value.trim())
+        .filter(Boolean);
 
 function requireAdministrator(req, res) {
     if (req.adminUser?.role === "admin") {
@@ -1145,7 +1137,13 @@ app.use(
         const origin =
             req.get("Origin");
 
-        if (isAllowedFrontendOrigin(origin)) {
+        if (
+            isAllowedFrontendOrigin(
+                origin,
+                frontendOrigin,
+                additionalFrontendOrigins
+            )
+        ) {
             res.setHeader(
                 "Access-Control-Allow-Origin",
                 origin
@@ -2234,7 +2232,11 @@ app.post(
 
         if (
             req.get("X-Requested-With") !== "XmlHttpRequest" ||
-            !isAllowedFrontendOrigin(origin)
+            !isAllowedFrontendOrigin(
+                origin,
+                frontendOrigin,
+                additionalFrontendOrigins
+            )
         ) {
             return res.status(403).json({
                 success: false,

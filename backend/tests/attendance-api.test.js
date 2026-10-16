@@ -7,6 +7,10 @@ require("dotenv").config();
 
 const { Pool } = require("pg");
 const bcrypt = require("bcrypt");
+const {
+    isAllowedFrontendOrigin,
+    isLocalDevelopmentOrigin
+} = require("../cors");
 
 const databaseUrl =
     process.env.TEST_DATABASE_URL ||
@@ -32,6 +36,44 @@ let archivedExpectedExpiration;
 let activeUserId;
 let testSchema;
 let memberTransactionSeeded = false;
+
+test("CORS permits local frontend development and configured production origins only", () => {
+    const productionOrigin = "https://anchor-gym-system.vercel.app";
+    const previewOrigin =
+        "https://anchor-gym-system-123-brunheart.vercel.app";
+
+    for (const origin of [
+        "http://localhost:8765",
+        "http://127.0.0.1:8766",
+        "http://[::1]:3000"
+    ]) {
+        assert.equal(isLocalDevelopmentOrigin(origin), true);
+        assert.equal(
+            isAllowedFrontendOrigin(origin, productionOrigin),
+            true
+        );
+    }
+
+    assert.equal(isAllowedFrontendOrigin(productionOrigin, productionOrigin), true);
+    assert.equal(isAllowedFrontendOrigin(previewOrigin, productionOrigin), true);
+    assert.equal(
+        isAllowedFrontendOrigin(
+            "https://untrusted.example",
+            productionOrigin,
+            ["https://untrusted.example"]
+        ),
+        true
+    );
+
+    for (const origin of [
+        "https://localhost:8765",
+        "http://localhost.example:8765",
+        "http://192.168.1.20:8765",
+        "not-an-origin"
+    ]) {
+        assert.equal(isAllowedFrontendOrigin(origin, productionOrigin), false);
+    }
+});
 
 test("package scripts use the backend entry point and provide a JavaScript syntax check", () => {
     const packageJson = JSON.parse(
