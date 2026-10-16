@@ -1413,15 +1413,85 @@ app.get(
 // DELETE RESTORED ARCHIVE
 // =====================================
 
-app.delete("/api/admin/archived-members/:id", (req, res) => {
+app.delete("/api/admin/archived-members/:id", async (req, res) => {
     if (!requireAdministrator(req, res)) {
         return;
     }
 
-    return res.status(410).json({
-        success: false,
-        message: "Archived membership history is retained and cannot be permanently deleted."
-    });
+    const client = await pool.connect();
+    let transactionStarted = false;
+
+    try {
+        const archiveId = Number(req.params.id);
+
+        if (!Number.isInteger(archiveId) || archiveId <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid archive ID."
+            });
+        }
+
+        await client.query("BEGIN");
+        transactionStarted = true;
+
+        const archiveResult = await client.query(
+            `
+            SELECT archive_id, member_id, status
+            FROM archived_members
+            WHERE archive_id = $1
+            FOR UPDATE
+            `,
+            [archiveId]
+        );
+
+        if (archiveResult.rows.length === 0) {
+            await client.query("ROLLBACK");
+            transactionStarted = false;
+
+            return res.status(404).json({
+                success: false,
+                message: "Archived member record not found."
+            });
+        }
+
+        const deleteResult = await client.query(
+            `
+            DELETE FROM archived_members
+            WHERE archive_id = $1
+            RETURNING archive_id, member_id, user_id
+            `,
+            [archiveId]
+        );
+
+        await client.query("COMMIT");
+        transactionStarted = false;
+
+        res.json({
+            success: true,
+            message: "Archived history deleted successfully.",
+            archive: deleteResult.rows[0]
+        });
+    } catch (error) {
+        if (transactionStarted) {
+            try {
+                await client.query("ROLLBACK");
+            } catch (rollbackError) {
+                console.error("Rollback error:", rollbackError);
+            }
+        }
+
+        console.error("Delete archived member error:", error);
+
+        res.status(500).json({
+            success: false,
+            message: "Unable to delete archived member history.",
+            error: error.message,
+            code: error.code || null,
+            detail: error.detail || null
+        });
+    } finally {
+        client.release();
+    }
 });
 
 // =====================================

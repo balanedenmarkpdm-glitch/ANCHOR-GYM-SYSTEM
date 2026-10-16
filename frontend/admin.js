@@ -2683,16 +2683,29 @@ async function loadArchivedMembers() {
                                     </button>
                                 `
                                 : restored
-                                ? `<span class="archived-history-label">History retained</span>`
-                                : `
+                                ? `
                                     <button
-                                        class="restore-button"
+                                        class="remove-button membership-action-button"
                                         type="button"
-                                        onclick="restoreArchivedMember(${Number(member.archive_id)})">
-
-                                        Restore
-
+                                        onclick="deleteArchivedMember(${Number(member.archive_id)})">
+                                        Delete history
                                     </button>
+                                `
+                                : `
+                                    <div class="archived-row-actions" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                                        <button
+                                            class="restore-button"
+                                            type="button"
+                                            onclick="restoreArchivedMember(${Number(member.archive_id)})">
+                                            Restore
+                                        </button>
+                                        <button
+                                            class="remove-button membership-action-button"
+                                            type="button"
+                                            onclick="deleteArchivedMember(${Number(member.archive_id)})">
+                                            Delete
+                                        </button>
+                                    </div>
                                 `;
 
 
@@ -2875,6 +2888,60 @@ async function restoreArchivedMember(
             "Unable to restore membership."
         );
 
+    }
+
+}
+
+
+async function deleteArchivedMember(
+    archiveId
+) {
+
+    if (!archiveId) {
+        return;
+    }
+
+    const confirmed =
+        confirm(
+            "Delete this archived membership history? This action cannot be undone."
+        );
+
+    if (!confirmed) {
+        return;
+    }
+
+    try {
+        const data =
+            await apiRequest(
+                `/api/admin/archived-members/${archiveId}`,
+                {
+                    method: "DELETE"
+                }
+            );
+
+        alert(
+            data.message ||
+            "Archived history deleted successfully."
+        );
+
+        await Promise.all([
+            loadArchivedMembers(),
+            loadMembers(),
+            loadAdminDashboard(),
+            loadTransactions(),
+            loadApplications(),
+            loadAttendance()
+        ]);
+    } catch (error) {
+        console.error(
+            "Delete archived member error:",
+            error
+        );
+
+        alert(
+            error.message ||
+            "Unable to delete archived membership history."
+        );
     }
 
 }
