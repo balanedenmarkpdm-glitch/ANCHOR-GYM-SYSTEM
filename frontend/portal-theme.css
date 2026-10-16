@@ -2128,6 +2128,11 @@ textarea:focus-visible {
     color: #16A34A;
 }
 
+:root[data-page="customer-dashboard"] .stat strong.membership-active-value,
+:root[data-page="customer-dashboard"] .detail-card h2.membership-active-value {
+    color: #16A34A;
+}
+
 :root:is(
     [data-page="customer-dashboard"],
     [data-page="admin-dashboard"]

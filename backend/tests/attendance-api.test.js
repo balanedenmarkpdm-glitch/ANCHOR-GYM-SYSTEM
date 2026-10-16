@@ -200,6 +200,20 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(adminJs, /function renderApplicationsTable\(applications\)/);
     assert.match(adminJs, /function changeApplicationsPage\(change\)/);
     assert.match(adminJs, /application\.rejection_reason/);
+    const applicationRowRenderer = adminJs.match(
+        /function createApplicationRow\([\s\S]*?(?=function formatTime\()/
+    )?.[0] || "";
+    const applicationDecisionActions = applicationRowRenderer.match(
+        /const actions =([\s\S]*?)const rejectionReason/
+    )?.[1] || "";
+    assert.match(applicationDecisionActions, /status ===\s*"PENDING"/);
+    assert.match(applicationDecisionActions, /"APPROVED",\s*"VERIFIED"[\s\S]*?application-decision-placeholder/);
+    assert.doesNotMatch(applicationDecisionActions, /"REJECTED"[\s\S]*?application-decision-placeholder/);
+    assert.match(applicationRowRenderer, /No rejection reason recorded\./);
+    assert.match(adminCss, /\.application-decision\s*\{[^}]*white-space:\s*normal[^}]*overflow-wrap:\s*anywhere/s);
+    assert.match(adminCss, /\.application-decision-placeholder\s*\{[^}]*font-size:\s*10px/s);
+    assert.match(adminCss, /\.applications-table th:nth-child\(8\)\s*\{\s*width:\s*10%;\s*\}/);
+    assert.match(adminCss, /\.applications-table th:nth-child\(9\)\s*\{\s*width:\s*10%;\s*\}/);
     assert.match(adminCss, /\.applications-table \.application-decision \.approve/);
     assert.match(adminCss, /\.applications-pagination \.small-btn:disabled/);
     assert.match(adminHtml, /attendanceMemberSearch/);
@@ -337,6 +351,10 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(portalTheme, /\.status\.active\s*\{[^}]*#16A34A/s);
     assert.match(portalTheme, /\.status\.pending\s*\{[^}]*#EAB308/s);
     assert.match(portalTheme, /\.status\.revoked\s*\{[^}]*#DC2626/s);
+    assert.match(
+        portalTheme,
+        /:root\[data-page="customer-dashboard"\] \.stat strong\.membership-active-value,[\s\S]*?:root\[data-page="customer-dashboard"\] \.detail-card h2\.membership-active-value\s*\{\s*color:\s*#16A34A/s
+    );
     assert.match(portalTheme, /#dashboardOccupancy[\s\S]*?#16A34A/);
     assert.match(customerJs, /setMembershipActiveStyle\(isActive\)/);
     assert.match(
@@ -957,6 +975,27 @@ if (!integrationEnabled) {
             /^data:image\/png;base64,/
         );
         assert.ok(issuedQrBody.qr_code);
+
+        const refreshedQr = await fetch(
+            `${baseUrl}/api/customer/attendance-qr`,
+            {
+                headers: {
+                    Authorization: `Bearer ${activeCustomerToken}`
+                }
+            }
+        );
+        const refreshedQrBody = await refreshedQr.json();
+        assert.equal(refreshedQr.status, 200, refreshedQrBody.message);
+        assert.notEqual(refreshedQrBody.qr_code, issuedQrBody.qr_code);
+        for (const qrCode of [
+            issuedQrBody.qr_code,
+            refreshedQrBody.qr_code
+        ]) {
+            const claims = JSON.parse(
+                Buffer.from(qrCode.split(".")[0], "base64url").toString("utf8")
+            );
+            assert.equal(claims.member_id, Number(activeMemberId));
+        }
 
         const scannedQr = await api("/api/admin/attendance/scan", {
             method: "POST",
@@ -1582,11 +1621,57 @@ if (!integrationEnabled) {
             "SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Manila')::date::text AS date"
         );
         const today = dateResult.rows[0].date;
+        const previousDayVisit = await pool.query(
+            `
+            INSERT INTO attendance (member_id, user_type, check_in)
+            VALUES (
+                $1,
+                'MEMBER',
+                DATE_TRUNC('day', CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Manila')
+                    - INTERVAL '1 day' + INTERVAL '12 hours'
+            )
+            RETURNING id, check_in, TO_CHAR(check_in, 'YYYY-MM-DD') AS visit_date
+            `,
+            [activeMemberId]
+        );
+        const autoCheckedOutCount =
+            await require("../server").checkoutMembersAtClosing();
+        assert.ok(autoCheckedOutCount >= 1);
+        const autoCheckedOutVisit = await pool.query(
+            `
+            SELECT
+                check_out,
+                DATE_TRUNC('day', check_in) + INTERVAL '22 hours' AS closing_time
+            FROM attendance
+            WHERE id = $1
+            `,
+            [previousDayVisit.rows[0].id]
+        );
+        assert.equal(
+            autoCheckedOutVisit.rows[0].check_out.getTime(),
+            autoCheckedOutVisit.rows[0].closing_time.getTime(),
+            "Open member visits should be checked out at the configured closing time"
+        );
+        assert.equal(
+            await require("../server").checkoutMembersAtClosing(),
+            0,
+            "Automatic checkout should not alter visits that are already checked out"
+        );
+        const currentAttendance = await api("/api/admin/attendance?type=all");
+        assert.equal(currentAttendance.response.status, 200);
+        assert.ok(
+            currentAttendance.body.attendance.every(
+                record => Number(record.id) !== Number(previousDayVisit.rows[0].id)
+            ),
+            "Attendance should show today's visits only"
+        );
+
         const reportResponses = await Promise.all([
             api("/api/admin/reports?period=daily"),
             api("/api/admin/reports?period=weekly"),
             api("/api/admin/reports?period=monthly"),
-            api(`/api/admin/reports?period=custom&startDate=${today}&endDate=${today}`)
+            api(`/api/admin/reports?period=custom&startDate=${today}&endDate=${today}`),
+            api(`/api/admin/reports?period=custom&startDate=${previousDayVisit.rows[0].visit_date}&endDate=${previousDayVisit.rows[0].visit_date}`)
         ]);
         for (const report of reportResponses) {
             assert.equal(report.response.status, 200, report.body.message);
@@ -1601,6 +1686,12 @@ if (!integrationEnabled) {
             );
         }
         assert.equal(reportResponses[0].body.totalVisits, reportResponses[3].body.totalVisits);
+        assert.ok(
+            reportResponses[4].body.records.some(
+                record => Number(record.id) === Number(previousDayVisit.rows[0].id)
+            ),
+            "Previous-day visits should remain available in Reports"
+        );
         assert.equal(reportResponses[0].body.series.length, 24);
         assert.equal(reportResponses[1].body.series.length, 7);
         assert.ok(reportResponses[2].body.series.length >= 4);
