@@ -4796,10 +4796,6 @@ async function scanCustomerQr() {
         }
 
 
-        let cameraId =
-            cameras[0].id;
-
-
         const rearCamera =
             cameras.find(
                 camera => {
@@ -4827,172 +4823,201 @@ async function scanCustomerQr() {
             );
 
 
-        if (rearCamera) {
-
-            cameraId =
-                rearCamera.id;
-
-        }
+        const cameraSources = [
+            ...new Set(
+                [
+                    rearCamera?.id,
+                    ...cameras.map(camera => camera.id)
+                ].filter(Boolean)
+            ),
+            { facingMode: "environment" },
+            { facingMode: "user" }
+        ];
 
 
         if (status) {
 
             status.textContent =
-                "Camera ready. Scan the customer's QR code.";
+                "Connecting to camera...";
 
         }
 
 
-        await qrScanner.start(
-            cameraId,
-            {
-                fps:
-                    10,
+        const handleQrScan = async decodedText => {
 
-                qrbox: {
-                    width:
-                        220,
+            if (
+                qrScanBusy ||
+                decodedText === lastScannedQr
+            ) {
 
-                    height:
-                        220
-                },
+                return;
 
-                aspectRatio:
-                    1
-            },
-
-            async (
-                decodedText
-            ) => {
-
-                if (
-                    qrScanBusy ||
-                    decodedText === lastScannedQr
-                ) {
-
-                    return;
-
-                }
-
-
-                qrScanBusy =
-                    true;
-
-                lastScannedQr =
-                    decodedText;
-
-                if (!isWithinMemberQrHours()) {
-
-                    const message =
-                        `Gym QR scanning is closed at ${formatConfiguredClosingTime(gymClosingTime)}. Record checkout only when the member actually leaves.`;
-
-                    if (status) {
-                        status.textContent = message;
-                    }
-
-                    await stopQrScanner();
-
-                    return;
-
-                }
-
-
-                try {
-
-                    const data =
-                        await apiRequest(
-                            "/api/admin/attendance/scan",
-                            {
-                                method:
-                                    "POST",
-
-                                headers: {
-                                    "Content-Type":
-                                        "application/json"
-                                },
-
-                                body:
-                                    JSON.stringify({
-                                        qr_code:
-                                            decodedText
-                                    })
-                            }
-                        );
-
-
-                    const actionLabel =
-                        data.action === "CHECKED_IN"
-                            ? "CHECK-IN SUCCESSFUL"
-                            : data.action === "CHECKED_OUT"
-                                ? "CHECK-OUT SUCCESSFUL"
-                                : data.message || "Scan successful.";
-                    const memberName =
-                        String(data.member?.full_name || "").trim();
-                    const successMessage =
-                        `${actionLabel}${memberName ? `: ${memberName}` : ""}`;
-
-                    if (status) {
-                        status.textContent =
-                            `${successMessage}. Ready for the next member.`;
-                    }
-
-                    alert(successMessage);
-
-                    await Promise.all([
-                        loadAttendance(),
-                        loadAdminDashboard(),
-                        loadReports()
-                    ]);
-
-                } catch (error) {
-
-                    console.error(
-                        "QR scan error:",
-                        error
-                    );
-
-
-                    if (status) {
-
-                        status.textContent =
-                            error.message ||
-                            "Unable to process QR code.";
-
-                    }
-
-
-                    alert(
-                        error.message ||
-                        "Unable to process QR code."
-                    );
-
-
-                    setTimeout(
-                        () => {
-
-                            qrScanBusy =
-                                false;
-
-                        },
-                        1500
-                    );
-
-
-                    return;
-
-                }
-
-
-                qrScanBusy =
-                    false;
-
-            },
-
-            () => {
-                lastScannedQr = null;
             }
 
-        );
+
+            qrScanBusy =
+                true;
+
+            lastScannedQr =
+                decodedText;
+
+            if (!isWithinMemberQrHours()) {
+
+                const message =
+                    `Gym QR scanning is closed at ${formatConfiguredClosingTime(gymClosingTime)}. Record checkout only when the member actually leaves.`;
+
+                if (status) {
+                    status.textContent = message;
+                }
+
+                await stopQrScanner();
+
+                return;
+
+            }
+
+
+            try {
+
+                const data =
+                    await apiRequest(
+                        "/api/admin/attendance/scan",
+                        {
+                            method:
+                                "POST",
+
+                            headers: {
+                                "Content-Type":
+                                    "application/json"
+                            },
+
+                            body:
+                                JSON.stringify({
+                                    qr_code:
+                                        decodedText
+                                })
+                        }
+                    );
+
+
+                const actionLabel =
+                    data.action === "CHECKED_IN"
+                        ? "CHECK-IN SUCCESSFUL"
+                        : data.action === "CHECKED_OUT"
+                            ? "CHECK-OUT SUCCESSFUL"
+                            : data.message || "Scan successful.";
+                const memberName =
+                    String(data.member?.full_name || "").trim();
+                const successMessage =
+                    `${actionLabel}${memberName ? `: ${memberName}` : ""}`;
+
+                if (status) {
+                    status.textContent =
+                        `${successMessage}. Ready for the next member.`;
+                }
+
+                alert(successMessage);
+
+                await Promise.all([
+                    loadAttendance(),
+                    loadAdminDashboard(),
+                    loadReports()
+                ]);
+
+            } catch (error) {
+
+                console.error(
+                    "QR scan error:",
+                    error
+                );
+
+
+                if (status) {
+
+                    status.textContent =
+                        error.message ||
+                        "Unable to process QR code.";
+
+                }
+
+
+                alert(
+                    error.message ||
+                    "Unable to process QR code."
+                );
+
+
+                setTimeout(
+                    () => {
+
+                        qrScanBusy =
+                            false;
+
+                    },
+                    1500
+                );
+
+
+                return;
+
+            }
+
+
+            qrScanBusy =
+                false;
+
+        };
+
+        const scannerConfig = {
+            fps: 10,
+            qrbox: {
+                width: 220,
+                height: 220
+            },
+            aspectRatio: 1
+        };
+        let cameraStartError = null;
+
+        for (let index = 0; index < cameraSources.length; index += 1) {
+            if (index > 0) {
+                qrScanner =
+                    new Html5Qrcode("qr-reader");
+
+                if (status) {
+                    status.textContent =
+                        `Unable to start that camera. Trying another camera (${index + 1}/${cameraSources.length})...`;
+                }
+            }
+
+            try {
+                await qrScanner.start(
+                    cameraSources[index],
+                    scannerConfig,
+                    handleQrScan,
+                    () => {
+                        lastScannedQr = null;
+                    }
+                );
+                cameraStartError = null;
+                break;
+            } catch (error) {
+                cameraStartError = error;
+                console.warn(
+                    "QR camera source failed to start:",
+                    error
+                );
+                await stopQrScanner();
+            }
+        }
+
+        if (cameraStartError) {
+            throw cameraStartError;
+        }
+
+        if (status) {
+            status.textContent =
+                "Camera ready. Scan the customer's QR code.";
+        }
 
 
     } catch (error) {

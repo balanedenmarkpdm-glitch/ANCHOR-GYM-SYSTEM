@@ -267,6 +267,8 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(adminHtml, /class="attendance-scanner-actions"/);
     assert.match(adminHtml, /class="attendance-scan-button"/);
     assert.match(adminHtml, /class="attendance-stop-scan-button"/);
+    assert.match(adminJs, /cameraSources[\s\S]*\{ facingMode: "environment" \}[\s\S]*\{ facingMode: "user" \}/);
+    assert.match(adminJs, /Trying another camera/);
     assert.match(adminCss, /#attendance\.active \.attendance-stats\s*\{\s*grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\)/);
     assert.match(adminCss, /#attendance\.active \.attendance-stats \.card/);
     assert.ok(
