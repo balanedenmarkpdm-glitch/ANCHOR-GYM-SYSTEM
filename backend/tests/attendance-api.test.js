@@ -504,7 +504,7 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(customerJs, /\/api\/customer\/attendance-qr/);
     assert.match(customerJs, /Refreshes in \$\{secondsRemaining\} seconds/);
     assert.match(customerJs, /can only be scanned once/);
-    assert.match(adminJs, /data\.action === "CHECKED_IN"[\s\S]*?"CHECK-IN SUCCESSFUL"[\s\S]*?data\.action === "CHECKED_OUT"[\s\S]*?"CHECK-OUT SUCCESSFUL"/);
+    assert.match(adminJs, /data\.action === "CHECKED_IN"[\s\S]*?"CHECK-IN SUCCESSFUL"[\s\S]*?data\.action === "CHECKED_OUT"[\s\S]*?"CHECK-OUT SUCCESSFUL"[\s\S]*?alert\(successMessage\)/);
     assert.match(adminHtml, /pending-applications-heading[\s\S]*?<svg/);
     assert.match(adminCss, /#dashboard\.active \.pending-applications-heading > svg[\s\S]*?#EAB308/);
 });

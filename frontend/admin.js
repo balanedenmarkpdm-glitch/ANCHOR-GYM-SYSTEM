@@ -4920,19 +4920,23 @@ async function scanCustomerQr() {
                         );
 
 
-                    if (status) {
-                        const actionLabel =
-                            data.action === "CHECKED_IN"
-                                ? "CHECK-IN SUCCESSFUL"
-                                : data.action === "CHECKED_OUT"
-                                    ? "CHECK-OUT SUCCESSFUL"
-                                    : data.message || "Scan successful.";
-                        const memberName =
-                            String(data.member?.full_name || "").trim();
+                    const actionLabel =
+                        data.action === "CHECKED_IN"
+                            ? "CHECK-IN SUCCESSFUL"
+                            : data.action === "CHECKED_OUT"
+                                ? "CHECK-OUT SUCCESSFUL"
+                                : data.message || "Scan successful.";
+                    const memberName =
+                        String(data.member?.full_name || "").trim();
+                    const successMessage =
+                        `${actionLabel}${memberName ? `: ${memberName}` : ""}`;
 
+                    if (status) {
                         status.textContent =
-                            `${actionLabel}${memberName ? `: ${memberName}` : ""}. Ready for the next member.`;
+                            `${successMessage}. Ready for the next member.`;
                     }
+
+                    alert(successMessage);
 
                     await Promise.all([
                         loadAttendance(),
