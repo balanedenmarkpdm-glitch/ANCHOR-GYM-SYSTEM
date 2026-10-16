@@ -617,11 +617,13 @@ table {
 .application-payment-date small,
 .application-rejection-reason {
     display: block;
-    margin-top: 3px;
+    margin-top: 4px;
     color: var(--color-subtle);
     font-size: 9px;
     line-height: 1.4;
     white-space: normal;
+    text-align: left;
+    overflow-wrap: anywhere;
 }
 
 .applications-table .application-proof-button,
@@ -642,6 +644,14 @@ table {
 .application-decision {
     white-space: normal;
     overflow-wrap: anywhere;
+    vertical-align: top !important;
+}
+
+.application-decision-placeholder {
+    display: inline-block;
+    color: var(--color-subtle);
+    font-size: 10px;
+    line-height: 1.2;
 }
 
 .transaction-reference,

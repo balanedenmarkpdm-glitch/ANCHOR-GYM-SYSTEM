@@ -918,7 +918,9 @@ function createApplicationRow(
 
                 </button>
             `
-            : "";
+            : ["APPROVED", "VERIFIED"].includes(status)
+                ? `<span class="application-decision-placeholder">—</span>`
+                : "";
 
     const rejectionReason =
         status === "REJECTED"
