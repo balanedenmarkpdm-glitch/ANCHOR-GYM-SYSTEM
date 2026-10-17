@@ -798,6 +798,59 @@ if (!integrationEnabled) {
         });
     }
 
+    test("signup allows one account per Gmail mailbox, including dotted and plus aliases", async () => {
+        const email = `anchor.test${process.pid}@gmail.com`;
+        const alias = `anchor.test${process.pid}+second@gmail.com`;
+        const signup = address => ({
+            method: "POST",
+            body: JSON.stringify({
+                full_name: "Gmail Uniqueness Test",
+                email: address,
+                phone: address === email ? "09133330001" : "09133330002",
+                password: "integration-test-only"
+            })
+        });
+
+        const results = await Promise.all([
+            api("/api/signup", signup(email)),
+            api("/api/signup", signup(alias))
+        ]);
+
+        assert.deepEqual(
+            results.map(result => result.response.status).sort(),
+            [201, 409]
+        );
+        assert.match(
+            results.find(result => result.response.status === 409).body.message,
+            /already linked to an account/i
+        );
+
+        const secondAttempt = await api(
+            "/api/signup",
+            signup(alias)
+        );
+        assert.equal(secondAttempt.response.status, 409);
+
+        const accounts = await pool.query(
+            `
+            SELECT COUNT(*)::int AS count
+            FROM users
+            WHERE LOWER(email) LIKE '%@gmail.com'
+              AND replace(
+                    split_part(
+                        split_part(LOWER(email), '@', 1),
+                        '+',
+                        1
+                    ),
+                    '.',
+                    ''
+                  ) = $1
+            `,
+            [`anchortest${process.pid}`]
+        );
+        assert.equal(accounts.rows[0].count, 1);
+    });
+
     test("hard-coded admin credentials authenticate without an existing admin database row", async () => {
         const login = await fetch(`${baseUrl}/api/admin/login`, {
             method: "POST",

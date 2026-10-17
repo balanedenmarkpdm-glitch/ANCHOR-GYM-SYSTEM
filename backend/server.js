@@ -782,6 +782,45 @@ function normalizeSignupEmail(value) {
         .toLowerCase();
 }
 
+function canonicalizeGmailAddress(value) {
+    const [username, domain] =
+        normalizeSignupEmail(value).split("@");
+
+    if (domain !== "gmail.com") {
+        return normalizeSignupEmail(value);
+    }
+
+    return `${username.split("+")[0].replace(/\./g, "")}@gmail.com`;
+}
+
+async function findGmailAccount(queryable, email, lockRow = false) {
+    const canonicalEmail =
+        canonicalizeGmailAddress(email);
+    const result =
+        await queryable.query(
+            `
+            SELECT id, full_name, email, phone, role, created_at
+            FROM users
+            WHERE LOWER(email) LIKE '%@gmail.com'
+              AND replace(
+                    split_part(
+                        split_part(LOWER(email), '@', 1),
+                        '+',
+                        1
+                    ),
+                    '.',
+                    ''
+                  ) || '@gmail.com' = $1
+            ORDER BY id
+            LIMIT 1
+            ${lockRow ? "FOR UPDATE" : ""}
+            `,
+            [canonicalEmail]
+        );
+
+    return result.rows[0] || null;
+}
+
 function isValidGmailAddress(value) {
     const match =
         /^([a-z0-9.]+)(?:\+([a-z0-9._-]+))?@gmail\.com$/.exec(
@@ -1583,11 +1622,34 @@ app.post(
             });
         }
 
+        let client;
+        let transactionStarted = false;
+
         try {
+            client = await pool.connect();
+            await client.query("BEGIN");
+            transactionStarted = true;
+            await client.query(
+                "SELECT pg_advisory_xact_lock(hashtext($1))",
+                [`gmail-account:${canonicalizeGmailAddress(email)}`]
+            );
+
+            const existingUser =
+                await findGmailAccount(client, email, true);
+
+            if (existingUser) {
+                await client.query("ROLLBACK");
+                transactionStarted = false;
+                return res.status(409).json({
+                    success: false,
+                    message: "This Gmail address is already linked to an account. Use a different Gmail address."
+                });
+            }
+
             const passwordHash =
                 await bcrypt.hash(password, 10);
             const userResult =
-                await pool.query(
+                await client.query(
                     `
                     INSERT INTO users
                     (
@@ -1609,6 +1671,9 @@ app.post(
                     [fullName, email, passwordHash, phone]
                 );
 
+            await client.query("COMMIT");
+            transactionStarted = false;
+
             return res.status(201).json({
                 success: true,
                 message: "Account created. The email address was not verified.",
@@ -1616,6 +1681,14 @@ app.post(
                 ...(await createCustomerSession(userResult.rows[0].id))
             });
         } catch (error) {
+            if (transactionStarted) {
+                try {
+                    await client.query("ROLLBACK");
+                } catch (rollbackError) {
+                    console.error("Signup rollback error:", rollbackError);
+                }
+            }
+
             if (error.code === "23505") {
                 return res.status(409).json({
                     success: false,
@@ -1628,6 +1701,10 @@ app.post(
                 success: false,
                 message: "Unable to create the account. Please try again."
             });
+        } finally {
+            if (client) {
+                client.release();
+            }
         }
     }
 );
@@ -2445,24 +2522,10 @@ app.post(
 
         try {
             const existingUser =
-                await pool.query(
-                    `
-                    SELECT
-                        id,
-                        full_name,
-                        email,
-                        phone,
-                        role,
-                        created_at
-                    FROM users
-                    WHERE LOWER(email) = $1
-                    `,
-                    [email]
-                );
+                await findGmailAccount(pool, email);
 
-            if (existingUser.rows.length > 0) {
-                const user =
-                    existingUser.rows[0];
+            if (existingUser) {
+                const user = existingUser;
 
                 if (
                     String(user.role).toLowerCase() !==
@@ -2514,51 +2577,116 @@ app.post(
                     10
                 );
 
-            const userResult =
-                await pool.query(
-                    `
-                    INSERT INTO users
-                    (
-                        full_name,
-                        email,
-                        password,
-                        phone,
-                        role
-                    )
-                    VALUES
-                    (
-                        $1,
-                        $2,
-                        $3,
-                        $4,
-                        'customer'
-                    )
-                    RETURNING
-                        id,
-                        full_name,
-                        email,
-                        phone,
-                        role,
-                        created_at
-                    `,
-                    [
-                        String(
-                            profile.name ||
-                            email.split("@")[0]
-                        ).trim(),
-                        email,
-                        passwordHash,
-                        phone
-                    ]
+            const client = await pool.connect();
+            let transactionStarted = false;
+
+            try {
+                await client.query("BEGIN");
+                transactionStarted = true;
+                await client.query(
+                    "SELECT pg_advisory_xact_lock(hashtext($1))",
+                    [`gmail-account:${canonicalizeGmailAddress(email)}`]
                 );
 
-            return res.status(201).json({
-                success: true,
-                message: "Google account created successfully.",
-                user: userResult.rows[0],
-                ...(await createCustomerSession(userResult.rows[0].id))
-            });
+                const existingAccount =
+                    await findGmailAccount(client, email, true);
+
+                if (existingAccount) {
+                    await client.query("COMMIT");
+                    transactionStarted = false;
+
+                    if (
+                        String(existingAccount.role).toLowerCase() !==
+                        "customer"
+                    ) {
+                        return res.status(403).json({
+                            success: false,
+                            message: "This login is for customer accounts only."
+                        });
+                    }
+
+                    return res.json({
+                        success: true,
+                        message: "Google sign-in successful.",
+                        user: existingAccount,
+                        ...(await createCustomerSession(
+                            existingAccount.id,
+                            req.body.remember_me === true
+                        ))
+                    });
+                }
+
+                const userResult =
+                    await client.query(
+                        `
+                        INSERT INTO users
+                        (
+                            full_name,
+                            email,
+                            password,
+                            phone,
+                            role
+                        )
+                        VALUES
+                        (
+                            $1,
+                            $2,
+                            $3,
+                            $4,
+                            'customer'
+                        )
+                        RETURNING
+                            id,
+                            full_name,
+                            email,
+                            phone,
+                            role,
+                            created_at
+                        `,
+                        [
+                            String(
+                                profile.name ||
+                                email.split("@")[0]
+                            ).trim(),
+                            email,
+                            passwordHash,
+                            phone
+                        ]
+                    );
+
+                await client.query("COMMIT");
+                transactionStarted = false;
+
+                return res.status(201).json({
+                    success: true,
+                    message: "Google account created successfully.",
+                    user: userResult.rows[0],
+                    ...(await createCustomerSession(userResult.rows[0].id))
+                });
+            } catch (error) {
+                if (transactionStarted) {
+                    try {
+                        await client.query("ROLLBACK");
+                    } catch (rollbackError) {
+                        console.error(
+                            "Google account creation rollback error:",
+                            rollbackError
+                        );
+                    }
+                }
+
+                throw error;
+            } finally {
+                client.release();
+            }
         } catch (error) {
+            if (error.code === "23505") {
+                return res.status(409).json({
+                    success: false,
+                    message: "This Gmail address is already linked to an account."
+                });
+            }
+
             console.error(
                 "Google account processing error:",
                 error
