@@ -226,15 +226,19 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
         4
     );
     assert.doesNotMatch(resetPasswordHtml, /id="resetEmail"/);
-    assert.match(backendServer, /crypto\.createHmac\("sha256", gmailClientSecret\)/);
+    assert.match(backendServer, /crypto\.createHmac\("sha256", resetCodeSecret\)/);
     assert.match(backendServer, /attempts < 5/);
     assert.match(backendServer, /CREATE TABLE IF NOT EXISTS password_reset_tokens/);
     assert.match(backendServer, /NOW\(\) \+ INTERVAL '30 minutes'/);
+    assert.match(backendServer, /GMAIL_APP_PASSWORD/);
+    assert.match(backendServer, /smtp\.gmail\.com/);
+    assert.match(backendServer, /nodemailer\.createTransport/);
+    assert.match(backendServer, /getPasswordResetSecret/);
     assert.match(backendServer, /GMAIL_REFRESH_TOKEN/);
     assert.match(backendServer, /EMAIL_FROM/);
     assert.match(backendServer, /https:\/\/gmail\.googleapis\.com\/gmail\/v1\/users\/me\/messages\/send/);
-    assert.match(backendServer, /crypto\.createHmac\("sha256", gmailClientSecret\)/);
-    assert.match(backendServer, /Gmail authorization failed/);
+    assert.match(backendServer, /crypto\.createHmac\("sha256", resetCodeSecret\)/);
+    assert.match(backendServer, /Gmail sign-in failed/);
     assert.match(backendServer, /gmail\.send permission/);
     assert.match(
         portalTheme,

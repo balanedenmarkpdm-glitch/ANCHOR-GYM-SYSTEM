@@ -4,6 +4,7 @@ const express = require("express");
 const { Pool } = require("pg");
 const bcrypt = require("bcrypt");
 const { OAuth2Client } = require("google-auth-library");
+const nodemailer = require("nodemailer");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
@@ -780,6 +781,18 @@ function normalizeSignupEmail(value) {
     return String(value || "")
         .trim()
         .toLowerCase();
+}
+
+function getPasswordResetSecret() {
+    const configuredSecret =
+        String(process.env.RESET_CODE_SECRET || "").trim();
+    const googleClientSecret =
+        String(process.env.GOOGLE_CLIENT_SECRET || "").trim();
+    const gmailAppPassword =
+        String(process.env.GMAIL_APP_PASSWORD || "")
+            .replace(/\s/g, "");
+
+    return configuredSecret || googleClientSecret || gmailAppPassword;
 }
 
 function canonicalizeGmailAddress(value) {
@@ -1748,18 +1761,32 @@ app.post(
             String(process.env.GOOGLE_CLIENT_SECRET || "").trim();
         const gmailRefreshToken =
             String(process.env.GMAIL_REFRESH_TOKEN || "").trim();
+        const smtpUser =
+            String(process.env.GMAIL_USER || "").trim();
+        const smtpPassword =
+            String(process.env.GMAIL_APP_PASSWORD || "")
+                .replace(/\s/g, "");
         const emailFrom =
-            String(process.env.EMAIL_FROM || "").trim();
+            String(process.env.EMAIL_FROM || smtpUser).trim();
+        const oauthConfigured =
+            Boolean(
+                gmailClientId &&
+                gmailClientSecret &&
+                gmailRefreshToken
+            );
+        const smtpConfigured =
+            Boolean(smtpUser && smtpPassword);
+        const resetCodeSecret =
+            getPasswordResetSecret();
 
         if (
-            !gmailClientId ||
-            !gmailClientSecret ||
-            !gmailRefreshToken ||
+            (!oauthConfigured && !smtpConfigured) ||
+            !resetCodeSecret ||
             !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailFrom)
         ) {
             return res.status(503).json({
                 success: false,
-                message: "Password reset email is not configured. Set GMAIL_REFRESH_TOKEN and EMAIL_FROM on the backend; use the Gmail address authorized for sending."
+                message: "Password reset email is not configured. Set GMAIL_USER and GMAIL_APP_PASSWORD on the backend, or configure Gmail OAuth."
             });
         }
 
@@ -1810,7 +1837,7 @@ app.post(
                             .toString()
                             .padStart(4, "0");
                     tokenHash =
-                        crypto.createHmac("sha256", gmailClientSecret)
+                        crypto.createHmac("sha256", resetCodeSecret)
                             .update(verificationCode)
                             .digest("hex");
 
@@ -1842,83 +1869,109 @@ app.post(
             client = null;
 
             if (recipient && verificationCode && tokenHash) {
-                const gmailClient =
-                    new OAuth2Client(
-                        gmailClientId,
-                        gmailClientSecret
-                    );
-                gmailClient.setCredentials({
-                    refresh_token: gmailRefreshToken
-                });
-
-                const accessToken =
-                    await gmailClient.getAccessToken();
-
-                if (!accessToken.token) {
-                    throw new Error(
-                        "Gmail did not provide an API access token."
-                    );
-                }
-
-                const messageBoundary =
-                    `anchor-${crypto.randomBytes(16).toString("hex")}`;
                 const emailHtml =
                     `<p>We received a request to reset your ANCHOR password.</p>` +
                     `<p>Your password reset code is <strong>${verificationCode}</strong>.</p>` +
                     `<p>Enter this code on the password reset page within 30 minutes. If you did not request this, you can ignore this email.</p>`;
-                const rawMessage =
-                    [
-                        `From: ${emailFrom}`,
-                        `To: ${recipient}`,
-                        "Subject: Reset your ANCHOR Gym System password",
-                        "MIME-Version: 1.0",
-                        `Content-Type: multipart/alternative; boundary="${messageBoundary}"`,
-                        "",
-                        `--${messageBoundary}`,
-                        "Content-Type: text/plain; charset=UTF-8",
-                        "Content-Transfer-Encoding: 8bit",
-                        "",
-                        `We received a request to reset your ANCHOR password. Enter this code on the password reset page within 30 minutes: ${verificationCode}`,
-                        "",
-                        "If you did not request this, you can ignore this email.",
-                        "",
-                        `--${messageBoundary}`,
-                        "Content-Type: text/html; charset=UTF-8",
-                        "Content-Transfer-Encoding: 8bit",
-                        "",
-                        emailHtml,
-                        "",
-                        `--${messageBoundary}--`
-                    ].join("\r\n");
-                const gmailRaw =
-                    Buffer.from(rawMessage)
-                        .toString("base64")
-                        .replace(/\+/g, "-")
-                        .replace(/\//g, "_")
-                        .replace(/=+$/g, "");
+                const emailText =
+                    `We received a request to reset your ANCHOR password. Enter this code on the password reset page within 30 minutes: ${verificationCode}\n\n` +
+                    "If you did not request this, you can ignore this email.";
 
-                const emailResponse =
-                    await fetch(
-                        "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
-                        {
-                            method: "POST",
-                            headers: {
-                                Authorization: `Bearer ${accessToken.token}`,
-                                "Content-Type": "application/json"
+                if (oauthConfigured) {
+                    const gmailClient =
+                        new OAuth2Client(
+                            gmailClientId,
+                            gmailClientSecret
+                        );
+                    gmailClient.setCredentials({
+                        refresh_token: gmailRefreshToken
+                    });
+
+                    const accessToken =
+                        await gmailClient.getAccessToken();
+
+                    if (!accessToken.token) {
+                        throw new Error(
+                            "Gmail did not provide an API access token."
+                        );
+                    }
+
+                    const messageBoundary =
+                        `anchor-${crypto.randomBytes(16).toString("hex")}`;
+                    const rawMessage =
+                        [
+                            `From: ${emailFrom}`,
+                            `To: ${recipient}`,
+                            "Subject: Reset your ANCHOR Gym System password",
+                            "MIME-Version: 1.0",
+                            `Content-Type: multipart/alternative; boundary="${messageBoundary}"`,
+                            "",
+                            `--${messageBoundary}`,
+                            "Content-Type: text/plain; charset=UTF-8",
+                            "Content-Transfer-Encoding: 8bit",
+                            "",
+                            emailText,
+                            "",
+                            `--${messageBoundary}`,
+                            "Content-Type: text/html; charset=UTF-8",
+                            "Content-Transfer-Encoding: 8bit",
+                            "",
+                            emailHtml,
+                            "",
+                            `--${messageBoundary}--`
+                        ].join("\r\n");
+                    const gmailRaw =
+                        Buffer.from(rawMessage)
+                            .toString("base64")
+                            .replace(/\+/g, "-")
+                            .replace(/\//g, "_")
+                            .replace(/=+$/g, "");
+
+                    const emailResponse =
+                        await fetch(
+                            "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+                            {
+                                method: "POST",
+                                headers: {
+                                    Authorization: `Bearer ${accessToken.token}`,
+                                    "Content-Type": "application/json"
+                                },
+                                body: JSON.stringify({
+                                    raw: gmailRaw
+                                }),
+                                signal: AbortSignal.timeout(15000)
+                            }
+                        );
+
+                    if (!emailResponse.ok) {
+                        const error =
+                            new Error("Gmail API rejected the reset email request.");
+                        error.statusCode =
+                            emailResponse.status;
+                        throw error;
+                    }
+                } else {
+                    const transporter =
+                        nodemailer.createTransport({
+                            host: "smtp.gmail.com",
+                            port: 465,
+                            secure: true,
+                            auth: {
+                                user: smtpUser,
+                                pass: smtpPassword
                             },
-                            body: JSON.stringify({
-                                raw: gmailRaw
-                            }),
-                            signal: AbortSignal.timeout(15000)
-                        }
-                    );
+                            connectionTimeout: 15000,
+                            greetingTimeout: 10000,
+                            socketTimeout: 15000
+                        });
 
-                if (!emailResponse.ok) {
-                    const error =
-                        new Error("Gmail API rejected the reset email request.");
-                    error.statusCode =
-                        emailResponse.status;
-                    throw error;
+                    await transporter.sendMail({
+                        from: emailFrom,
+                        to: recipient,
+                        subject: "Reset your ANCHOR Gym System password",
+                        text: emailText,
+                        html: emailHtml
+                    });
                 }
             }
 
@@ -1955,18 +2008,30 @@ app.post(
             console.error("Password reset email request error:", error);
             const providerStatus =
                 error && typeof error === "object"
-                    ? Number(error.statusCode || 0)
+                    ? Number(error.statusCode || error.responseCode || 0)
                     : 0;
+            const providerCode =
+                error && typeof error === "object"
+                    ? String(error.code || "")
+                    : "";
             let failureMessage =
                 "Unable to send a password reset email right now. Please try again later.";
 
-            if (providerStatus === 401) {
+            if (
+                providerStatus === 401 ||
+                providerCode === "EAUTH" ||
+                providerCode === "AUTH"
+            ) {
                 failureMessage =
-                    "Gmail authorization failed. Re-authorize the Gmail account and update GMAIL_REFRESH_TOKEN.";
+                    "Gmail sign-in failed. Check the Gmail app password or OAuth credentials configured on the backend.";
             } else if (providerStatus === 403) {
                 failureMessage =
                     "Gmail denied permission to send. Enable the Gmail API and authorize the account with the gmail.send permission.";
-            } else if (providerStatus === 400) {
+            } else if (
+                providerStatus === 400 ||
+                providerStatus === 550 ||
+                providerStatus === 553
+            ) {
                 failureMessage =
                     "Gmail rejected the sender or message. Confirm EMAIL_FROM matches the Gmail account authorized to send.";
             } else if (providerStatus === 429) {
@@ -1976,6 +2041,9 @@ app.post(
                 failureMessage =
                     "Gmail is temporarily unavailable. Please try again later.";
             } else if (
+                providerCode === "ETIMEDOUT" ||
+                providerCode === "ECONNECTION" ||
+                providerCode === "ESOCKET" ||
                 error && typeof error === "object" &&
                 error.name === "TimeoutError"
             ) {
@@ -2015,9 +2083,9 @@ app.post(
             });
         }
 
-        const gmailClientSecret =
-            String(process.env.GOOGLE_CLIENT_SECRET || "").trim();
-        if (!gmailClientSecret) {
+        const resetCodeSecret =
+            getPasswordResetSecret();
+        if (!resetCodeSecret) {
             return res.status(503).json({
                 success: false,
                 message: "Password reset is not configured. Contact the administrator."
@@ -2025,7 +2093,7 @@ app.post(
         }
 
         const tokenHash =
-            crypto.createHmac("sha256", gmailClientSecret)
+            crypto.createHmac("sha256", resetCodeSecret)
                 .update(verificationCode)
                 .digest("hex");
         const resetToken =

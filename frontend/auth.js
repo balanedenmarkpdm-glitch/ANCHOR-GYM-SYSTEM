@@ -1160,6 +1160,14 @@ if (verifyResetCodeForm && resetPasswordForm) {
         Array.from(
             document.querySelectorAll("#resetCodeInputs input")
         );
+    bindPasswordToggle(
+        "toggleResetPassword",
+        "resetPassword"
+    );
+    bindPasswordToggle(
+        "toggleResetPasswordConfirm",
+        "resetPasswordConfirm"
+    );
     const resendResetCodeButton =
         document.getElementById("resendResetCode");
     const requestNewResetCode =
@@ -1339,7 +1347,7 @@ if (verifyResetCodeForm && resetPasswordForm) {
                 resetToken = "";
                 clearCodeInputs();
                 resetMessage.textContent =
-                    "If an account matches this email, a new verification code has been sent.";
+                    "If an account matches this email, a new code has been sent. Check your inbox and spam folder.";
             } catch (error) {
                 console.error("Password reset code resend error:", error);
                 resetMessage.textContent =
