@@ -1156,6 +1156,10 @@ if (verifyResetCodeForm && resetPasswordForm) {
         document.getElementById("resetPasswordConfirm");
     const resetRecipient =
         document.getElementById("resetRecipient");
+    const resetPageTitle =
+        document.getElementById("resetPageTitle");
+    const resetPageInstructions =
+        document.getElementById("resetPageInstructions");
     const resetCodeInputs =
         Array.from(
             document.querySelectorAll("#resetCodeInputs input")
@@ -1307,7 +1311,10 @@ if (verifyResetCodeForm && resetPasswordForm) {
                 resetToken = data.resetToken;
                 verifyResetCodeForm.hidden = true;
                 resetPasswordForm.hidden = false;
-                resetMessage.textContent = data.message;
+                resetPageTitle.textContent = "Create a New Password";
+                resetPageInstructions.textContent =
+                    "Your 4-digit code is verified. Enter and confirm your new password below.";
+                resetMessage.textContent = "";
             } catch (error) {
                 console.error("Password reset code verification error:", error);
                 resetMessage.textContent =

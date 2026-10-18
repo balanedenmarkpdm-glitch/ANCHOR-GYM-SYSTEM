@@ -221,6 +221,9 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(authJs, /\/api\/auth\/forgot-password/);
     assert.match(resetPasswordHtml, /id="resetPasswordForm"/);
     assert.match(resetPasswordHtml, /id="resetPasswordForm" hidden/);
+    assert.match(resetPasswordHtml, /id="resetPageTitle">Enter Your Reset Code/);
+    assert.match(authJs, /resetPageTitle\.textContent = "Create a New Password"/);
+    assert.match(authJs, /resetPageInstructions\.textContent/);
     assert.equal(
         (resetPasswordHtml.match(/aria-label="Digit \d of 4"/g) || []).length,
         4
