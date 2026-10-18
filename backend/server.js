@@ -1820,48 +1820,35 @@ app.post(
 
             if (userResult.rows.length > 0) {
                 const user = userResult.rows[0];
-                const recentRequests =
-                    await client.query(
-                        `
-                        SELECT COUNT(*)::int AS count
-                        FROM password_reset_tokens
-                        WHERE user_id = $1
-                          AND created_at > NOW() - INTERVAL '15 minutes'
-                        `,
-                        [user.id]
-                    );
+                verificationCode =
+                    crypto.randomInt(0, 10000)
+                        .toString()
+                        .padStart(4, "0");
+                tokenHash =
+                    crypto.createHmac("sha256", resetCodeSecret)
+                        .update(verificationCode)
+                        .digest("hex");
 
-                if (recentRequests.rows[0].count < 3) {
-                    verificationCode =
-                        crypto.randomInt(0, 10000)
-                            .toString()
-                            .padStart(4, "0");
-                    tokenHash =
-                        crypto.createHmac("sha256", resetCodeSecret)
-                            .update(verificationCode)
-                            .digest("hex");
+                await client.query(
+                    `
+                    UPDATE password_reset_tokens
+                    SET used_at = NOW()
+                    WHERE user_id = $1
+                      AND used_at IS NULL
+                    `,
+                    [user.id]
+                );
 
-                    await client.query(
-                        `
-                        UPDATE password_reset_tokens
-                        SET used_at = NOW()
-                        WHERE user_id = $1
-                          AND used_at IS NULL
-                        `,
-                        [user.id]
-                    );
+                await client.query(
+                    `
+                    INSERT INTO password_reset_tokens
+                        (token_hash, user_id, expires_at)
+                    VALUES ($1, $2, NOW() + INTERVAL '30 minutes')
+                    `,
+                    [tokenHash, user.id]
+                );
 
-                    await client.query(
-                        `
-                        INSERT INTO password_reset_tokens
-                            (token_hash, user_id, expires_at)
-                        VALUES ($1, $2, NOW() + INTERVAL '30 minutes')
-                        `,
-                        [tokenHash, user.id]
-                    );
-
-                    recipient = user.email;
-                }
+                recipient = user.email;
             }
 
             await client.query("COMMIT");

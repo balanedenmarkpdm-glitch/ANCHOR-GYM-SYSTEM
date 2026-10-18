@@ -237,6 +237,7 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(backendServer, /smtp\.gmail\.com/);
     assert.match(backendServer, /nodemailer\.createTransport/);
     assert.match(backendServer, /getPasswordResetSecret/);
+    assert.doesNotMatch(backendServer, /recentRequests/);
     assert.match(backendServer, /GMAIL_REFRESH_TOKEN/);
     assert.match(backendServer, /EMAIL_FROM/);
     assert.match(backendServer, /https:\/\/gmail\.googleapis\.com\/gmail\/v1\/users\/me\/messages\/send/);
