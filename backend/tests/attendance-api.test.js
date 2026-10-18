@@ -211,6 +211,9 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.match(signupHtml, /Use at least 8 characters/);
     assert.match(authJs, /if \(password\.length < 8\)/);
     assert.match(backendServer, /if \(password\.length < 8\)/);
+    assert.match(customerHtml, /id="reference"[\s\S]*?minlength="10"[\s\S]*?maxlength="13"/);
+    assert.match(customerJs, /reference\.length < 10 \|\| reference\.length > 13/);
+    assert.match(backendServer, /gcashReference\.length < 10[\s\S]*?gcashReference\.length > 13/);
     assert.match(privacyPolicyHtml, /Privacy Policy/);
     assert.match(privacyPolicyHtml, /balanedenmark\.pdm@gmail\.com/);
     assert.match(forgotPasswordHtml, /id="forgotForm"/);
@@ -813,6 +816,24 @@ if (!integrationEnabled) {
             })
         });
     }
+
+    test("application rejects GCash references outside 10 to 13 characters", async () => {
+        for (const reference of ["123456789", "12345678901234"]) {
+            const result = await api("/api/applications", {
+                method: "POST",
+                body: JSON.stringify({
+                    user_id: 1,
+                    gcash_reference: reference
+                })
+            });
+
+            assert.equal(result.response.status, 400);
+            assert.match(
+                result.body.message,
+                /between 10 and 13 characters/i
+            );
+        }
+    });
 
     test("signup rejects passwords shorter than eight characters", async () => {
         const result = await api("/api/signup", {

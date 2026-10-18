@@ -4071,6 +4071,19 @@ app.post(
 
             }
 
+            const gcashReference =
+                String(gcash_reference).trim();
+
+            if (
+                gcashReference.length < 10 ||
+                gcashReference.length > 13
+            ) {
+                return res.status(400).json({
+                    success: false,
+                    message: "GCash reference number must be between 10 and 13 characters."
+                });
+            }
+
             if (!payment_date) {
 
                 return res.status(
@@ -4234,9 +4247,7 @@ app.post(
                     WHERE LOWER(gcash_reference) = LOWER($1)
                     `,
                     [
-                        String(
-                            gcash_reference
-                        ).trim()
+                        gcashReference
                     ]
                 );
 
@@ -4346,9 +4357,7 @@ app.post(
 
                         fixedAmount,
 
-                        String(
-                            gcash_reference
-                        ).trim(),
+                        gcashReference,
 
                         payment_screenshot,
 

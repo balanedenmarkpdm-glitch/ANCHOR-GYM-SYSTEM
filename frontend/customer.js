@@ -3594,6 +3594,13 @@ async function submitApplication() {
 
     }
 
+    if (reference.length < 10 || reference.length > 13) {
+        alert(
+            "GCash reference number must be between 10 and 13 characters."
+        );
+        return;
+    }
+
 
     if (!paymentDate) {
 
