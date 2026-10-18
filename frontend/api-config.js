@@ -19,13 +19,13 @@ window.anchorPasswordStrength = function(password) {
 
     let score = 0;
 
-    if (password.length >= 6) score++;
+    if (password.length >= 8) score++;
     if (password.length >= 10) score++;
     if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score++;
     if (/\d/.test(password)) score++;
     if (/[^A-Za-z0-9]/.test(password)) score++;
 
-    if (password.length < 6 || score <= 1) {
+    if (password.length < 8 || score <= 1) {
         return { score: 1, label: "Weak", state: "weak" };
     }
 

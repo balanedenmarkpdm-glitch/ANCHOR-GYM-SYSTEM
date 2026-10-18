@@ -123,6 +123,10 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
         path.join(projectRoot, "frontend", "login.html"),
         "utf8"
     );
+    const signupHtml = fs.readFileSync(
+        path.join(projectRoot, "frontend", "signup.html"),
+        "utf8"
+    );
     const customerLoginCss = fs.readFileSync(
         path.join(projectRoot, "frontend", "login.css"),
         "utf8"
@@ -203,6 +207,10 @@ test("admin UI exposes the required application, dashboard, report, attendance, 
     assert.doesNotMatch(customerLoginCss, /min-width:\s*320px/);
     assert.doesNotMatch(customerLoginCss, /body\.login-page\s*\{[^}]*overflow-x:\s*hidden/s);
     assert.match(customerLoginHtml, /href="privacy-policy\.html"/);
+    assert.match(signupHtml, /id="signupPassword"[\s\S]*?minlength="8"/);
+    assert.match(signupHtml, /Use at least 8 characters/);
+    assert.match(authJs, /if \(password\.length < 8\)/);
+    assert.match(backendServer, /if \(password\.length < 8\)/);
     assert.match(privacyPolicyHtml, /Privacy Policy/);
     assert.match(privacyPolicyHtml, /balanedenmark\.pdm@gmail\.com/);
     assert.match(forgotPasswordHtml, /id="forgotForm"/);
@@ -805,6 +813,21 @@ if (!integrationEnabled) {
             })
         });
     }
+
+    test("signup rejects passwords shorter than eight characters", async () => {
+        const result = await api("/api/signup", {
+            method: "POST",
+            body: JSON.stringify({
+                full_name: "Short Password Test",
+                email: `short.password.${process.pid}@gmail.com`,
+                phone: "09133330003",
+                password: "short77"
+            })
+        });
+
+        assert.equal(result.response.status, 400);
+        assert.match(result.body.message, /at least 8 characters/i);
+    });
 
     test("signup allows one account per Gmail mailbox, including dotted and plus aliases", async () => {
         const email = `anchor.test${process.pid}@gmail.com`;
