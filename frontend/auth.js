@@ -1210,6 +1210,15 @@ if (verifyResetCodeForm && resetPasswordForm) {
 
         input.addEventListener("keydown", function(event) {
             if (
+                /^\d$/.test(event.key) &&
+                input.value &&
+                !event.ctrlKey &&
+                !event.metaKey &&
+                !event.altKey
+            ) {
+                event.preventDefault();
+                fillCodeInputs(index, event.key);
+            } else if (
                 event.key === "Backspace" &&
                 !input.value &&
                 index > 0
