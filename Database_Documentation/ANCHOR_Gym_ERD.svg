@@ -1,0 +1,386 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2400" height="2580" viewBox="0 0 2400 2580" role="img" aria-labelledby="t d">
+<title id="t">ANCHOR Gym System Entity Relationship Diagram</title>
+<desc id="d">Editable database model preview with fourteen entities, logical relationships, and cardinality labels.</desc>
+<defs><style>
+text{font-family:Arial,"Segoe UI",sans-serif;fill:#183047}.title{font-size:36px;font-weight:700}.subtitle{font-size:16px;fill:#53687c}.section{font-size:14px;font-weight:bold;letter-spacing:2px;fill:#496177}
+.box{fill:#fff;stroke:#9db0c1;stroke-width:2;rx:12}.head{fill:#123b5d}.guesthead{fill:#087f8c}.supporthead{fill:#55697e}.name{fill:#fff;font-weight:bold;font-size:18px;letter-spacing:.5px}.field{font-size:15px}.key{font-weight:bold;fill:#075c94}.faint{fill:#60758a}.edge{fill:none;stroke:#425d75;stroke-width:2.3}.cardinality{font-size:13px;font-weight:bold;fill:#203c54}.labelback{fill:#fff;stroke:#d6e0e8;stroke-width:1;rx:4}.legend{font-size:14px;fill:#334e66}
+</style></defs><rect width="100%" height="100%" fill="#f3f6fa"/>
+<text class="title" x="60" y="58">ANCHOR GYM SYSTEM</text>
+<text class="subtitle" x="60" y="88">Logical ERD • PostgreSQL application schema • Relationship constraints verified only where backend DDL explicitly declares them</text>
+<text class="section" x="60" y="125">ACCOUNT &amp; MEMBERSHIP</text>
+<text class="section" x="60" y="695">ATTENDANCE &amp; GUEST BILLING</text>
+<text class="section" x="60" y="1275">AUTHENTICATION &amp; EXTENSIONS</text>
+<text class="section" x="60" y="1965">RESET &amp; QR SUPPORT</text>
+<path class="edge" d="M 570 270 H 650"/>
+<rect class="labelback" x="574.0" y="233" width="72.0" height="23"/>
+<text class="cardinality" x="610" y="249" text-anchor="middle">1 : 0..M</text>
+<path class="edge" d="M 1750 310 H 1830"/>
+<rect class="labelback" x="1744.4" y="271" width="91.2" height="23"/>
+<text class="cardinality" x="1790" y="287" text-anchor="middle">0..1 : 0..M</text>
+<path class="edge" d="M 905 455 V 690 H 905 V 720"/>
+<rect class="labelback" x="874.4" y="571" width="91.2" height="23"/>
+<text class="cardinality" x="920" y="587" text-anchor="middle">0..1 : 0..1</text>
+<path class="edge" d="M 1495 552 V 720"/>
+<rect class="labelback" x="1464.4" y="616" width="91.2" height="23"/>
+<text class="cardinality" x="1510" y="632" text-anchor="middle">0..1 : 0..M</text>
+<path class="edge" d="M 1830 870 H 1750"/>
+<rect class="labelback" x="1744.4" y="833" width="91.2" height="23"/>
+<text class="cardinality" x="1790" y="849" text-anchor="middle">0..1 : 0..M</text>
+<path class="edge" d="M 1495 1052 V 1300"/>
+<rect class="labelback" x="1474.0" y="1156" width="72.0" height="23"/>
+<text class="cardinality" x="1510" y="1172" text-anchor="middle">1 : 0..M</text>
+<path class="edge" d="M 2085 1052 V 1300"/>
+<rect class="labelback" x="2064.0" y="1156" width="72.0" height="23"/>
+<text class="cardinality" x="2100" y="1172" text-anchor="middle">1 : 0..M</text>
+<path class="edge" d="M 1750 1530 H 1830"/>
+<rect class="labelback" x="1744.4" y="1493" width="91.2" height="23"/>
+<text class="cardinality" x="1790" y="1509" text-anchor="middle">0..1 : 0..M</text>
+<path class="edge" d="M 315 458 V 720"/>
+<rect class="labelback" x="294.0" y="616" width="72.0" height="23"/>
+<text class="cardinality" x="330" y="632" text-anchor="middle">1 : 0..M</text>
+<path class="edge" d="M 60 330 H 35 V 1450 H 60"/>
+<rect class="labelback" x="64.0" y="1121" width="72.0" height="23"/>
+<text class="cardinality" x="100" y="1137" text-anchor="middle">1 : 0..M</text>
+<path class="edge" d="M 570 350 H 610 V 1435 H 650"/>
+<rect class="labelback" x="589.0" y="881" width="72.0" height="23"/>
+<text class="cardinality" x="625" y="897" text-anchor="middle">1 : 0..M</text>
+<path class="edge" d="M 60 410 H 20 V 2150 H 60"/>
+<rect class="labelback" x="64.0" y="1176" width="72.0" height="23"/>
+<text class="cardinality" x="100" y="1192" text-anchor="middle">1 : 0..M</text>
+<path class="edge" d="M 1240 480 H 1200 V 2140 H 1160 V 2150"/>
+<rect class="labelback" x="1144.0" y="1091" width="72.0" height="23"/>
+<text class="cardinality" x="1180" y="1107" text-anchor="middle">1 : 0..M</text>
+<path class="edge" d="M 315 150 V 130 H 1495 V 150"/>
+<rect class="labelback" x="864.0" y="111" width="72.0" height="23"/>
+<text class="cardinality" x="900" y="127" text-anchor="middle">1 : 0..M</text>
+<path class="edge" d="M 430 150 V 108 H 2085 V 150"/>
+<rect class="labelback" x="1664.0" y="89" width="72.0" height="23"/>
+<text class="cardinality" x="1700" y="105" text-anchor="middle">1 : 0..M</text>
+<path class="edge" d="M 500 458 V 625 H 880 V 720"/>
+<rect class="labelback" x="644.4" y="591" width="91.2" height="23"/>
+<text class="cardinality" x="690" y="607" text-anchor="middle">0..1 : 0..M</text>
+<path class="edge" d="M 1240 500 H 1190 V 600 H 900 V 720"/>
+<rect class="labelback" x="1024.4" y="571" width="91.2" height="23"/>
+<text class="cardinality" x="1070" y="587" text-anchor="middle">0..1 : 0..M</text>
+<path class="edge" d="M 1750 1020 H 1785 V 1320 H 1830"/>
+<rect class="labelback" x="1744.4" y="981" width="91.2" height="23"/>
+<text class="cardinality" x="1790" y="997" text-anchor="middle">0..1 : 0..M</text>
+<path class="edge" d="M 2340 1030 H 2370 V 1880 H 1495 V 1782"/>
+<rect class="labelback" x="2319.0" y="1221" width="72.0" height="23"/>
+<text class="cardinality" x="2355" y="1237" text-anchor="middle">1 : 0..M</text>
+<path class="edge" d="M 1750 550 H 1770 V 680 H 2370 V 661 H 2340"/>
+<rect class="labelback" x="1794.4" y="641" width="91.2" height="23"/>
+<text class="cardinality" x="1840" y="657" text-anchor="middle">0..1 : 0..M</text>
+<rect class="box" x="60" y="150" width="510" height="308"/>
+<path class="head" d="M72 150 H558 Q570 150 570 162 V204 H60 V162 Q60 150 72 150Z"/>
+<text class="name" x="78" y="185">USERS</text>
+<text class="key" x="79" y="227">PK*  id</text>
+<text class="faint" x="552" y="227" text-anchor="end">INTEGER</text>
+<text class="field" x="79" y="256">full_name</text>
+<text class="faint" x="552" y="256" text-anchor="end">VARCHAR</text>
+<text class="field" x="79" y="285">email</text>
+<text class="faint" x="552" y="285" text-anchor="end">VARCHAR</text>
+<text class="field" x="79" y="314">password</text>
+<text class="faint" x="552" y="314" text-anchor="end">VARCHAR</text>
+<text class="field" x="79" y="343">phone</text>
+<text class="faint" x="552" y="343" text-anchor="end">VARCHAR</text>
+<text class="field" x="79" y="372">role</text>
+<text class="faint" x="552" y="372" text-anchor="end">VARCHAR</text>
+<text class="field" x="79" y="401">created_at</text>
+<text class="faint" x="552" y="401" text-anchor="end">TIMESTAMP</text>
+<text class="field" x="79" y="430">profile_photo</text>
+<text class="faint" x="552" y="430" text-anchor="end">TEXT</text>
+<rect class="box" x="650" y="150" width="510" height="366"/>
+<path class="head" d="M662 150 H1148 Q1160 150 1160 162 V204 H650 V162 Q650 150 662 150Z"/>
+<text class="name" x="668" y="185">APPLICATIONS</text>
+<text class="key" x="669" y="227">PK*  id</text>
+<text class="faint" x="1142" y="227" text-anchor="end">INTEGER</text>
+<text class="key" x="669" y="256">FK†  user_id</text>
+<text class="faint" x="1142" y="256" text-anchor="end">INTEGER</text>
+<text class="field" x="669" y="285">membership_plan</text>
+<text class="faint" x="1142" y="285" text-anchor="end">VARCHAR</text>
+<text class="field" x="669" y="314">amount</text>
+<text class="faint" x="1142" y="314" text-anchor="end">NUMERIC</text>
+<text class="field" x="669" y="343">gcash_reference</text>
+<text class="faint" x="1142" y="343" text-anchor="end">VARCHAR</text>
+<text class="field" x="669" y="372">payment_screenshot</text>
+<text class="faint" x="1142" y="372" text-anchor="end">TEXT</text>
+<text class="field" x="669" y="401">payment_date</text>
+<text class="faint" x="1142" y="401" text-anchor="end">DATE</text>
+<text class="field" x="669" y="430">status</text>
+<text class="faint" x="1142" y="430" text-anchor="end">VARCHAR</text>
+<text class="field" x="669" y="459">rejection_reason</text>
+<text class="faint" x="1142" y="459" text-anchor="end">VARCHAR</text>
+<text class="field" x="669" y="488">created_at</text>
+<text class="faint" x="1142" y="488" text-anchor="end">TIMESTAMP</text>
+<rect class="box" x="1240" y="150" width="510" height="424"/>
+<path class="head" d="M1252 150 H1738 Q1750 150 1750 162 V204 H1240 V162 Q1240 150 1252 150Z"/>
+<text class="name" x="1258" y="185">MEMBERS</text>
+<text class="key" x="1259" y="227">PK*  id</text>
+<text class="faint" x="1732" y="227" text-anchor="end">INTEGER</text>
+<text class="key" x="1259" y="256">FK†  user_id</text>
+<text class="faint" x="1732" y="256" text-anchor="end">INTEGER</text>
+<text class="field" x="1259" y="285">member_id</text>
+<text class="faint" x="1732" y="285" text-anchor="end">VARCHAR</text>
+<text class="field" x="1259" y="314">registration_type</text>
+<text class="faint" x="1732" y="314" text-anchor="end">VARCHAR</text>
+<text class="field" x="1259" y="343">membership_plan</text>
+<text class="faint" x="1732" y="343" text-anchor="end">VARCHAR</text>
+<text class="field" x="1259" y="372">start_date</text>
+<text class="faint" x="1732" y="372" text-anchor="end">DATE</text>
+<text class="field" x="1259" y="401">expiration_date</text>
+<text class="faint" x="1732" y="401" text-anchor="end">DATE</text>
+<text class="field" x="1259" y="430">status</text>
+<text class="faint" x="1732" y="430" text-anchor="end">VARCHAR</text>
+<text class="field" x="1259" y="459">qr_code</text>
+<text class="faint" x="1732" y="459" text-anchor="end">VARCHAR</text>
+<text class="field" x="1259" y="488">paused_days_remaining</text>
+<text class="faint" x="1732" y="488" text-anchor="end">INTEGER</text>
+<text class="field" x="1259" y="517">archived_at</text>
+<text class="faint" x="1732" y="517" text-anchor="end">TIMESTAMP</text>
+<text class="key" x="1259" y="546">FK†  archived_archive_id</text>
+<text class="faint" x="1732" y="546" text-anchor="end">BIGINT</text>
+<rect class="box" x="650" y="720" width="510" height="424"/>
+<path class="head" d="M662 720 H1148 Q1160 720 1160 732 V774 H650 V732 Q650 720 662 720Z"/>
+<text class="name" x="668" y="755">MEMBER_TRANSACTIONS</text>
+<text class="key" x="669" y="797">PK*  id</text>
+<text class="faint" x="1142" y="797" text-anchor="end">INTEGER</text>
+<text class="key" x="669" y="826">FK†  user_id</text>
+<text class="faint" x="1142" y="826" text-anchor="end">INTEGER</text>
+<text class="key" x="669" y="855">FK†  member_id</text>
+<text class="faint" x="1142" y="855" text-anchor="end">INTEGER</text>
+<text class="key" x="669" y="884">FK†  application_id</text>
+<text class="faint" x="1142" y="884" text-anchor="end">INTEGER</text>
+<text class="field" x="669" y="913">amount</text>
+<text class="faint" x="1142" y="913" text-anchor="end">NUMERIC</text>
+<text class="field" x="669" y="942">payment_method</text>
+<text class="faint" x="1142" y="942" text-anchor="end">VARCHAR</text>
+<text class="field" x="669" y="971">gcash_reference</text>
+<text class="faint" x="1142" y="971" text-anchor="end">VARCHAR</text>
+<text class="field" x="669" y="1000">transaction_date</text>
+<text class="faint" x="1142" y="1000" text-anchor="end">TIMESTAMP</text>
+<text class="field" x="669" y="1029">status</text>
+<text class="faint" x="1142" y="1029" text-anchor="end">VARCHAR</text>
+<text class="field" x="669" y="1058">verified_by</text>
+<text class="faint" x="1142" y="1058" text-anchor="end">INTEGER</text>
+<text class="field" x="669" y="1087">verification_date</text>
+<text class="faint" x="1142" y="1087" text-anchor="end">TIME</text>
+<text class="field" x="669" y="1116">created_at</text>
+<text class="faint" x="1142" y="1116" text-anchor="end">TIMESTAMP</text>
+<rect class="box" x="1240" y="720" width="510" height="337"/>
+<path class="guesthead" d="M1252 720 H1738 Q1750 720 1750 732 V774 H1240 V732 Q1240 720 1252 720Z"/>
+<text class="name" x="1258" y="755">ATTENDANCE</text>
+<text class="key" x="1259" y="797">PK*  id</text>
+<text class="faint" x="1732" y="797" text-anchor="end">INTEGER</text>
+<text class="key" x="1259" y="826">FK†  member_id</text>
+<text class="faint" x="1732" y="826" text-anchor="end">INTEGER</text>
+<text class="key" x="1259" y="855">FK†  guest_id</text>
+<text class="faint" x="1732" y="855" text-anchor="end">INTEGER</text>
+<text class="field" x="1259" y="884">user_type</text>
+<text class="faint" x="1732" y="884" text-anchor="end">VARCHAR</text>
+<text class="field" x="1259" y="913">check_in</text>
+<text class="faint" x="1732" y="913" text-anchor="end">TIMESTAMP</text>
+<text class="field" x="1259" y="942">check_out</text>
+<text class="faint" x="1732" y="942" text-anchor="end">TIMESTAMP</text>
+<text class="field" x="1259" y="971">expires_at</text>
+<text class="faint" x="1732" y="971" text-anchor="end">TIMESTAMP</text>
+<text class="field" x="1259" y="1000">expiration_time</text>
+<text class="faint" x="1732" y="1000" text-anchor="end">TIMESTAMP</text>
+<text class="field" x="1259" y="1029">voided_at</text>
+<text class="faint" x="1732" y="1029" text-anchor="end">TIMESTAMP</text>
+<rect class="box" x="1830" y="720" width="510" height="337"/>
+<path class="guesthead" d="M1842 720 H2328 Q2340 720 2340 732 V774 H1830 V732 Q1830 720 1842 720Z"/>
+<text class="name" x="1848" y="755">GUESTS</text>
+<text class="key" x="1849" y="797">PK*  id</text>
+<text class="faint" x="2322" y="797" text-anchor="end">INTEGER</text>
+<text class="field" x="1849" y="826">full_name</text>
+<text class="faint" x="2322" y="826" text-anchor="end">VARCHAR</text>
+<text class="field" x="1849" y="855">phone</text>
+<text class="faint" x="2322" y="855" text-anchor="end">VARCHAR</text>
+<text class="field" x="1849" y="884">visit_type</text>
+<text class="faint" x="2322" y="884" text-anchor="end">VARCHAR</text>
+<text class="field" x="1849" y="913">amount_paid</text>
+<text class="faint" x="2322" y="913" text-anchor="end">NUMERIC</text>
+<text class="field" x="1849" y="942">payment_method</text>
+<text class="faint" x="2322" y="942" text-anchor="end">VARCHAR</text>
+<text class="field" x="1849" y="971">created_at</text>
+<text class="faint" x="2322" y="971" text-anchor="end">TIMESTAMP</text>
+<text class="field" x="1849" y="1000">hours</text>
+<text class="faint" x="2322" y="1000" text-anchor="end">INTEGER</text>
+<text class="field" x="1849" y="1029">email</text>
+<text class="faint" x="2322" y="1029" text-anchor="end">VARCHAR</text>
+<rect class="box" x="1830" y="1300" width="510" height="540"/>
+<path class="guesthead" d="M1842 1300 H2328 Q2340 1300 2340 1312 V1354 H1830 V1312 Q1830 1300 1842 1300Z"/>
+<text class="name" x="1848" y="1335">GUEST_TRANSACTIONS</text>
+<text class="key" x="1849" y="1377">PK  id</text>
+<text class="faint" x="2322" y="1377" text-anchor="end">BIGINT</text>
+<text class="key" x="1849" y="1406">FK†  guest_id</text>
+<text class="faint" x="2322" y="1406" text-anchor="end">BIGINT</text>
+<text class="field" x="1849" y="1435">guest_name</text>
+<text class="faint" x="2322" y="1435" text-anchor="end">TEXT</text>
+<text class="field" x="1849" y="1464">visit_type</text>
+<text class="faint" x="2322" y="1464" text-anchor="end">TEXT</text>
+<text class="field" x="1849" y="1493">amount</text>
+<text class="faint" x="2322" y="1493" text-anchor="end">NUMERIC(10,2)</text>
+<text class="field" x="1849" y="1522">payment_method</text>
+<text class="faint" x="2322" y="1522" text-anchor="end">TEXT</text>
+<text class="field" x="1849" y="1551">transaction_date</text>
+<text class="faint" x="2322" y="1551" text-anchor="end">TIMESTAMPTZ</text>
+<text class="field" x="1849" y="1580">created_at</text>
+<text class="faint" x="2322" y="1580" text-anchor="end">TIMESTAMPTZ</text>
+<text class="field" x="1849" y="1609">transaction_reference</text>
+<text class="faint" x="2322" y="1609" text-anchor="end">TEXT</text>
+<text class="key" x="1849" y="1638">FK†  attendance_id</text>
+<text class="faint" x="2322" y="1638" text-anchor="end">BIGINT</text>
+<text class="field" x="1849" y="1667">extension_type</text>
+<text class="faint" x="2322" y="1667" text-anchor="end">TEXT</text>
+<text class="field" x="1849" y="1696">additional_hours</text>
+<text class="faint" x="2322" y="1696" text-anchor="end">INTEGER</text>
+<text class="field" x="1849" y="1725">payment_status</text>
+<text class="faint" x="2322" y="1725" text-anchor="end">TEXT</text>
+<text class="field" x="1849" y="1754">previous_expiration</text>
+<text class="faint" x="2322" y="1754" text-anchor="end">TIMESTAMPTZ</text>
+<text class="field" x="1849" y="1783">new_expiration</text>
+<text class="faint" x="2322" y="1783" text-anchor="end">TIMESTAMPTZ</text>
+<text class="field" x="1849" y="1812">idempotency_key</text>
+<text class="faint" x="2322" y="1812" text-anchor="end">TEXT</text>
+<rect class="box" x="1240" y="1300" width="510" height="482"/>
+<path class="guesthead" d="M1252 1300 H1738 Q1750 1300 1750 1312 V1354 H1240 V1312 Q1240 1300 1252 1300Z"/>
+<text class="name" x="1258" y="1335">GUEST_VISIT_EXTENSIONS</text>
+<text class="key" x="1259" y="1377">PK  id</text>
+<text class="faint" x="1732" y="1377" text-anchor="end">BIGINT</text>
+<text class="key" x="1259" y="1406">FK†  attendance_id</text>
+<text class="faint" x="1732" y="1406" text-anchor="end">BIGINT</text>
+<text class="key" x="1259" y="1435">FK†  guest_id</text>
+<text class="faint" x="1732" y="1435" text-anchor="end">BIGINT</text>
+<text class="field" x="1259" y="1464">extension_type</text>
+<text class="faint" x="1732" y="1464" text-anchor="end">TEXT</text>
+<text class="field" x="1259" y="1493">additional_hours</text>
+<text class="faint" x="1732" y="1493" text-anchor="end">INTEGER</text>
+<text class="field" x="1259" y="1522">amount</text>
+<text class="faint" x="1732" y="1522" text-anchor="end">NUMERIC(10,2)</text>
+<text class="field" x="1259" y="1551">payment_status</text>
+<text class="faint" x="1732" y="1551" text-anchor="end">TEXT</text>
+<text class="field" x="1259" y="1580">previous_expiration</text>
+<text class="faint" x="1732" y="1580" text-anchor="end">TIMESTAMPTZ</text>
+<text class="field" x="1259" y="1609">new_expiration</text>
+<text class="faint" x="1732" y="1609" text-anchor="end">TIMESTAMPTZ</text>
+<text class="field" x="1259" y="1638">transaction_reference</text>
+<text class="faint" x="1732" y="1638" text-anchor="end">TEXT</text>
+<text class="key" x="1259" y="1667">FK†  guest_transaction_id</text>
+<text class="faint" x="1732" y="1667" text-anchor="end">BIGINT</text>
+<text class="field" x="1259" y="1696">idempotency_key</text>
+<text class="faint" x="1732" y="1696" text-anchor="end">TEXT</text>
+<text class="field" x="1259" y="1725">payment_date</text>
+<text class="faint" x="1732" y="1725" text-anchor="end">TIMESTAMPTZ</text>
+<text class="field" x="1259" y="1754">created_at</text>
+<text class="faint" x="1732" y="1754" text-anchor="end">TIMESTAMPTZ</text>
+<rect class="box" x="1830" y="150" width="510" height="511"/>
+<path class="supporthead" d="M1842 150 H2328 Q2340 150 2340 162 V204 H1830 V162 Q1830 150 1842 150Z"/>
+<text class="name" x="1848" y="185">ARCHIVED_MEMBERS</text>
+<text class="key" x="1849" y="227">PK*  archive_id</text>
+<text class="faint" x="2322" y="227" text-anchor="end">BIGINT</text>
+<text class="key" x="1849" y="256">FK†  original_member_id</text>
+<text class="faint" x="2322" y="256" text-anchor="end">INTEGER</text>
+<text class="key" x="1849" y="285">FK†  user_id</text>
+<text class="faint" x="2322" y="285" text-anchor="end">INTEGER</text>
+<text class="field" x="1849" y="314">member_id</text>
+<text class="faint" x="2322" y="314" text-anchor="end">VARCHAR</text>
+<text class="field" x="1849" y="343">full_name</text>
+<text class="faint" x="2322" y="343" text-anchor="end">VARCHAR</text>
+<text class="field" x="1849" y="372">email</text>
+<text class="faint" x="2322" y="372" text-anchor="end">VARCHAR</text>
+<text class="field" x="1849" y="401">registration_type</text>
+<text class="faint" x="2322" y="401" text-anchor="end">VARCHAR</text>
+<text class="field" x="1849" y="430">membership_plan</text>
+<text class="faint" x="2322" y="430" text-anchor="end">VARCHAR</text>
+<text class="field" x="1849" y="459">start_date</text>
+<text class="faint" x="2322" y="459" text-anchor="end">DATE</text>
+<text class="field" x="1849" y="488">expiration_date</text>
+<text class="faint" x="2322" y="488" text-anchor="end">DATE</text>
+<text class="field" x="1849" y="517">status</text>
+<text class="faint" x="2322" y="517" text-anchor="end">VARCHAR</text>
+<text class="field" x="1849" y="546">qr_code</text>
+<text class="faint" x="2322" y="546" text-anchor="end">TEXT</text>
+<text class="field" x="1849" y="575">archived_at</text>
+<text class="faint" x="2322" y="575" text-anchor="end">TIMESTAMP</text>
+<text class="field" x="1849" y="604">removal_reason</text>
+<text class="faint" x="2322" y="604" text-anchor="end">TEXT</text>
+<text class="field" x="1849" y="633">restored_at</text>
+<text class="faint" x="2322" y="633" text-anchor="end">TIMESTAMP</text>
+<rect class="box" x="60" y="720" width="510" height="279"/>
+<path class="supporthead" d="M72 720 H558 Q570 720 570 732 V774 H60 V732 Q60 720 72 720Z"/>
+<text class="name" x="78" y="755">NOTIFICATIONS</text>
+<text class="key" x="79" y="797">PK*  id</text>
+<text class="faint" x="552" y="797" text-anchor="end">INTEGER</text>
+<text class="key" x="79" y="826">FK†  user_id</text>
+<text class="faint" x="552" y="826" text-anchor="end">INTEGER</text>
+<text class="field" x="79" y="855">title</text>
+<text class="faint" x="552" y="855" text-anchor="end">VARCHAR</text>
+<text class="field" x="79" y="884">message</text>
+<text class="faint" x="552" y="884" text-anchor="end">VARCHAR</text>
+<text class="field" x="79" y="913">is_read</text>
+<text class="faint" x="552" y="913" text-anchor="end">BOOLEAN</text>
+<text class="field" x="79" y="942">created_at</text>
+<text class="faint" x="552" y="942" text-anchor="end">TIMESTAMP</text>
+<text class="field" x="79" y="971">type</text>
+<text class="faint" x="552" y="971" text-anchor="end">VARCHAR</text>
+<rect class="box" x="60" y="1300" width="510" height="192"/>
+<path class="supporthead" d="M72 1300 H558 Q570 1300 570 1312 V1354 H60 V1312 Q60 1300 72 1300Z"/>
+<text class="name" x="78" y="1335">ADMIN_SESSIONS</text>
+<text class="key" x="79" y="1377">PK  token_hash</text>
+<text class="faint" x="552" y="1377" text-anchor="end">CHAR(64)</text>
+<text class="key" x="79" y="1406">FK  user_id</text>
+<text class="faint" x="552" y="1406" text-anchor="end">INTEGER</text>
+<text class="field" x="79" y="1435">expires_at</text>
+<text class="faint" x="552" y="1435" text-anchor="end">TIMESTAMPTZ</text>
+<text class="field" x="79" y="1464">created_at</text>
+<text class="faint" x="552" y="1464" text-anchor="end">TIMESTAMPTZ</text>
+<rect class="box" x="650" y="1300" width="510" height="192"/>
+<path class="supporthead" d="M662 1300 H1148 Q1160 1300 1160 1312 V1354 H650 V1312 Q650 1300 662 1300Z"/>
+<text class="name" x="668" y="1335">CUSTOMER_SESSIONS</text>
+<text class="key" x="669" y="1377">PK  token_hash</text>
+<text class="faint" x="1142" y="1377" text-anchor="end">CHAR(64)</text>
+<text class="key" x="669" y="1406">FK  user_id</text>
+<text class="faint" x="1142" y="1406" text-anchor="end">INTEGER</text>
+<text class="field" x="669" y="1435">expires_at</text>
+<text class="faint" x="1142" y="1435" text-anchor="end">TIMESTAMPTZ</text>
+<text class="field" x="669" y="1464">created_at</text>
+<text class="faint" x="1142" y="1464" text-anchor="end">TIMESTAMPTZ</text>
+<rect class="box" x="650" y="1990" width="510" height="221"/>
+<path class="supporthead" d="M662 1990 H1148 Q1160 1990 1160 2002 V2044 H650 V2002 Q650 1990 662 1990Z"/>
+<text class="name" x="668" y="2025">MEMBER_QR_TOKENS</text>
+<text class="key" x="669" y="2067">PK  token_hash</text>
+<text class="faint" x="1142" y="2067" text-anchor="end">CHAR(64)</text>
+<text class="key" x="669" y="2096">FK  member_id</text>
+<text class="faint" x="1142" y="2096" text-anchor="end">BIGINT</text>
+<text class="field" x="669" y="2125">expires_at</text>
+<text class="faint" x="1142" y="2125" text-anchor="end">TIMESTAMPTZ</text>
+<text class="field" x="669" y="2154">consumed_at</text>
+<text class="faint" x="1142" y="2154" text-anchor="end">TIMESTAMPTZ</text>
+<text class="field" x="669" y="2183">created_at</text>
+<text class="faint" x="1142" y="2183" text-anchor="end">TIMESTAMPTZ</text>
+<rect class="box" x="60" y="1990" width="510" height="308"/>
+<path class="supporthead" d="M72 1990 H558 Q570 1990 570 2002 V2044 H60 V2002 Q60 1990 72 1990Z"/>
+<text class="name" x="78" y="2025">PASSWORD_RESET_TOKENS</text>
+<text class="key" x="79" y="2067">PK  token_hash</text>
+<text class="faint" x="552" y="2067" text-anchor="end">CHAR(64)</text>
+<text class="key" x="79" y="2096">FK  user_id</text>
+<text class="faint" x="552" y="2096" text-anchor="end">INTEGER</text>
+<text class="field" x="79" y="2125">expires_at</text>
+<text class="faint" x="552" y="2125" text-anchor="end">TIMESTAMPTZ</text>
+<text class="field" x="79" y="2154">used_at</text>
+<text class="faint" x="552" y="2154" text-anchor="end">TIMESTAMPTZ</text>
+<text class="field" x="79" y="2183">attempts</text>
+<text class="faint" x="552" y="2183" text-anchor="end">INTEGER</text>
+<text class="field" x="79" y="2212">verified_at</text>
+<text class="faint" x="552" y="2212" text-anchor="end">TIMESTAMPTZ</text>
+<text class="field" x="79" y="2241">reset_token_hash</text>
+<text class="faint" x="552" y="2241" text-anchor="end">CHAR(64)</text>
+<text class="field" x="79" y="2270">created_at</text>
+<text class="faint" x="552" y="2270" text-anchor="end">TIMESTAMPTZ</text>
+<rect x="60" y="2440" width="2280" height="92" rx="10" fill="#fff" stroke="#c8d5e0"/>
+<text class="legend" x="82" y="2473"><tspan font-weight="bold">Legend:</tspan> PK = primary key; PK* = logical key not verified in catalog; FK = key reference; FK† = application reference, physical FK not verified.</text>
+<text class="legend" x="82" y="2504">Connector labels show parent : child cardinality (1 = exactly one, 0..1 = optional one, 0..M = optional many). Attendance member/guest rows are intended to be mutually exclusive (XOR).</text>
+<text class="legend" x="82" y="2526">Application approval checks for duplicate application payments; database uniqueness is unverified. Physical FKs are confirmed only for the four auth/token links declared in backend setup.</text>
+</svg>

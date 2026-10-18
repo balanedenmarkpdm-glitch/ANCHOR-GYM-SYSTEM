@@ -1,0 +1,238 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1500" viewBox="0 0 1800 1500" role="img" aria-labelledby="title description">
+  <title id="title">ANCHOR Gym System Entity Relationship Diagram</title>
+  <desc id="description">Visual overview of the gym system database entities, application relationships, and normalization review.</desc>
+  <defs>
+    <style>
+      text { font-family: "Segoe UI", Arial, sans-serif; fill: #172033; }
+      .page { fill: #f4f7fb; }
+      .title { font-size: 34px; font-weight: 700; }
+      .subtitle { font-size: 16px; fill: #526078; }
+      .section { font-size: 14px; font-weight: 700; letter-spacing: 1.6px; fill: #526078; }
+      .card { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; rx: 12; }
+      .head { fill: #173b67; }
+      .head-support { fill: #59677d; }
+      .head-guest { fill: #087e8b; }
+      .head-member { fill: #3157a4; }
+      .entity { font-size: 16px; font-weight: 700; fill: #ffffff; letter-spacing: .5px; }
+      .field { font-size: 13px; }
+      .muted { fill: #66758b; }
+      .pk { fill: #a05a00; font-weight: 700; }
+      .fk { fill: #226a43; font-weight: 700; }
+      .line-app { fill: none; stroke: #63748b; stroke-width: 2.2; stroke-dasharray: 7 6; }
+      .line-db { fill: none; stroke: #13834a; stroke-width: 2.8; }
+      .legend { font-size: 13px; fill: #526078; }
+      .note { font-size: 13px; fill: #526078; }
+      .norm-card { fill: #ffffff; stroke: #d6deea; stroke-width: 1.4; rx: 12; }
+      .norm-head { font-size: 16px; font-weight: 700; fill: #173b67; }
+      .norm-text { font-size: 13px; fill: #526078; }
+    </style>
+    <marker id="arrow-app" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#63748b"/>
+    </marker>
+    <marker id="arrow-db" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#13834a"/>
+    </marker>
+  </defs>
+
+  <rect class="page" width="1800" height="1500"/>
+  <text class="title" x="54" y="58">ANCHOR GYM SYSTEM</text>
+  <text class="subtitle" x="54" y="86">Database ERD • Based on pgAdmin columns shared and backend/server.js application behavior</text>
+  <text class="section" x="54" y="126">MEMBERSHIP &amp; PAYMENTS</text>
+  <text class="section" x="54" y="475">VISITS &amp; GUEST PAYMENTS</text>
+  <text class="section" x="54" y="828">USER SUPPORT RECORDS</text>
+
+  <!-- Relationship lines are behind the entity cards. -->
+  <g marker-end="url(#arrow-app)">
+    <path class="line-app" d="M330 205 H410"/>
+    <path class="line-app" d="M710 205 H820"/>
+    <path class="line-app" d="M1150 205 H1280"/>
+    <path class="line-app" d="M190 360 V405 H570 V500"/>
+    <path class="line-app" d="M190 360 V430 H985 V500"/>
+    <path class="line-app" d="M710 575 H820"/>
+    <path class="line-app" d="M1150 600 H1280"/>
+    <path class="line-app" d="M1445 730 V850"/>
+    <path class="line-app" d="M1150 660 H1200 V960 H1280"/>
+    <path class="line-app" d="M330 565 H410"/>
+    <path class="line-app" d="M985 730 V850"/>
+    <path class="line-app" d="M330 905 H410"/>
+    <path class="line-app" d="M330 990 H820"/>
+    <path class="line-app" d="M330 1078 H410"/>
+    <path class="line-app" d="M330 1115 H820 V360 H985 V500"/>
+  </g>
+  <g marker-end="url(#arrow-db)">
+    <path class="line-db" d="M190 360 V875"/>
+    <path class="line-db" d="M190 360 V950"/>
+    <path class="line-db" d="M190 360 V1038"/>
+    <path class="line-db" d="M190 360 V1110 H820"/>
+    <path class="line-db" d="M985 360 V1150 H820 V1190"/>
+  </g>
+
+  <!-- Membership and payment entities -->
+  <g>
+    <rect class="card" x="50" y="150" width="280" height="210"/>
+    <path class="head" d="M62 150 H318 Q330 150 330 162 V190 H50 V162 Q50 150 62 150Z"/>
+    <text class="entity" x="68" y="177">USERS</text>
+    <text class="field pk" x="68" y="215">PK  id</text>
+    <text class="field" x="68" y="239">full_name, email, password</text>
+    <text class="field" x="68" y="263">phone, role, created_at</text>
+    <text class="field" x="68" y="287">profile_photo</text>
+    <text class="field muted" x="68" y="333">Account / identity record</text>
+  </g>
+  <g>
+    <rect class="card" x="410" y="150" width="300" height="210"/>
+    <path class="head-member" d="M422 150 H698 Q710 150 710 162 V190 H410 V162 Q410 150 422 150Z"/>
+    <text class="entity" x="428" y="177">APPLICATIONS</text>
+    <text class="field pk" x="428" y="215">PK  id</text>
+    <text class="field fk" x="428" y="239">FK* user_id</text>
+    <text class="field" x="428" y="263">membership_plan, amount</text>
+    <text class="field" x="428" y="287">payment reference / screenshot</text>
+    <text class="field" x="428" y="311">payment_date, status</text>
+    <text class="field muted" x="428" y="339">Membership request and review</text>
+  </g>
+  <g>
+    <rect class="card" x="820" y="150" width="330" height="210"/>
+    <path class="head-member" d="M832 150 H1138 Q1150 150 1150 162 V190 H820 V162 Q820 150 832 150Z"/>
+    <text class="entity" x="838" y="177">MEMBERS</text>
+    <text class="field pk" x="838" y="215">PK  id</text>
+    <text class="field fk" x="838" y="239">FK* user_id</text>
+    <text class="field" x="838" y="263">member_id, registration_type</text>
+    <text class="field" x="838" y="287">plan, start / expiration dates</text>
+    <text class="field" x="838" y="311">status, qr_code, paused_days_remaining</text>
+    <text class="field muted" x="838" y="339">Current membership lifecycle</text>
+  </g>
+  <g>
+    <rect class="card" x="1280" y="150" width="430" height="210"/>
+    <path class="head-support" d="M1292 150 H1698 Q1710 150 1710 162 V190 H1280 V162 Q1280 150 1292 150Z"/>
+    <text class="entity" x="1298" y="177">ARCHIVED_MEMBERS</text>
+    <text class="field pk" x="1298" y="215">PK  archive_id</text>
+    <text class="field fk" x="1298" y="239">FK* original_member_id, user_id</text>
+    <text class="field" x="1298" y="263">Member/account details snapshot</text>
+    <text class="field" x="1298" y="287">archived_at, removal_reason</text>
+    <text class="field" x="1298" y="311">restored_at</text>
+    <text class="field muted" x="1298" y="339">History retained after archiving</text>
+  </g>
+
+  <g>
+    <rect class="card" x="410" y="500" width="300" height="230"/>
+    <path class="head-member" d="M422 500 H698 Q710 500 710 512 V540 H410 V512 Q410 500 422 500Z"/>
+    <text class="entity" x="428" y="527">MEMBER_TRANSACTIONS</text>
+    <text class="field pk" x="428" y="565">PK  id</text>
+    <text class="field fk" x="428" y="589">FK* user_id, member_id</text>
+    <text class="field fk" x="428" y="613">FK* application_id</text>
+    <text class="field" x="428" y="637">amount, payment_method</text>
+    <text class="field" x="428" y="661">reference, status, verified_by</text>
+    <text class="field" x="428" y="685">transaction_date, created_at</text>
+    <text class="field muted" x="428" y="711">Member/application payment history</text>
+  </g>
+  <g>
+    <rect class="card" x="50" y="500" width="280" height="180"/>
+    <path class="head-support" d="M62 500 H318 Q330 500 330 512 V540 H50 V512 Q50 500 62 500Z"/>
+    <text class="entity" x="68" y="527">NOTIFICATIONS</text>
+    <text class="field pk" x="68" y="565">PK  id (identity)</text>
+    <text class="field fk" x="68" y="589">FK* user_id</text>
+    <text class="field" x="68" y="613">title, message, type</text>
+    <text class="field" x="68" y="637">is_read, created_at</text>
+    <text class="field muted" x="68" y="662">User-facing notices</text>
+  </g>
+
+  <!-- Visits and guest payments -->
+  <g>
+    <rect class="card" x="820" y="500" width="330" height="230"/>
+    <path class="head-guest" d="M832 500 H1138 Q1150 500 1150 512 V540 H820 V512 Q820 500 832 500Z"/>
+    <text class="entity" x="838" y="527">ATTENDANCE</text>
+    <text class="field pk" x="838" y="565">PK  id</text>
+    <text class="field fk" x="838" y="589">FK* member_id OR guest_id</text>
+    <text class="field" x="838" y="613">user_type, check_in, check_out</text>
+    <text class="field" x="838" y="637">expires_at, expiration_time</text>
+    <text class="field" x="838" y="661">voided_at</text>
+    <text class="field muted" x="838" y="706">Visit event; subject is polymorphic</text>
+  </g>
+  <g>
+    <rect class="card" x="1280" y="500" width="330" height="230"/>
+    <path class="head-guest" d="M1292 500 H1598 Q1610 500 1610 512 V540 H1280 V512 Q1280 500 1292 500Z"/>
+    <text class="entity" x="1298" y="527">GUESTS</text>
+    <text class="field pk" x="1298" y="565">PK  id</text>
+    <text class="field" x="1298" y="589">full_name, phone, email</text>
+    <text class="field" x="1298" y="613">visit_type, hours</text>
+    <text class="field" x="1298" y="637">amount_paid, payment_method</text>
+    <text class="field" x="1298" y="661">created_at</text>
+    <text class="field muted" x="1298" y="706">Guest profile / visit details</text>
+  </g>
+  <g>
+    <rect class="card" x="1280" y="850" width="330" height="230"/>
+    <path class="head-guest" d="M1292 850 H1598 Q1610 850 1610 862 V890 H1280 V862 Q1280 850 1292 850Z"/>
+    <text class="entity" x="1298" y="877">GUEST_TRANSACTIONS</text>
+    <text class="field pk" x="1298" y="915">PK  id</text>
+    <text class="field fk" x="1298" y="939">FK* guest_id, attendance_id</text>
+    <text class="field" x="1298" y="963">amount, payment_method, status</text>
+    <text class="field" x="1298" y="987">transaction_reference, idempotency_key</text>
+    <text class="field" x="1298" y="1011">visit / extension and expiration data</text>
+    <text class="field muted" x="1298" y="1057">Guest visit and extension charges</text>
+  </g>
+  <g>
+    <rect class="card" x="820" y="850" width="330" height="230"/>
+    <path class="head-guest" d="M832 850 H1138 Q1150 850 1150 862 V890 H820 V862 Q820 850 832 850Z"/>
+    <text class="entity" x="838" y="877">GUEST_VISIT_EXTENSIONS</text>
+    <text class="field pk" x="838" y="915">PK  id</text>
+    <text class="field fk" x="838" y="939">FK* attendance_id, guest_id</text>
+    <text class="field fk" x="838" y="963">FK* guest_transaction_id</text>
+    <text class="field" x="838" y="987">extension_type, additional_hours</text>
+    <text class="field" x="838" y="1011">amount, payment_status, idempotency_key</text>
+    <text class="field" x="838" y="1035">previous / new expiration</text>
+    <text class="field muted" x="838" y="1057">Extension event and payment detail</text>
+  </g>
+
+  <!-- Security records -->
+  <g>
+    <rect class="card" x="50" y="850" width="280" height="270"/>
+    <path class="head-support" d="M62 850 H318 Q330 850 330 862 V890 H50 V862 Q50 850 62 850Z"/>
+    <text class="entity" x="68" y="877">AUTH / SECURITY</text>
+    <text class="field" x="68" y="915">admin_sessions</text>
+    <text class="field" x="68" y="936">customer_sessions</text>
+    <text class="field" x="68" y="957">password_reset_tokens</text>
+    <text class="field" x="68" y="978">member_qr_tokens</text>
+    <text class="field fk" x="68" y="1010">user_id / member_id references</text>
+    <text class="field" x="68" y="1034">hashed tokens and expiry times</text>
+    <text class="field muted" x="68" y="1093">Login, password reset, QR security</text>
+  </g>
+
+  <!-- Legend and caveats -->
+  <g>
+    <rect x="410" y="850" width="300" height="270" fill="#eaf0f8" stroke="#d6deea" rx="12"/>
+    <text class="section" x="432" y="885">HOW TO READ THIS</text>
+    <path class="line-db" d="M434 923 H500" marker-end="url(#arrow-db)"/>
+    <text class="legend" x="515" y="928">FK declared by app setup</text>
+    <path class="line-app" d="M434 961 H500" marker-end="url(#arrow-app)"/>
+    <text class="legend" x="515" y="966">Logical/app relationship</text>
+    <text class="legend" x="432" y="1010">PK = row identifier shown/used by app</text>
+    <text class="legend" x="432" y="1035">FK* = relationship inferred from app use</text>
+    <text class="note" x="432" y="1075">Dashed links do not prove a database</text>
+    <text class="note" x="432" y="1095">foreign-key constraint exists.</text>
+  </g>
+
+  <!-- Normalization visual -->
+  <text class="section" x="54" y="1190">NORMALIZATION AT A GLANCE</text>
+  <g>
+    <rect class="norm-card" x="50" y="1210" width="520" height="210"/>
+    <text class="norm-head" x="76" y="1250">1NF · Atomic values</text>
+    <text class="norm-text" x="76" y="1282">The listed fields are scalar, and events/payments</text>
+    <text class="norm-text" x="76" y="1304">are represented as rows rather than repeating groups.</text>
+    <text class="norm-text" x="76" y="1356">Looks consistent from the columns shared.</text>
+  </g>
+  <g>
+    <rect class="norm-card" x="640" y="1210" width="520" height="210"/>
+    <text class="norm-head" x="666" y="1250">2NF · No partial key dependency</text>
+    <text class="norm-text" x="666" y="1282">Requires knowing candidate keys. The column list</text>
+    <text class="norm-text" x="666" y="1304">does not show all PK/unique constraints.</text>
+    <text class="norm-text" x="666" y="1356">Cannot be formally confirmed yet.</text>
+  </g>
+  <g>
+    <rect class="norm-card" x="1230" y="1210" width="520" height="210"/>
+    <text class="norm-head" x="1256" y="1250">3NF · Keep facts with their entity</text>
+    <text class="norm-text" x="1256" y="1282">Core data is separated by account, membership,</text>
+    <text class="norm-text" x="1256" y="1304">visit, and payment. Archive/guest snapshots may</text>
+    <text class="norm-text" x="1256" y="1326">intentionally repeat values; attendance is polymorphic.</text>
+    <text class="norm-text" x="1256" y="1370">Review keys and dependencies before redesigning.</text>
+  </g>
+  <text class="subtitle" x="54" y="1460">Logical design only • Verify keys, constraints, and triggers in the live PostgreSQL catalog before schema changes.</text>
+</svg>

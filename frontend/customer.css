@@ -1102,6 +1102,62 @@ th {
     font-size: 25px;
 }
 
+.gcash-payment {
+    display: grid;
+    justify-items: center;
+    gap: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: var(--color-surface-raised);
+    text-align: center;
+}
+
+.gcash-payment h2,
+.gcash-payment p {
+    margin: 0;
+}
+
+.gcash-payment h2 {
+    font-size: 18px;
+}
+
+.gcash-payment-qr {
+    display: block;
+    width: min(100%, 280px);
+    height: auto;
+    border-radius: 8px;
+    background: white;
+}
+
+.gcash-payment-details {
+    display: grid;
+    gap: 8px;
+    width: 100%;
+    margin: 0;
+}
+
+.gcash-payment-details div {
+    display: grid;
+    gap: 2px;
+}
+
+.gcash-payment-details dt {
+    color: var(--color-subtle);
+    font-size: 12px;
+}
+
+.gcash-payment-details dd {
+    margin: 0;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.gcash-payment-details a {
+    color: var(--color-text);
+}
+
 
 .upload {
     padding: 30px;
