@@ -8343,7 +8343,7 @@ app.get("/api/admin/attendance/members", async (req, res) => {
                 ON u.id = m.user_id
             WHERE m.archived_at IS NULL
               AND LOWER(u.role) = 'customer'
-            ORDER BY u.full_name, m.id DESC
+            ORDER BY m.member_id ASC, m.id ASC
             `
         );
 
