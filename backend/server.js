@@ -5462,7 +5462,7 @@ app.get(
                         ON u.id = m.user_id
                     WHERE m.archived_at IS NULL
                       AND UPPER(m.status) <> 'REVOKED'
-                    ORDER BY m.id DESC
+                    ORDER BY m.member_id ASC, m.id ASC
                     `
                 );
 
@@ -7149,8 +7149,7 @@ app.get(
                           + INTERVAL '${GYM_CLOSING_INTERVAL}'
 
                     ORDER BY
-                        a.check_in DESC,
-                        a.id DESC
+                        a.id ASC
                     `,
                     [
                         filterType,
