@@ -279,6 +279,65 @@ async function ensureBuiltInAdminAccount() {
     }
 }
 
+const ERD_FOREIGN_KEYS = [
+    ["applications", "user_id", "users", "id"],
+    ["members", "user_id", "users", "id"],
+    ["members", "archived_archive_id", "archived_members", "archive_id"],
+    ["member_transactions", "user_id", "users", "id"],
+    ["member_transactions", "member_id", "members", "id"],
+    ["member_transactions", "application_id", "applications", "id"],
+    ["attendance", "member_id", "members", "id"],
+    ["attendance", "guest_id", "guests", "id"],
+    ["guest_transactions", "guest_id", "guests", "id"],
+    ["guest_transactions", "attendance_id", "attendance", "id"],
+    ["guest_visit_extensions", "attendance_id", "attendance", "id"],
+    ["guest_visit_extensions", "guest_id", "guests", "id"],
+    ["guest_visit_extensions", "guest_transaction_id", "guest_transactions", "id"],
+    ["archived_members", "original_member_id", "members", "id"],
+    ["archived_members", "user_id", "users", "id"],
+    ["notifications", "user_id", "users", "id"]
+];
+
+async function ensureErdForeignKeys() {
+    for (const [table, column, referencedTable, referencedColumn] of ERD_FOREIGN_KEYS) {
+        const existingConstraint = await pool.query(
+            `
+            SELECT 1
+            FROM pg_constraint AS foreign_key
+            JOIN pg_attribute AS source_column
+                ON source_column.attrelid = foreign_key.conrelid
+               AND source_column.attnum = foreign_key.conkey[1]
+            JOIN pg_attribute AS target_column
+                ON target_column.attrelid = foreign_key.confrelid
+               AND target_column.attnum = foreign_key.confkey[1]
+            WHERE foreign_key.contype = 'f'
+              AND foreign_key.conrelid =
+                  to_regclass(format('%I.%I', current_schema(), $1::text))
+              AND foreign_key.confrelid =
+                  to_regclass(format('%I.%I', current_schema(), $3::text))
+              AND cardinality(foreign_key.conkey) = 1
+              AND cardinality(foreign_key.confkey) = 1
+              AND source_column.attname = $2
+              AND target_column.attname = $4
+            LIMIT 1
+            `,
+            [table, column, referencedTable, referencedColumn]
+        );
+
+        if (existingConstraint.rowCount > 0) {
+            continue;
+        }
+
+        const constraintName = `${table}_${column}_fkey`;
+        await pool.query(
+            `ALTER TABLE "${databaseSchema}"."${table}"
+             ADD CONSTRAINT "${constraintName}"
+             FOREIGN KEY ("${column}")
+             REFERENCES "${databaseSchema}"."${referencedTable}" ("${referencedColumn}")`
+        );
+    }
+}
+
 async function ensureDashboardSchema() {
     await pool.query(`
         DO $$
@@ -626,6 +685,7 @@ async function ensureDashboardSchema() {
         END;
         $$
     `);
+    await ensureErdForeignKeys();
 }
 
 let customerProfilePhotoColumnReady = false;

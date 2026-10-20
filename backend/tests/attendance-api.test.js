@@ -721,20 +721,41 @@ if (!integrationEnabled) {
             "SELECT (CURRENT_DATE + 20)::text AS expiration_date"
         );
         archivedExpectedExpiration = archiveExpiry.rows[0].expiration_date;
+        const archivedSourceMember = await pool.query(
+            `
+            INSERT INTO members
+                (user_id, member_id, registration_type, membership_plan, start_date,
+                 expiration_date, status, qr_code, archived_at)
+            VALUES
+                (980006, 'TEST-ARCHIVED-001', 'ONLINE', 'Monthly',
+                 CURRENT_DATE - 10, CURRENT_DATE + 20, 'REVOKED', 'TEST-QR-ARCHIVED',
+                 CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Manila')
+            RETURNING id
+            `
+        );
         const archive = await pool.query(
             `
             INSERT INTO archived_members
                 (original_member_id, user_id, member_id, full_name, email, registration_type,
                  membership_plan, start_date, expiration_date, status, archived_at, removal_reason)
             VALUES
-                (991234, 980006, 'TEST-ARCHIVED-001', 'Archived Member',
+                ($1, 980006, 'TEST-ARCHIVED-001', 'Archived Member',
                  'archived-member@example.invalid', 'ONLINE', 'Monthly',
                  CURRENT_DATE - 10, CURRENT_DATE + 20, 'REVOKED',
                  CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Manila', 'Integration test')
             RETURNING archive_id
-            `
+            `,
+            [archivedSourceMember.rows[0].id]
         );
         archivedRecordId = archive.rows[0].archive_id;
+        await pool.query(
+            `
+            UPDATE members
+            SET archived_archive_id = $2
+            WHERE id = $1
+            `,
+            [archivedSourceMember.rows[0].id, archivedRecordId]
+        );
 
         httpServer = application.app.listen(0, "127.0.0.1");
         await new Promise((resolve, reject) => {
@@ -790,6 +811,66 @@ if (!integrationEnabled) {
             body: await response.json()
         };
     }
+
+    test("database initialization creates the foreign keys shown in the ERD", async () => {
+        const constraints = await pool.query(
+            `
+            SELECT
+                source_table.relname AS table_name,
+                source_column.attname AS column_name,
+                target_table.relname AS referenced_table,
+                target_column.attname AS referenced_column
+            FROM pg_constraint AS foreign_key
+            JOIN pg_class AS source_table
+                ON source_table.oid = foreign_key.conrelid
+            JOIN pg_attribute AS source_column
+                ON source_column.attrelid = foreign_key.conrelid
+               AND source_column.attnum = foreign_key.conkey[1]
+            JOIN pg_class AS target_table
+                ON target_table.oid = foreign_key.confrelid
+            JOIN pg_attribute AS target_column
+                ON target_column.attrelid = foreign_key.confrelid
+               AND target_column.attnum = foreign_key.confkey[1]
+            WHERE foreign_key.contype = 'f'
+              AND source_table.relnamespace = current_schema()::regnamespace
+              AND cardinality(foreign_key.conkey) = 1
+              AND cardinality(foreign_key.confkey) = 1
+            `
+        );
+        const actual = new Set(
+            constraints.rows.map(
+                row =>
+                    `${row.table_name}.${row.column_name}->` +
+                    `${row.referenced_table}.${row.referenced_column}`
+            )
+        );
+        const expected = [
+            "applications.user_id->users.id",
+            "members.user_id->users.id",
+            "members.archived_archive_id->archived_members.archive_id",
+            "member_transactions.user_id->users.id",
+            "member_transactions.member_id->members.id",
+            "member_transactions.application_id->applications.id",
+            "attendance.member_id->members.id",
+            "attendance.guest_id->guests.id",
+            "guest_transactions.guest_id->guests.id",
+            "guest_transactions.attendance_id->attendance.id",
+            "guest_visit_extensions.attendance_id->attendance.id",
+            "guest_visit_extensions.guest_id->guests.id",
+            "guest_visit_extensions.guest_transaction_id->guest_transactions.id",
+            "archived_members.original_member_id->members.id",
+            "archived_members.user_id->users.id",
+            "notifications.user_id->users.id",
+            "admin_sessions.user_id->users.id",
+            "customer_sessions.user_id->users.id",
+            "member_qr_tokens.member_id->members.id",
+            "password_reset_tokens.user_id->users.id"
+        ];
+
+        for (const relationship of expected) {
+            assert.ok(actual.has(relationship), `Missing ERD relationship: ${relationship}`);
+        }
+    });
 
     async function createGuest({
         key,
