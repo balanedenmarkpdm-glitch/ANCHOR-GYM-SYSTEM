@@ -497,7 +497,7 @@ function displayCustomer(user) {
             renderCustomerAvatar(
                 avatar,
                 initials,
-                user.profile_photo
+                user.profile_name
             );
 
         }
@@ -600,7 +600,7 @@ function displayCustomer(user) {
         renderCustomerAvatar(
             profilePhotoPreview,
             getInitials(fullName),
-            user.profile_photo
+            user.profile_name
         );
     }
 
@@ -809,7 +809,7 @@ function initializeProfileEditor() {
                 };
 
                 if (selectedProfilePhotoData) {
-                    body.profile_photo =
+                    body.profile_name =
                         selectedProfilePhotoData;
                 }
 
@@ -3098,6 +3098,9 @@ async function loadRotatingQr(memberId) {
 
     }
 
+    const requestStartedAt =
+        Date.now();
+
     try {
 
         const response =
@@ -3118,7 +3121,9 @@ async function loadRotatingQr(memberId) {
             !response.ok ||
             !data.success ||
             !data.qr_image ||
-            !data.expires_at
+            !data.expires_at ||
+            !Number.isFinite(Number(data.expires_in)) ||
+            Number(data.expires_in) <= 0
         ) {
 
             throw new Error(
@@ -3138,9 +3143,13 @@ async function loadRotatingQr(memberId) {
         const expiresAt =
             new Date(data.expires_at).getTime();
 
+        const localExpiry =
+            requestStartedAt +
+            Number(data.expires_in) * 1000;
+
         if (
             Number.isNaN(expiresAt) ||
-            expiresAt <= Date.now()
+            localExpiry <= Date.now()
         ) {
 
             throw new Error(
@@ -3149,7 +3158,7 @@ async function loadRotatingQr(memberId) {
 
         }
 
-        rotatingQrExpiry = expiresAt;
+        rotatingQrExpiry = localExpiry;
         rotatingQrLoading = false;
 
         if (container) {

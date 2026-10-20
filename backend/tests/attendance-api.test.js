@@ -650,6 +650,20 @@ if (!integrationEnabled) {
         process.env.DATABASE_SCHEMA = testSchema;
         application = require("../server");
         pool = application.pool;
+        await pool.query(
+            `ALTER TABLE ${quoteIdentifier(testSchema)}.users
+             ADD COLUMN IF NOT EXISTS profile_photo TEXT`
+        );
+        await pool.query(
+            `
+            INSERT INTO ${quoteIdentifier(testSchema)}.users
+                (id, full_name, email, password, phone, role, profile_photo)
+            VALUES
+                (979999, 'Profile Migration Test',
+                 'profile-migration@example.invalid', 'test-password',
+                 '09111110999', 'customer', 'legacy-profile-image-data')
+            `
+        );
         await application.ensureDashboardSchema();
 
         const passwordHash = await bcrypt.hash("integration-test-only", 4);
@@ -870,6 +884,30 @@ if (!integrationEnabled) {
         for (const relationship of expected) {
             assert.ok(actual.has(relationship), `Missing ERD relationship: ${relationship}`);
         }
+    });
+
+    test("profile photo storage migrates to profile_name without losing data", async () => {
+        const result = await pool.query(
+            `
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = current_schema()
+              AND table_name = 'users'
+              AND column_name IN ('profile_photo', 'profile_name')
+            `
+        );
+        assert.deepEqual(
+            result.rows.map(row => row.column_name),
+            ["profile_name"]
+        );
+
+        const profile = await pool.query(
+            "SELECT profile_name FROM users WHERE id = 979999"
+        );
+        assert.equal(
+            profile.rows[0]?.profile_name,
+            "legacy-profile-image-data"
+        );
     });
 
     async function createGuest({
@@ -1306,7 +1344,10 @@ if (!integrationEnabled) {
         );
         const issuedQrBody = await issuedQr.json();
         assert.equal(issuedQr.status, 200, issuedQrBody.message);
-        assert.equal(issuedQrBody.expires_in, 30);
+        assert.ok(
+            issuedQrBody.expires_in > 0 &&
+            issuedQrBody.expires_in <= 30
+        );
         assert.match(
             issuedQrBody.qr_image,
             /^data:image\/png;base64,/
@@ -1572,6 +1613,14 @@ if (!integrationEnabled) {
         );
         assert.equal(activeCustomerDashboard.response.status, 200);
         assert.equal(activeCustomerDashboard.body.membership.status, "ACTIVE");
+        assert.equal(activeCustomerDashboard.body.customer.profile_name, null);
+        assert.equal(
+            Object.prototype.hasOwnProperty.call(
+                activeCustomerDashboard.body.customer,
+                "profile_photo"
+            ),
+            false
+        );
         assert.equal(
             Object.prototype.hasOwnProperty.call(
                 activeCustomerDashboard.body.membership,

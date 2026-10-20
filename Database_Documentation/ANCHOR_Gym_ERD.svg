@@ -3,7 +3,7 @@
 <desc id="d">Editable database model preview with fourteen entities, logical relationships, and cardinality labels.</desc>
 <defs><style>
 text{font-family:Arial,"Segoe UI",sans-serif;fill:#183047}.title{font-size:36px;font-weight:700}.subtitle{font-size:16px;fill:#53687c}.section{font-size:14px;font-weight:bold;letter-spacing:2px;fill:#496177}
-.box{fill:#fff;stroke:#9db0c1;stroke-width:2;rx:12}.head{fill:#123b5d}.guesthead{fill:#087f8c}.supporthead{fill:#55697e}.name{fill:#fff;font-weight:bold;font-size:18px;letter-spacing:.5px}.field{font-size:15px}.key{font-weight:bold;fill:#075c94}.faint{fill:#60758a}.edge{fill:none;stroke:#425d75;stroke-width:2.3}.cardinality{font-size:13px;font-weight:bold;fill:#203c54}.labelback{fill:#fff;stroke:#d6e0e8;stroke-width:1;rx:4}.legend{font-size:14px;fill:#334e66}
+.box{fill:#fff;stroke:#9db0c1;stroke-width:2;rx:12}.head{fill:#123b5d}.guesthead{fill:#087f8c}.supporthead{fill:#55697e}.name{fill:#fff;font-weight:bold;font-size:18px;letter-spacing:.5px}.field{font-size:15px}.key{font-weight:bold;fill:#075c94}.faint{fill:#60758a}.edge{fill:none;stroke:#425d75;stroke-width:2.3}.cardinality{font-size:11px;font-weight:bold;fill:#203c54}.labelback{fill:#fff;stroke:#d6e0e8;stroke-width:1;rx:4}.legend{font-size:14px;fill:#334e66}
 </style></defs><rect width="100%" height="100%" fill="#f3f6fa"/>
 <text class="title" x="60" y="58">ANCHOR GYM SYSTEM</text>
 <text class="subtitle" x="60" y="88">Logical ERD • PostgreSQL application schema • Relationship constraints verified only where backend DDL explicitly declares them</text>
@@ -12,65 +12,65 @@ text{font-family:Arial,"Segoe UI",sans-serif;fill:#183047}.title{font-size:36px;
 <text class="section" x="60" y="1275">AUTHENTICATION &amp; EXTENSIONS</text>
 <text class="section" x="60" y="1965">RESET &amp; QR SUPPORT</text>
 <path class="edge" d="M 570 270 H 650"/>
-<rect class="labelback" x="574.0" y="233" width="72.0" height="23"/>
-<text class="cardinality" x="610" y="249" text-anchor="middle">1 : 0..M</text>
+<rect class="labelback" x="549.8" y="233" width="120.5" height="23"/>
+<text class="cardinality" x="610" y="249" text-anchor="middle">PK.id -> FK.user_id</text>
 <path class="edge" d="M 1750 310 H 1830"/>
-<rect class="labelback" x="1744.4" y="271" width="91.2" height="23"/>
-<text class="cardinality" x="1790" y="287" text-anchor="middle">0..1 : 0..M</text>
+<rect class="labelback" x="1699.5" y="271" width="181.0" height="23"/>
+<text class="cardinality" x="1790" y="287" text-anchor="middle">PK.id -> FK.original_member_id</text>
 <path class="edge" d="M 905 455 V 690 H 905 V 720"/>
-<rect class="labelback" x="874.4" y="571" width="91.2" height="23"/>
-<text class="cardinality" x="920" y="587" text-anchor="middle">0..1 : 0..1</text>
+<rect class="labelback" x="840.5" y="571" width="159.0" height="23"/>
+<text class="cardinality" x="920" y="587" text-anchor="middle">PK.id -> FK.application_id</text>
 <path class="edge" d="M 1495 552 V 720"/>
-<rect class="labelback" x="1464.4" y="616" width="91.2" height="23"/>
-<text class="cardinality" x="1510" y="632" text-anchor="middle">0..1 : 0..M</text>
+<rect class="labelback" x="1444.2" y="616" width="131.5" height="23"/>
+<text class="cardinality" x="1510" y="632" text-anchor="middle">PK.id -> FK.member_id</text>
 <path class="edge" d="M 1830 870 H 1750"/>
-<rect class="labelback" x="1744.4" y="833" width="91.2" height="23"/>
-<text class="cardinality" x="1790" y="849" text-anchor="middle">0..1 : 0..M</text>
+<rect class="labelback" x="1727.0" y="833" width="126.0" height="23"/>
+<text class="cardinality" x="1790" y="849" text-anchor="middle">PK.id -> FK.guest_id</text>
 <path class="edge" d="M 1495 1052 V 1300"/>
-<rect class="labelback" x="1474.0" y="1156" width="72.0" height="23"/>
-<text class="cardinality" x="1510" y="1172" text-anchor="middle">1 : 0..M</text>
+<rect class="labelback" x="1433.2" y="1156" width="153.5" height="23"/>
+<text class="cardinality" x="1510" y="1172" text-anchor="middle">PK.id -> FK.attendance_id</text>
 <path class="edge" d="M 2085 1052 V 1300"/>
-<rect class="labelback" x="2064.0" y="1156" width="72.0" height="23"/>
-<text class="cardinality" x="2100" y="1172" text-anchor="middle">1 : 0..M</text>
+<rect class="labelback" x="2037.0" y="1156" width="126.0" height="23"/>
+<text class="cardinality" x="2100" y="1172" text-anchor="middle">PK.id -> FK.guest_id</text>
 <path class="edge" d="M 1750 1530 H 1830"/>
-<rect class="labelback" x="1744.4" y="1493" width="91.2" height="23"/>
-<text class="cardinality" x="1790" y="1509" text-anchor="middle">0..1 : 0..M</text>
+<rect class="labelback" x="1694.0" y="1493" width="192.0" height="23"/>
+<text class="cardinality" x="1790" y="1509" text-anchor="middle">PK.id -> FK.guest_transaction_id</text>
 <path class="edge" d="M 315 458 V 720"/>
-<rect class="labelback" x="294.0" y="616" width="72.0" height="23"/>
-<text class="cardinality" x="330" y="632" text-anchor="middle">1 : 0..M</text>
+<rect class="labelback" x="269.8" y="616" width="120.5" height="23"/>
+<text class="cardinality" x="330" y="632" text-anchor="middle">PK.id -> FK.user_id</text>
 <path class="edge" d="M 60 330 H 35 V 1450 H 60"/>
-<rect class="labelback" x="64.0" y="1121" width="72.0" height="23"/>
-<text class="cardinality" x="100" y="1137" text-anchor="middle">1 : 0..M</text>
+<rect class="labelback" x="39.8" y="1121" width="120.5" height="23"/>
+<text class="cardinality" x="100" y="1137" text-anchor="middle">PK.id -> FK.user_id</text>
 <path class="edge" d="M 570 350 H 610 V 1435 H 650"/>
-<rect class="labelback" x="589.0" y="881" width="72.0" height="23"/>
-<text class="cardinality" x="625" y="897" text-anchor="middle">1 : 0..M</text>
+<rect class="labelback" x="564.8" y="881" width="120.5" height="23"/>
+<text class="cardinality" x="625" y="897" text-anchor="middle">PK.id -> FK.user_id</text>
 <path class="edge" d="M 60 410 H 20 V 2150 H 60"/>
-<rect class="labelback" x="64.0" y="1176" width="72.0" height="23"/>
-<text class="cardinality" x="100" y="1192" text-anchor="middle">1 : 0..M</text>
+<rect class="labelback" x="39.8" y="1176" width="120.5" height="23"/>
+<text class="cardinality" x="100" y="1192" text-anchor="middle">PK.id -> FK.user_id</text>
 <path class="edge" d="M 1240 480 H 1200 V 2140 H 1160 V 2150"/>
-<rect class="labelback" x="1144.0" y="1091" width="72.0" height="23"/>
-<text class="cardinality" x="1180" y="1107" text-anchor="middle">1 : 0..M</text>
+<rect class="labelback" x="1114.2" y="1091" width="131.5" height="23"/>
+<text class="cardinality" x="1180" y="1107" text-anchor="middle">PK.id -> FK.member_id</text>
 <path class="edge" d="M 315 150 V 130 H 1495 V 150"/>
-<rect class="labelback" x="864.0" y="111" width="72.0" height="23"/>
-<text class="cardinality" x="900" y="127" text-anchor="middle">1 : 0..M</text>
+<rect class="labelback" x="839.8" y="111" width="120.5" height="23"/>
+<text class="cardinality" x="900" y="127" text-anchor="middle">PK.id -> FK.user_id</text>
 <path class="edge" d="M 430 150 V 108 H 2085 V 150"/>
-<rect class="labelback" x="1664.0" y="89" width="72.0" height="23"/>
-<text class="cardinality" x="1700" y="105" text-anchor="middle">1 : 0..M</text>
+<rect class="labelback" x="1639.8" y="89" width="120.5" height="23"/>
+<text class="cardinality" x="1700" y="105" text-anchor="middle">PK.id -> FK.user_id</text>
 <path class="edge" d="M 500 458 V 625 H 880 V 720"/>
-<rect class="labelback" x="644.4" y="591" width="91.2" height="23"/>
-<text class="cardinality" x="690" y="607" text-anchor="middle">0..1 : 0..M</text>
+<rect class="labelback" x="629.8" y="591" width="120.5" height="23"/>
+<text class="cardinality" x="690" y="607" text-anchor="middle">PK.id -> FK.user_id</text>
 <path class="edge" d="M 1240 500 H 1190 V 600 H 900 V 720"/>
-<rect class="labelback" x="1024.4" y="571" width="91.2" height="23"/>
-<text class="cardinality" x="1070" y="587" text-anchor="middle">0..1 : 0..M</text>
+<rect class="labelback" x="1004.2" y="571" width="131.5" height="23"/>
+<text class="cardinality" x="1070" y="587" text-anchor="middle">PK.id -> FK.member_id</text>
 <path class="edge" d="M 1750 1020 H 1785 V 1320 H 1830"/>
-<rect class="labelback" x="1744.4" y="981" width="91.2" height="23"/>
-<text class="cardinality" x="1790" y="997" text-anchor="middle">0..1 : 0..M</text>
+<rect class="labelback" x="1713.2" y="981" width="153.5" height="23"/>
+<text class="cardinality" x="1790" y="997" text-anchor="middle">PK.id -> FK.attendance_id</text>
 <path class="edge" d="M 2340 1030 H 2370 V 1880 H 1495 V 1782"/>
-<rect class="labelback" x="2319.0" y="1221" width="72.0" height="23"/>
-<text class="cardinality" x="2355" y="1237" text-anchor="middle">1 : 0..M</text>
+<rect class="labelback" x="2292.0" y="1221" width="126.0" height="23"/>
+<text class="cardinality" x="2355" y="1237" text-anchor="middle">PK.id -> FK.guest_id</text>
 <path class="edge" d="M 1750 550 H 1770 V 680 H 2370 V 661 H 2340"/>
-<rect class="labelback" x="1794.4" y="641" width="91.2" height="23"/>
-<text class="cardinality" x="1840" y="657" text-anchor="middle">0..1 : 0..M</text>
+<rect class="labelback" x="1724.8" y="641" width="230.5" height="23"/>
+<text class="cardinality" x="1840" y="657" text-anchor="middle">PK.archive_id -> FK.archived_archive_id</text>
 <rect class="box" x="60" y="150" width="510" height="308"/>
 <path class="head" d="M72 150 H558 Q570 150 570 162 V204 H60 V162 Q60 150 72 150Z"/>
 <text class="name" x="78" y="185">USERS</text>
@@ -88,7 +88,7 @@ text{font-family:Arial,"Segoe UI",sans-serif;fill:#183047}.title{font-size:36px;
 <text class="faint" x="552" y="372" text-anchor="end">VARCHAR</text>
 <text class="field" x="79" y="401">created_at</text>
 <text class="faint" x="552" y="401" text-anchor="end">TIMESTAMP</text>
-<text class="field" x="79" y="430">profile_photo</text>
+<text class="field" x="79" y="430">profile_name</text>
 <text class="faint" x="552" y="430" text-anchor="end">TEXT</text>
 <rect class="box" x="650" y="150" width="510" height="366"/>
 <path class="head" d="M662 150 H1148 Q1160 150 1160 162 V204 H650 V162 Q650 150 662 150Z"/>
@@ -381,6 +381,6 @@ text{font-family:Arial,"Segoe UI",sans-serif;fill:#183047}.title{font-size:36px;
 <text class="faint" x="552" y="2270" text-anchor="end">TIMESTAMPTZ</text>
 <rect x="60" y="2440" width="2280" height="92" rx="10" fill="#fff" stroke="#c8d5e0"/>
 <text class="legend" x="82" y="2473"><tspan font-weight="bold">Legend:</tspan> PK = primary key; PK* = logical key not verified in catalog; FK = key reference; FK† = application reference, physical FK not verified.</text>
-<text class="legend" x="82" y="2504">Connector labels show parent : child cardinality (1 = exactly one, 0..1 = optional one, 0..M = optional many). Attendance member/guest rows are intended to be mutually exclusive (XOR).</text>
+<text class="legend" x="82" y="2504">Connector labels map the parent PK column to the child FK column; editable Draw.io edges also show cardinality. Attendance member/guest rows are intended to be mutually exclusive (XOR).</text>
 <text class="legend" x="82" y="2526">Application approval checks for duplicate application payments; database uniqueness is unverified. Physical FKs are confirmed only for the four auth/token links declared in backend setup.</text>
 </svg>

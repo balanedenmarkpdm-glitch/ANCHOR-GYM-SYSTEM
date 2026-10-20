@@ -686,9 +686,10 @@ async function ensureDashboardSchema() {
         $$
     `);
     await ensureErdForeignKeys();
+    await ensureCustomerProfileNameColumn();
 }
 
-let customerProfilePhotoColumnReady = false;
+let customerProfileNameColumnReady = false;
 let paymentScreenshotColumnReady = false;
 let pausedDaysRemainingColumnReady = false;
 
@@ -708,15 +709,55 @@ async function ensurePausedDaysRemainingColumn() {
     pausedDaysRemainingColumnReady = true;
 }
 
-async function ensureCustomerProfilePhotoColumn() {
-    if (customerProfilePhotoColumnReady) {
+async function ensureCustomerProfileNameColumn() {
+    if (customerProfileNameColumnReady) {
         return;
     }
 
+    await pool.query(`
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = current_schema()
+                  AND table_name = 'users'
+                  AND column_name = 'profile_photo'
+            ) AND NOT EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = current_schema()
+                  AND table_name = 'users'
+                  AND column_name = 'profile_name'
+            ) THEN
+                ALTER TABLE users
+                RENAME COLUMN profile_photo TO profile_name;
+            ELSIF EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = current_schema()
+                  AND table_name = 'users'
+                  AND column_name = 'profile_photo'
+            ) AND EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = current_schema()
+                  AND table_name = 'users'
+                  AND column_name = 'profile_name'
+            ) THEN
+                UPDATE users
+                SET profile_name = COALESCE(profile_name, profile_photo)
+                WHERE profile_photo IS NOT NULL;
+                ALTER TABLE users
+                DROP COLUMN profile_photo;
+            END IF;
+        END;
+        $$
+    `);
     await pool.query(
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_photo TEXT"
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_name TEXT"
     );
-    customerProfilePhotoColumnReady = true;
+    customerProfileNameColumnReady = true;
 }
 
 async function ensurePaymentScreenshotColumn() {
@@ -3006,12 +3047,12 @@ app.get(
         }
 
         try {
-            await ensureCustomerProfilePhotoColumn();
+            await ensureCustomerProfileNameColumn();
 
             const result =
                 await pool.query(
                     `
-                    SELECT profile_photo
+                    SELECT profile_name
                     FROM users
                     WHERE id = $1
                       AND LOWER(role) = 'customer'
@@ -3021,7 +3062,7 @@ app.get(
 
             if (
                 result.rows.length === 0 ||
-                !result.rows[0].profile_photo
+                !result.rows[0].profile_name
             ) {
                 return res.status(404).json({
                     success: false,
@@ -3031,7 +3072,7 @@ app.get(
 
             const photo =
                 decodeProfilePhoto(
-                    result.rows[0].profile_photo
+                    result.rows[0].profile_name
                 );
 
             if (!photo) {
@@ -3103,7 +3144,7 @@ app.put(
         }
 
         try {
-            await ensureCustomerProfilePhotoColumn();
+            await ensureCustomerProfileNameColumn();
 
             const customerResult =
                 await pool.query(
@@ -3136,8 +3177,8 @@ app.put(
                 });
             }
 
-            if (req.body.profile_photo !== undefined) {
-                if (!decodeProfilePhoto(req.body.profile_photo)) {
+            if (req.body.profile_name !== undefined) {
+                if (!decodeProfilePhoto(req.body.profile_name)) {
                     return res.status(400).json({
                         success: false,
                         message: "Choose a valid JPG, PNG, or WEBP profile photo."
@@ -3145,10 +3186,10 @@ app.put(
                 }
             }
 
-            const profilePhoto =
-                req.body.profile_photo === undefined
+            const profileName =
+                req.body.profile_name === undefined
                     ? null
-                    : req.body.profile_photo;
+                    : req.body.profile_name;
             const result =
                 await pool.query(
                     `
@@ -3156,7 +3197,7 @@ app.put(
                     SET
                         full_name = $2,
                         phone = $3,
-                        profile_photo = COALESCE($4, profile_photo)
+                        profile_name = COALESCE($4, profile_name)
                     WHERE id = $1
                       AND LOWER(role) = 'customer'
                     RETURNING
@@ -3167,16 +3208,16 @@ app.put(
                         role,
                         created_at,
                         CASE
-                            WHEN profile_photo IS NULL THEN NULL
+                            WHEN profile_name IS NULL THEN NULL
                             ELSE '/api/customer/' || id ||
-                                '/profile-photo?v=' || MD5(profile_photo)
-                        END AS profile_photo
+                                '/profile-photo?v=' || MD5(profile_name)
+                        END AS profile_name
                     `,
                     [
                         userId,
                         fullName,
                         phone,
-                        profilePhoto
+                        profileName
                     ]
                 );
 
@@ -3439,12 +3480,18 @@ app.get(
             );
 
             const qrImage = await QRCode.toDataURL(token);
+            const expiresIn =
+                Math.max(
+                    0,
+                    (expiresAt * 1000 - Date.now()) / 1000
+                );
+
             return res.json({
                 success: true,
                 qr_image: qrImage,
                 qr_code: token,
                 expires_at: new Date(expiresAt * 1000).toISOString(),
-                expires_in: QR_TOKEN_LIFETIME_SECONDS
+                expires_in: expiresIn
             });
         } catch (error) {
             console.error("Member QR generation error:", error);
@@ -3656,7 +3703,7 @@ app.get(
 
             }
 
-            await ensureCustomerProfilePhotoColumn();
+            await ensureCustomerProfileNameColumn();
 
             const userResult =
                 await pool.query(
@@ -3669,10 +3716,10 @@ app.get(
                         role,
                         created_at,
                         CASE
-                            WHEN profile_photo IS NULL THEN NULL
+                            WHEN profile_name IS NULL THEN NULL
                             ELSE '/api/customer/' || id ||
-                                '/profile-photo?v=' || MD5(profile_photo)
-                        END AS profile_photo
+                                '/profile-photo?v=' || MD5(profile_name)
+                        END AS profile_name
                     FROM users
                     WHERE id = $1
                       AND LOWER(role) = 'customer'
