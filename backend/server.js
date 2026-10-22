@@ -34,9 +34,9 @@ if (
 ) {
     throw new Error("BOOTSTRAP_ADMIN_EMAIL must be a valid email address.");
 }
-if (bootstrapAdminPassword && bootstrapAdminPassword.length < 12) {
+if (bootstrapAdminPassword && bootstrapAdminPassword.length < 8) {
     throw new Error(
-        "BOOTSTRAP_ADMIN_PASSWORD must be at least 12 characters long."
+        "BOOTSTRAP_ADMIN_PASSWORD must be at least 8 characters long."
     );
 }
 const frontendOrigin =

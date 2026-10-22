@@ -37,7 +37,7 @@ let activeUserId;
 let testSchema;
 let memberTransactionSeeded = false;
 const testBootstrapAdminEmail = "bootstrap-admin@example.invalid";
-const testBootstrapAdminPassword = "integration-bootstrap-password";
+const testBootstrapAdminPassword = "admin123";
 const environmentBeforeIntegrationTests = {
     DATABASE_SCHEMA: process.env.DATABASE_SCHEMA,
     BOOTSTRAP_ADMIN_EMAIL: process.env.BOOTSTRAP_ADMIN_EMAIL,
