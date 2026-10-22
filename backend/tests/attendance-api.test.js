@@ -36,6 +36,15 @@ let archivedExpectedExpiration;
 let activeUserId;
 let testSchema;
 let memberTransactionSeeded = false;
+const testBootstrapAdminEmail = "bootstrap-admin@example.invalid";
+const testBootstrapAdminPassword = "integration-bootstrap-password";
+const environmentBeforeIntegrationTests = {
+    DATABASE_SCHEMA: process.env.DATABASE_SCHEMA,
+    BOOTSTRAP_ADMIN_EMAIL: process.env.BOOTSTRAP_ADMIN_EMAIL,
+    BOOTSTRAP_ADMIN_PASSWORD: process.env.BOOTSTRAP_ADMIN_PASSWORD,
+    GYM_OPENING_TIME: process.env.GYM_OPENING_TIME,
+    GYM_CLOSING_TIME: process.env.GYM_CLOSING_TIME
+};
 
 test("CORS permits local frontend development and configured production origins only", () => {
     const productionOrigin = "https://anchor-gym-system.vercel.app";
@@ -648,6 +657,10 @@ if (!integrationEnabled) {
         }
 
         process.env.DATABASE_SCHEMA = testSchema;
+        process.env.BOOTSTRAP_ADMIN_EMAIL = testBootstrapAdminEmail;
+        process.env.BOOTSTRAP_ADMIN_PASSWORD = testBootstrapAdminPassword;
+        process.env.GYM_OPENING_TIME = "00:00";
+        process.env.GYM_CLOSING_TIME = "23:59";
         application = require("../server");
         pool = application.pool;
         await pool.query(
@@ -808,6 +821,15 @@ if (!integrationEnabled) {
                 );
             }
             await sourcePool.end();
+        }
+        for (const [name, value] of Object.entries(
+            environmentBeforeIntegrationTests
+        )) {
+            if (value === undefined) {
+                delete process.env[name];
+            } else {
+                process.env[name] = value;
+            }
         }
     });
 
@@ -1022,8 +1044,44 @@ if (!integrationEnabled) {
         assert.equal(accounts.rows[0].count, 1);
     });
 
-    test("hard-coded admin credentials authenticate without an existing admin database row", async () => {
+    test("configured bootstrap admin credentials create an account only when needed", async () => {
         const login = await fetch(`${baseUrl}/api/admin/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                email: testBootstrapAdminEmail,
+                password: testBootstrapAdminPassword
+            })
+        });
+        const result = await login.json();
+        assert.equal(login.status, 200, result.message);
+        assert.equal(result.user.email, testBootstrapAdminEmail);
+        assert.equal(result.user.role, "admin");
+
+        const storedAccount = await pool.query(
+            `
+            SELECT password, role
+            FROM users
+            WHERE LOWER(email) = $1
+            `,
+            [testBootstrapAdminEmail]
+        );
+        assert.equal(storedAccount.rows.length, 1);
+        assert.equal(storedAccount.rows[0].role, "admin");
+        assert.notEqual(
+            storedAccount.rows[0].password,
+            testBootstrapAdminPassword
+        );
+        assert.match(storedAccount.rows[0].password, /^\$2[aby]\$/);
+        assert.equal(
+            await bcrypt.compare(
+                testBootstrapAdminPassword,
+                storedAccount.rows[0].password
+            ),
+            true
+        );
+
+        const legacyCredentials = await fetch(`${baseUrl}/api/admin/login`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -1031,22 +1089,7 @@ if (!integrationEnabled) {
                 password: "admin123"
             })
         });
-        const result = await login.json();
-        assert.equal(login.status, 200, result.message);
-        assert.equal(result.user.email, "admin@gmail.com");
-        assert.equal(result.user.role, "admin");
-
-        const storedAccount = await pool.query(
-            `
-            SELECT password, role
-            FROM users
-            WHERE LOWER(email) = 'admin@gmail.com'
-            `
-        );
-        assert.equal(storedAccount.rows.length, 1);
-        assert.equal(storedAccount.rows[0].role, "admin");
-        assert.notEqual(storedAccount.rows[0].password, "admin123");
-        assert.match(storedAccount.rows[0].password, /^\$2[aby]\$/);
+        assert.equal(legacyCredentials.status, 401);
 
         const authorized = await fetch(`${baseUrl}/api/admin/attendance`, {
             headers: { Authorization: `Bearer ${result.token}` }
@@ -2088,11 +2131,14 @@ if (!integrationEnabled) {
             `
             SELECT
                 check_out,
-                DATE_TRUNC('day', check_in) + INTERVAL '22 hours' AS closing_time
+                DATE_TRUNC('day', check_in) + $2::interval AS closing_time
             FROM attendance
             WHERE id = $1
             `,
-            [previousDayVisit.rows[0].id]
+            [
+                previousDayVisit.rows[0].id,
+                "23 hours 59 minutes"
+            ]
         );
         assert.equal(
             autoCheckedOutVisit.rows[0].check_out.getTime(),

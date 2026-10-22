@@ -18,8 +18,27 @@ if (!/^[a-z_][a-z0-9_]*$/.test(databaseSchema)) {
     throw new Error("DATABASE_SCHEMA must be a lowercase PostgreSQL schema identifier.");
 }
 const QR_TOKEN_LIFETIME_SECONDS = 30;
-const BUILT_IN_ADMIN_EMAIL = "admin@gmail.com";
-const BUILT_IN_ADMIN_PASSWORD = "admin123";
+const bootstrapAdminEmail = String(
+    process.env.BOOTSTRAP_ADMIN_EMAIL || ""
+).trim().toLowerCase();
+const bootstrapAdminPassword =
+    process.env.BOOTSTRAP_ADMIN_PASSWORD || "";
+if (Boolean(bootstrapAdminEmail) !== Boolean(bootstrapAdminPassword)) {
+    throw new Error(
+        "Set both BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_PASSWORD to enable admin account bootstrapping."
+    );
+}
+if (
+    bootstrapAdminEmail &&
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(bootstrapAdminEmail)
+) {
+    throw new Error("BOOTSTRAP_ADMIN_EMAIL must be a valid email address.");
+}
+if (bootstrapAdminPassword && bootstrapAdminPassword.length < 12) {
+    throw new Error(
+        "BOOTSTRAP_ADMIN_PASSWORD must be at least 12 characters long."
+    );
+}
 const frontendOrigin =
     process.env.FRONTEND_URL ||
     "https://anchor-gym-system.vercel.app";
@@ -192,12 +211,13 @@ function verifyMemberQrToken(token) {
     }
 }
 
-function isBuiltInAdminLogin(email, password) {
+function isBootstrapAdminLogin(email, password) {
     const submitted = Buffer.from(password);
-    const expected = Buffer.from(BUILT_IN_ADMIN_PASSWORD);
+    const expected = Buffer.from(bootstrapAdminPassword);
 
     return (
-        email === BUILT_IN_ADMIN_EMAIL &&
+        Boolean(bootstrapAdminEmail) &&
+        email === bootstrapAdminEmail &&
         submitted.length === expected.length &&
         crypto.timingSafeEqual(submitted, expected)
     );
@@ -211,7 +231,7 @@ const pool = new Pool({
     statement_timeout: 15000
 });
 
-async function ensureBuiltInAdminAccount() {
+async function ensureBootstrapAdminAccount() {
     const client = await pool.connect();
     let transactionStarted = false;
 
@@ -220,12 +240,12 @@ async function ensureBuiltInAdminAccount() {
         transactionStarted = true;
         await client.query(
             "SELECT pg_advisory_xact_lock(hashtext($1))",
-            [`built-in-admin:${BUILT_IN_ADMIN_EMAIL}`]
+            [`bootstrap-admin:${bootstrapAdminEmail}`]
         );
 
         const existing = await client.query(
             `
-            SELECT id, full_name, email, role
+            SELECT id, full_name, email, password, role
             FROM users
             WHERE LOWER(email) = $1
             ORDER BY CASE
@@ -236,22 +256,22 @@ async function ensureBuiltInAdminAccount() {
             LIMIT 1
             FOR UPDATE
             `,
-            [BUILT_IN_ADMIN_EMAIL]
+            [bootstrapAdminEmail]
         );
 
         let user = existing.rows[0];
         if (!user) {
             const passwordHash = await bcrypt.hash(
-                BUILT_IN_ADMIN_PASSWORD,
+                bootstrapAdminPassword,
                 12
             );
             const inserted = await client.query(
                 `
                 INSERT INTO users (full_name, email, password, phone, role)
                 VALUES ('ANCHOR Gym Administrator', $1, $2, '', 'admin')
-                RETURNING id, full_name, email, role
+                RETURNING id, full_name, email, password, role
                 `,
-                [BUILT_IN_ADMIN_EMAIL, passwordHash]
+                [bootstrapAdminEmail, passwordHash]
             );
             user = inserted.rows[0];
         }
@@ -1017,16 +1037,26 @@ function normalizedPhoneSql(column) {
 const GUEST_TIMER_TEST_MODE =
     process.env.GUEST_TIMER_TEST_MODE === "true";
 
+const GYM_OPENING_TIME =
+    process.env.GYM_OPENING_TIME || "08:00";
 const GYM_CLOSING_TIME =
     process.env.GYM_CLOSING_TIME || "22:00";
+
+if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(GYM_OPENING_TIME)) {
+    throw new Error("GYM_OPENING_TIME must use 24-hour HH:MM format.");
+}
 
 if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(GYM_CLOSING_TIME)) {
     throw new Error("GYM_CLOSING_TIME must use 24-hour HH:MM format.");
 }
 
+const [GYM_OPENING_HOUR, GYM_OPENING_MINUTE] =
+    GYM_OPENING_TIME.split(":").map(Number);
 const [GYM_CLOSING_HOUR, GYM_CLOSING_MINUTE] =
     GYM_CLOSING_TIME.split(":").map(Number);
 
+const GYM_OPENING_INTERVAL =
+    `${GYM_OPENING_HOUR} hours ${GYM_OPENING_MINUTE} minutes`;
 const GYM_CLOSING_INTERVAL =
     `${GYM_CLOSING_HOUR} hours ${GYM_CLOSING_MINUTE} minutes`;
 
@@ -1342,45 +1372,33 @@ app.post("/api/admin/login", async (req, res) => {
             });
         }
 
-        const isBuiltInAdmin =
-            isBuiltInAdminLogin(email, password);
-        let user;
+        const result = await pool.query(
+            `
+            SELECT id, full_name, email, password, role
+            FROM users
+            WHERE LOWER(email) = $1
+              AND LOWER(role) IN ('admin', 'staff')
+            ORDER BY id
+            LIMIT 1
+            `,
+            [email]
+        );
+        let user = result.rows[0];
 
-        if (isBuiltInAdmin) {
-            user = await ensureBuiltInAdminAccount();
+        if (!user && isBootstrapAdminLogin(email, password)) {
+            user = await ensureBootstrapAdminAccount();
             if (!user) {
                 return res.status(409).json({
                     success: false,
-                    message: "The built-in admin email belongs to a non-admin account. Ask an administrator to resolve the account conflict."
+                    message: "The bootstrap admin email belongs to a non-admin account. Ask an administrator to resolve the account conflict."
                 });
             }
-        } else {
-            const result = await pool.query(
-                `
-                SELECT id, full_name, email, password, role
-                FROM users
-                WHERE LOWER(email) = $1
-                  AND LOWER(role) IN ('admin', 'staff')
-                ORDER BY id
-                LIMIT 1
-                `,
-                [email]
-            );
-
-            if (
-                result.rows.length === 0 ||
-                !(await bcrypt.compare(password, result.rows[0].password))
-            ) {
-                return res.status(401).json({
-                    success: false,
-                    message: "Invalid admin or staff email or password."
-                });
-            }
-
-            user = result.rows[0];
         }
 
-        if (!user) {
+        if (
+            !user ||
+            !(await bcrypt.compare(password, user.password))
+        ) {
             return res.status(401).json({
                 success: false,
                 message: "Invalid admin or staff email or password."
@@ -7959,7 +7977,7 @@ app.post(
                             date_trunc(
                                 'day',
                                 ${GUEST_NOW_SQL}
-                            ) + INTERVAL '8 hours'
+                            ) + INTERVAL '${GYM_OPENING_INTERVAL}'
                         AND ${GUEST_NOW_SQL} <
                             date_trunc(
                                 'day',
