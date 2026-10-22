@@ -349,11 +349,35 @@ async function ensureErdForeignKeys() {
         }
 
         const constraintName = `${table}_${column}_fkey`;
+        const orphanedReferences = await pool.query(
+            `
+            SELECT EXISTS (
+                SELECT 1
+                FROM "${databaseSchema}"."${table}" AS source_row
+                WHERE source_row."${column}" IS NOT NULL
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM "${databaseSchema}"."${referencedTable}" AS target_row
+                      WHERE target_row."${referencedColumn}" =
+                            source_row."${column}"
+                  )
+            ) AS has_orphans
+            `
+        );
+        const hasOrphans = orphanedReferences.rows[0].has_orphans;
+        if (hasOrphans) {
+            console.warn(
+                `Existing orphaned references found in ${table}.${column}; ` +
+                `adding ${constraintName} as NOT VALID to preserve legacy data.`
+            );
+        }
+
         await pool.query(
             `ALTER TABLE "${databaseSchema}"."${table}"
              ADD CONSTRAINT "${constraintName}"
              FOREIGN KEY ("${column}")
-             REFERENCES "${databaseSchema}"."${referencedTable}" ("${referencedColumn}")`
+             REFERENCES "${databaseSchema}"."${referencedTable}" ("${referencedColumn}")` +
+            (hasOrphans ? " NOT VALID" : "")
         );
     }
 }
@@ -10028,6 +10052,7 @@ if (require.main === module) {
 module.exports = {
     app,
     pool,
+    ensureErdForeignKeys,
     ensureDashboardSchema,
     startServer,
     checkoutMembersAtClosing

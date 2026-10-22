@@ -848,6 +848,77 @@ if (!integrationEnabled) {
         };
     }
 
+    test("database initialization preserves legacy orphan transaction references and enforces new links", async () => {
+        const guest = await pool.query(
+            `
+            INSERT INTO guests
+                (full_name, phone, visit_type, hours, amount_paid, payment_method)
+            VALUES ('Legacy Orphan Test', '09111110998', '1 Hour', 1, 30, 'CASH')
+            RETURNING id
+            `
+        );
+        let orphanTransactionId;
+
+        try {
+            await pool.query(
+                `ALTER TABLE ${quoteIdentifier(testSchema)}.guest_transactions
+                 DROP CONSTRAINT guest_transactions_attendance_id_fkey`
+            );
+            const orphanTransaction = await pool.query(
+                `
+                INSERT INTO guest_transactions
+                    (guest_id, guest_name, visit_type, amount, payment_method, attendance_id)
+                VALUES ($1, 'Legacy Orphan Test', '1 Hour', 30, 'CASH', 999999999)
+                RETURNING id
+                `,
+                [guest.rows[0].id]
+            );
+            orphanTransactionId = orphanTransaction.rows[0].id;
+
+            await application.ensureErdForeignKeys();
+
+            const constraint = await pool.query(
+                `
+                SELECT convalidated
+                FROM pg_constraint
+                WHERE conrelid = to_regclass($1)
+                  AND conname = 'guest_transactions_attendance_id_fkey'
+                `,
+                [`${testSchema}.guest_transactions`]
+            );
+            assert.equal(constraint.rows[0].convalidated, false);
+
+            const preservedTransaction = await pool.query(
+                "SELECT attendance_id FROM guest_transactions WHERE id = $1",
+                [orphanTransactionId]
+            );
+            assert.equal(
+                preservedTransaction.rows[0].attendance_id,
+                "999999999"
+            );
+
+            await assert.rejects(
+                pool.query(
+                    `
+                    INSERT INTO guest_transactions
+                        (guest_id, guest_name, visit_type, amount, payment_method, attendance_id)
+                    VALUES ($1, 'Legacy Orphan Test', '1 Hour', 30, 'CASH', 999999998)
+                    `,
+                    [guest.rows[0].id]
+                ),
+                error => error.code === "23503"
+            );
+        } finally {
+            if (orphanTransactionId !== undefined) {
+                await pool.query(
+                    "DELETE FROM guest_transactions WHERE id = $1",
+                    [orphanTransactionId]
+                );
+            }
+            await pool.query("DELETE FROM guests WHERE id = $1", [guest.rows[0].id]);
+        }
+    });
+
     test("database initialization creates the foreign keys shown in the ERD", async () => {
         const constraints = await pool.query(
             `
